@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const cookieParser = require('cookie-parser');
+const cloudinary = require('../config/cloudinary');
 
 const signUp = async (req, res) => {
     const { name, email, password } = req.body;
@@ -92,6 +93,17 @@ const updateProfile = async (req, res) => {
     const userId = req.userId; // Assuming you have user ID from authentication middleware
 
     try {
+        const updatedProfilePicture = req.file;
+        if (updatedProfilePicture) {
+            // Upload new profile picture to Cloudinary
+            const result = await cloudinary.uploader.upload(updatedProfilePicture.path, {
+                folder: 'profile_pictures',
+                width: 150,
+                crop: 'scale'
+            });
+            updatedUser.profilePicture = result.secure_url;
+            await updatedUser.save();
+        }
         const updatedUser = await User.findByIdAndUpdate(
             userId,
             { name, profilePicture, bio },
@@ -101,7 +113,7 @@ const updateProfile = async (req, res) => {
         if (!updatedUser) {
             return res.status(404).json({ message: "User not found" });
         }
-
+        
         res.status(200).json({
             message: "Profile updated successfully",
             user: updatedUser
