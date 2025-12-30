@@ -1,0 +1,3 @@
+- Create axios instance in chatapp/src/lib/axios.js with baseURL 'http://localhost:3000' and withCredentials: true
+- Build chat app UI in home.jsx with sidebar, message area, and input
+- Add messages state and functions to zustand store
