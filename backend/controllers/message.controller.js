@@ -1,5 +1,5 @@
 // controllers/messageController.js
-const Message = require('../models/message');
+const Message = require('../model/message');
 
 const sendMessage = async (req, res) => {
     const { receiverId, content, imageUrl, publicId } = req.body;
@@ -44,4 +44,36 @@ const sendMessage = async (req, res) => {
 };
 
 
-module.exports = { sendMessage };
+
+// Get all messages between authenticated user and receiverId
+const getMessages = async (req, res) => {
+    const receiverId = req.params.receiverId;
+    const userId = req.userId;
+
+    if (!receiverId) {
+        return res.status(400).json({ message: "receiverId is required" });
+    }
+
+    try {
+        // Find all messages where sender/receiver is either userId or receiverId
+        const messages = await Message.find({
+            $or: [
+                { sender: userId, receiver: receiverId },
+                { sender: receiverId, receiver: userId }
+            ]
+        })
+        .sort({ createdAt: 1 })
+        .populate('sender', 'name profilePicture')
+        .populate('receiver', 'name profilePicture');
+
+        res.status(200).json({
+            message: "Messages fetched successfully",
+            data: messages
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+module.exports = { sendMessage, getMessages };

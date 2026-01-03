@@ -1,12 +1,17 @@
-import React, { useEffect, useState } from "react";
+
+import React, { useState, useEffect } from "react";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "../lib/axios";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [activeBox, setActiveBox] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -15,8 +20,18 @@ export default function SignIn() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleSubmit = () => {
-    console.log("Sign in attempted with:", email);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await axios.post("/signin", { email, password });
+      setLoading(false);
+      navigate("/");
+    } catch (err) {
+      setLoading(false);
+      setError(err.response?.data?.message || "Sign in failed. Please try again.");
+    }
   };
 
   return (
@@ -84,9 +99,13 @@ export default function SignIn() {
           <button
             onClick={handleSubmit}
             className="w-full border border-slate-600 hover:border-white text-white font-medium py-3 rounded-lg transition-colors duration-200 cursor-pointer"
+            disabled={loading}
           >
-            Sign in
+            {loading ? "Signing in..." : "Sign in"}
           </button>
+          {error && (
+            <div className="text-red-400 text-sm mt-2">{error}</div>
+          )}
         </form>
 
         <div className="mt-8 text-center">
@@ -117,7 +136,7 @@ export default function SignIn() {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .animate-spin-slow {
           animation: spin 2s linear infinite;
         }
@@ -167,3 +186,5 @@ export default function SignIn() {
     </div>
   );
 }
+
+

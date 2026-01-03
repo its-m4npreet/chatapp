@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from "react";
+
+import React, { useState, useEffect } from "react";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "../lib/axios";
 
 export default function SignUp() {
   const [username, setUsername] = useState("");
@@ -9,6 +11,8 @@ export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
   const [activeBox, setActiveBox] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -19,13 +23,21 @@ export default function SignUp() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Basic validation (already required in inputs, but double check)
+    setError("");
     if (!username || !email || !password || password.length < 8) return;
     setLoading(true);
-    // Simulate async signup
-    await new Promise((res) => setTimeout(res, 1800));
-    setLoading(false);
-    console.log("Sign up attempted with:", { username, email, password });
+    try {
+      await axios.post("/signup", {
+        name: username,
+        email,
+        password,
+      });
+      setLoading(false);
+      navigate("/signin");
+    } catch (err) {
+      setLoading(false);
+      setError(err.response?.data?.message || "Sign up failed. Please try again.");
+    }
   };
 
   return (
@@ -79,6 +91,8 @@ export default function SignUp() {
               />
             </div>
 
+
+
             {/* Password Field */}
             <div>
               <label className="block text-sm font-medium text-slate-200 mb-2">
@@ -124,6 +138,9 @@ export default function SignUp() {
               )}
               {loading ? "Creating..." : "Sign Up"}
             </button>
+            {error && (
+              <div className="text-red-400 text-sm mt-2">{error}</div>
+            )}
           </form>
 
           <div className="mt-8 text-center">
@@ -173,7 +190,7 @@ export default function SignUp() {
       </div>
 
       {/* Global Styles */}
-      <style jsx global>{`
+      <style>{`
         @keyframes spin {
           from {
             transform: rotate(0deg);
