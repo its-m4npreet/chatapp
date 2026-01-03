@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { FaRegEye, FaRegEyeSlash } from 'react-icons/fa';
-import { Link} from 'react-router-dom';
+import React, { useEffect, useState } from "react";
+import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
+import { Link } from "react-router-dom";
 
 export default function SignUp() {
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [activeBox, setActiveBox] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -25,17 +25,16 @@ export default function SignUp() {
     // Simulate async signup
     await new Promise((res) => setTimeout(res, 1800));
     setLoading(false);
-    console.log('Sign up attempted with:', { username, email, password });
+    console.log("Sign up attempted with:", { username, email, password });
   };
 
   return (
-    <div className="w-250 grid grid-cols-1 lg:grid-cols-2 overflow-hidden h-screen ">
+    <div className="w-screen grid grid-cols-1 lg:grid-cols-2 overflow-hidden h-screen ">
       {/* <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-5 left-0 w-64 h-64 bg-purple-900 rounded-full filter blur-3xl opacity-20 animate-float" />
         </div> */}
       {/* Left Side - Form */}
-      <div className="flex items-center justify-center px-8 lg:px-16">
-        
+      <div className="flex items-center justify-center px-8 lg:px-16 lg:ml-35">
         <div className="w-full max-w-md">
           <div className="mb-6">
             <h2 className="text-5xl font-bold text-white mb-3 tracking-tight">
@@ -87,7 +86,7 @@ export default function SignUp() {
               </label>
               <div className="relative">
                 <input
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••"
@@ -99,9 +98,13 @@ export default function SignUp() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? <FaRegEyeSlash size={22} /> : <FaRegEye size={22} />}
+                  {showPassword ? (
+                    <FaRegEyeSlash size={22} />
+                  ) : (
+                    <FaRegEye size={22} />
+                  )}
                 </button>
               </div>
               <p className="mt-2 text-xs text-slate-400">
@@ -111,21 +114,26 @@ export default function SignUp() {
 
             <button
               type="submit"
-              className={`w-full border border-white text-white font-semibold py-4 rounded-xl cursor-pointer transition-all duration-300 flex items-center justify-center gap-2 ${loading ? ' animate-pulse border-white' : 'focus:border-white'}`}
+              className={`w-full border border-white text-white font-semibold py-4 rounded-xl cursor-pointer transition-all duration-300 flex items-center justify-center gap-2 ${
+                loading ? " animate-pulse border-white" : "focus:border-white"
+              }`}
               disabled={loading}
             >
               {loading && (
                 <span className="inline-block animate-spin rounded-full border-2 border-t-transparent border-white h-5 w-5"></span>
               )}
-              {loading ? 'Creating...' : 'Sign Up'}
+              {loading ? "Creating..." : "Sign Up"}
             </button>
           </form>
 
           <div className="mt-8 text-center">
             <span className="text-slate-400 text-sm">
-              Already have an account?{' '}
+              Already have an account?{" "}
             </span>
-            <Link to="" className="text-purple-300 font-medium hover:text-purple-200 underline-offset-4 hover:underline transition-all">
+            <Link
+              to=""
+              className="text-purple-300 font-medium hover:text-purple-200 underline-offset-4 hover:underline transition-all"
+            >
               Sign in
             </Link>
           </div>
@@ -134,19 +142,22 @@ export default function SignUp() {
 
       {/* Right Side - Animated 3D Cube Grid */}
       <div className="hidden lg:flex items-center justify-center relative overflow-hidden h-full min-h-100">
-        <div className="relative">
-          <div className="grid grid-cols-1 gap-6 scale-110 perspective-1000">
-            <div className="rotate-45 animate-spin-slow">
+        <div className="relative flex ">
+          <div className="grid grid-cols-3 gap-6  items-center">
+            <div className="rotate-45 animate-spin-slow ">
               {[...Array(9)].map((_, i) => (
                 <div
                   key={i}
                   className={`w-16 h-16 rounded-xl border-2 transition-all duration-700 transform-gpu ${
                     i === activeBox
-                      ? 'border-purple-400 shadow-2xl shadow-purple-500/50 scale-110 translate-z-10 bg-purple-500/10'
-                      : 'border-slate-600 bg-slate-800/20'
+                      ? "border-purple-400 shadow-2xl shadow-purple-500/50 scale-110 translate-z-10 bg-purple-500/10"
+                      : "border-slate-600 bg-slate-800/20"
                   }`}
                   style={{
-                    transform: i === activeBox ? 'translateZ(40px) scale(1.15)' : 'translateZ(0)',
+                    transform:
+                      i === activeBox
+                        ? "translateZ(40px) scale(1.15)"
+                        : "translateZ(0)",
                   }}
                 />
               ))}
@@ -175,7 +186,8 @@ export default function SignUp() {
           animation: spin 30s linear infinite;
         }
         @keyframes float {
-          0%, 100% {
+          0%,
+          100% {
             transform: translateY(0) translateX(0);
           }
           50% {
