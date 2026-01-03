@@ -123,4 +123,14 @@ const updateProfile = async (req, res) => {
     }
 }
 
-module.exports = { signUp, signIn, logout, updateProfile };
+// Get all users except the current user
+const getAllUsers = async (req, res) => {
+    try {
+        const users = await User.find({ _id: { $ne: req.userId } }).select('name email profilePicture');
+        res.status(200).json({ users });
+    } catch (error) {
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+module.exports = { signUp, signIn, logout, updateProfile, getAllUsers };

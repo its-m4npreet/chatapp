@@ -25,7 +25,11 @@ export default function SignIn() {
     setLoading(true);
     setError("");
     try {
-      await axios.post("/signin", { email, password });
+      const res = await axios.post("/signin", { email, password });
+      // Save user info to localStorage for socket
+      if (res.data && res.data.user) {
+        localStorage.setItem('user', JSON.stringify(res.data.user));
+      }
       setLoading(false);
       navigate("/");
     } catch (err) {

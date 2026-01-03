@@ -1,16 +1,43 @@
-import React, { useState, useRef } from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import { IoMdSend } from 'react-icons/io';
 import { FaRegSmile } from 'react-icons/fa';
 import EmojiPicker from 'emoji-picker-react';
 
-const ChatView = ({ user }) => {
+const ChatView = ({ user, socket, currentUser }) => {
   const [showEmoji, setShowEmoji] = useState(false);
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const [inputValue, setInputValue] = useState('');
+  const [messages, setMessages] = useState([]);
+
+  // Listen for incoming messages
+  useEffect(() => {
+    if (!socket || !currentUser) return;
+    const handleNewMessage = (msg) => {
+      // Only add if for this chat
+      if (
+        user &&
+        ((msg.sender === user._id && msg.receiver === currentUser._id) ||
+         (msg.sender === currentUser._id && msg.receiver === user._id))
+      ) {
+        setMessages((prev) => [...prev, msg]);
+      }
+    };
+    socket.on('newMessage', handleNewMessage);
+    return () => {
+      socket.off('newMessage', handleNewMessage);
+    };
+  }, [socket, user, currentUser]);
+
+  // Optionally, fetch previous messages when user changes
+  useEffect(() => {
+    setMessages([]);
+    // TODO: fetch previous messages from backend if needed
+  }, [user]);
 
   // Close emoji picker only when clicking outside, not on search or emoji picker itself
-  React.useEffect(() => {
+  useEffect(() => {
     if (!showEmoji) return;
     const handleClickOutside = (event) => {
       if (
@@ -29,6 +56,20 @@ const ChatView = ({ user }) => {
     setInputValue((prev) => prev + emojiData.emoji);
     if (inputRef.current) inputRef.current.focus();
     // Do not close the picker on emoji select
+  };
+
+  const handleSend = (e) => {
+    e.preventDefault();
+    if (!inputValue.trim() || !user || !currentUser) return;
+    const msg = {
+      content: inputValue,
+      receiver: user._id,
+      sender: currentUser._id,
+      createdAt: new Date().toISOString(),
+    };
+    socket.emit('sendMessage', msg);
+    setMessages((prev) => [...prev, { ...msg }]);
+    setInputValue('');
   };
 
   if (!user) {
@@ -50,10 +91,21 @@ const ChatView = ({ user }) => {
         </div>
       </div>
       <div className="flex-1 p-6 overflow-y-auto text-white">
-        <div className="text-center text-gray-500 my-4">No messages yet.</div>
+        {messages.length === 0 ? (
+          <div className="text-center text-gray-500 my-4">No messages yet.</div>
+        ) : (
+          messages.map((msg, idx) => (
+            <div key={idx} className={`my-2 flex ${msg.sender === (currentUser && currentUser._id) ? 'justify-end' : 'justify-start'}`}>
+              <div className={`px-4 py-2 rounded-lg ${msg.sender === (currentUser && currentUser._id) ? 'bg-blue-600 text-white' : 'bg-gray-700 text-white'}`}>
+                {msg.content}
+              </div>
+            </div>
+          ))
+        )}
       </div>
-      <div className="p-4 border-t border-gray-700 flex items-center gap-2 relative">
+      <form className="p-4 border-t border-gray-700 flex items-center gap-2 relative" onSubmit={handleSend}>
         <button
+          type="button"
           className="p-2 text-gray-400 hover:text-white relative"
           onClick={() => setShowEmoji((v) => !v)}
           data-emoji-button="true"
@@ -66,7 +118,7 @@ const ChatView = ({ user }) => {
             className="absolute bottom-12 left-0 z-50 "
             style={{ minWidth: 320 }}
           >
-            <EmojiPicker onEmojiClick={handleEmojiClick} theme="dark" searchDisabled={false}  />
+            <EmojiPicker onEmojiClick={handleEmojiClick} theme="dark" searchDisabled={false} />
           </div>
         )}
         <input
@@ -76,10 +128,10 @@ const ChatView = ({ user }) => {
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
         />
-        <button className="p-2 text-gray-400 hover:text-white">
+        <button type="submit" className="p-2 text-gray-400 hover:text-white">
           <IoMdSend size={22} />
         </button>
-      </div>
+      </form>
     </div>
   );
 };
