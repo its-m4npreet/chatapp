@@ -29,4 +29,9 @@ h1 {
   line-height: 1.1;
 }
 
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 
