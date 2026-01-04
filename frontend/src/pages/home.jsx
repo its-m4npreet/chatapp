@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import ChatView from '../components/ChatView';
 import Profile from '../components/Profile';
+import EditProfile from '../components/EditProfile';
 import Settings from '../components/Settings';
 import socket from '../lib/socket';
 
@@ -10,7 +11,9 @@ export const Home = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [unreadCounts, setUnreadCounts] = useState({});
   const [showProfile, setShowProfile] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [viewingUserProfile, setViewingUserProfile] = useState(null);
 
   // Fetch current user info on mount and when localStorage changes
   useEffect(() => {
@@ -90,13 +93,41 @@ export const Home = () => {
   };
 
   const handleProfileClick = () => {
+    setViewingUserProfile(null); // Reset viewing user to show current user's profile
     setShowProfile(true);
     setShowSettings(false);
     setSelectedUser(null);
   };
 
   const handleCloseProfile = () => {
+    // If viewing another user's profile, go back to chat with that user
+    if (viewingUserProfile) {
+      setSelectedUser(viewingUserProfile);
+      setShowProfile(false);
+      setViewingUserProfile(null);
+    } else {
+      setShowProfile(false);
+    }
+  };
+
+  const handleEditProfile = () => {
+    setShowEditProfile(true);
     setShowProfile(false);
+  };
+
+  const handleCloseEditProfile = () => {
+    setShowEditProfile(false);
+    setShowProfile(true);
+  };
+
+  const handleProfileSaved = (updatedUser) => {
+    setCurrentUser(updatedUser);
+  };
+
+  const handleViewUserProfile = (user) => {
+    setViewingUserProfile(user);
+    setShowProfile(true);
+    setShowSettings(false);
   };
 
   const handleSettingsClick = () => {
@@ -125,14 +156,31 @@ export const Home = () => {
         onSettingsClick={handleSettingsClick}
         showSettings={showSettings}
         onTabChange={handleTabChange}
+        viewingUserProfile={viewingUserProfile}
       />
       <div className='w-full h-full'>
-        {showProfile ? (
-          <Profile currentUser={currentUser} onClose={handleCloseProfile} />
+        {showEditProfile ? (
+          <EditProfile 
+            currentUser={currentUser} 
+            onClose={handleCloseEditProfile}
+            onSave={handleProfileSaved}
+          />
+        ) : showProfile ? (
+          <Profile 
+            currentUser={currentUser} 
+            viewingUser={viewingUserProfile} 
+            onClose={handleCloseProfile}
+            onEditProfile={handleEditProfile}
+          />
         ) : showSettings ? (
           <Settings onClose={handleCloseSettings} />
         ) : (
-          <ChatView user={selectedUser} socket={socket} currentUser={currentUser} />
+          <ChatView 
+            user={selectedUser} 
+            socket={socket} 
+            currentUser={currentUser} 
+            onViewProfile={handleViewUserProfile}
+          />
         )}
       </div>
     </div>

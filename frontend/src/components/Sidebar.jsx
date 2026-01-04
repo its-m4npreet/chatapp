@@ -7,12 +7,15 @@ import { IoChatboxEllipsesOutline } from "react-icons/io5";
 import { TiGroup } from "react-icons/ti";
 import axios from '../lib/axios';
 
-const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick, showProfile, onSettingsClick, showSettings, onTabChange }) => {
+const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick, showProfile, onSettingsClick, showSettings, onTabChange, viewingUserProfile }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState('chats'); // 'chats' or 'groups'
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Check if viewing another user's profile (from chat)
+  const isViewingOtherUserProfile = showProfile && viewingUserProfile;
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -106,46 +109,44 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
     );
   };
 
-  // Determine current active section name
-  // const getActiveSectionName = () => {
-  //   if (showProfile) return 'Profile';
-  //   if (showSettings) return 'Settings';
-  //   if (activeTab === 'groups') return 'Groups';
-  //   return 'Chats';
-  // };
+  // Determine current active section for indicator position
+  const getActiveSection = () => {
+    if (showSettings) return 'settings';
+    if (showProfile && !isViewingOtherUserProfile) return 'profile';
+    if (activeTab === 'groups' && !showProfile && !showSettings) return 'groups';
+    return 'chats'; // Default to chats (also when viewing other user's profile)
+  };
+
+  const activeSection = getActiveSection();
 
   return (
     <>
-      <div className="border-r w-16 border-gray-700 flex flex-col items-center py-6 h-full">
+      <div className="border-r w-16 border-gray-700 flex flex-col items-center py-6 h-full relative">
   {/* Top icons */}
-  <div className="flex flex-col gap-6">
-        <div className="relative group">
+  <div className="flex flex-col gap-6 relative">
+        <div className="relative group" data-section="chats">
           <IoChatboxEllipsesOutline 
             size={22} 
-            className={`${activeTab === 'chats' && !showProfile && !showSettings ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer`} 
+            className={`${activeSection === 'chats' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
             title='chat'
             onClick={() => {
               setActiveTab('chats');
               if (onTabChange) onTabChange();
             }}
           />
-          {activeTab === 'chats' && !showProfile && !showSettings && (
-            <span className="absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r"></span>
-          )}
+          <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'chats' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
         </div>
-        <div className="relative group">
+        <div className="relative group" data-section="groups">
           <TiGroup 
             size={22} 
-            className={`${activeTab === 'groups' && !showProfile && !showSettings ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer`} 
+            className={`${activeSection === 'groups' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
             title='group'
             onClick={() => {
               setActiveTab('groups');
               if (onTabChange) onTabChange();
             }}
           />
-          {activeTab === 'groups' && !showProfile && !showSettings && (
-            <span className="absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r"></span>
-          )}
+          <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'groups' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
         </div>
   </div>
 
@@ -153,28 +154,24 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
   <div className="flex-1" />
 
   {/* Bottom icons */}
-  <div className="flex flex-col gap-6 mb-3 border border-t-gray-700">
-    <div className="relative group">
+  <div className="flex flex-col gap-6">
+    <div className="relative group" data-section="settings">
       <MdOutlineSettings 
         size={22} 
-        className={`${showSettings ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer`} 
+        className={`${activeSection === 'settings' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
         title='settings' 
         onClick={onSettingsClick}
       />
-      {showSettings && (
-        <span className="absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r"></span>
-      )}
+      <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'settings' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
     </div>
-    <div className="relative group">
+    <div className="relative group" data-section="profile">
       <FaCircleUser 
         size={22} 
-        className={`${showProfile ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer`} 
+        className={`${activeSection === 'profile' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
         title='user' 
         onClick={onProfileClick}
       />
-      {showProfile && (
-        <span className="absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r"></span>
-      )}
+      <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'profile' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
     </div>
   </div>
 

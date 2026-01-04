@@ -5,7 +5,7 @@ import { FaRegSmile } from 'react-icons/fa';
 import { IoImageOutline, IoClose } from 'react-icons/io5';
 import EmojiPicker from 'emoji-picker-react';
 
-const ChatView = ({ user, socket, currentUser }) => {
+const ChatView = ({ user, socket, currentUser, onViewProfile }) => {
       // Join current user's room for real-time updates
       useEffect(() => {
         if (socket && currentUser && currentUser._id) {
@@ -281,12 +281,17 @@ const ChatView = ({ user, socket, currentUser }) => {
   return (
     <div className="chat-view h-full w-full flex flex-col relative">
       <div className="chat-header p-4 border-b border-gray-700 flex items-center gap-4 ">
-        <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-lg">
-          {user.name[0]}
-        </div>
-        <div>
-          <div className="font-semibold text-white">{user.name}</div>
-          <div className="text-xs text-gray-400">{user.bio || 'No bio available.'}</div>
+        <div 
+          className="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => onViewProfile && onViewProfile(user)}
+        >
+          <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-lg">
+            {user.name[0]}
+          </div>
+          <div>
+            <div className="font-semibold text-white">{user.name}</div>
+            <div className="text-xs text-gray-400">{user.bio || 'No bio available.'}</div>
+          </div>
         </div>
       </div>
       <div className="flex-1 p-6 overflow-y-auto text-white scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
@@ -299,7 +304,7 @@ const ChatView = ({ user, socket, currentUser }) => {
             const imageUrl = msg.image?.url || msg.image;
             return (
               <div key={msg._id || idx} className={`my-2 flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-xs `}>
+                <div className={`max-w-xs ${isCurrentUser ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'} p-3 rounded-lg shadow-md`}>
                   {imageUrl && (
                     <img 
                       src={imageUrl} 
