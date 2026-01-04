@@ -19,7 +19,8 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT;
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(cookieParser());
 
 app.use(cors({
@@ -62,18 +63,18 @@ io.on('connection', (socket) => {
   // Real-time message sending
   socket.on('sendMessage', async (msg) => {
     try {
-      const { sender, receiver, content, imageUrl, publicId } = msg;
-      if (!receiver || (!content?.trim() && !imageUrl)) return;
+      const { sender, receiver, content, image } = msg;
+      if (!receiver || (!content?.trim() && !image)) return;
 
       let messageType = 'text';
-      if (content?.trim() && imageUrl) messageType = 'mixed';
-      else if (imageUrl) messageType = 'image';
+      if (content?.trim() && image) messageType = 'mixed';
+      else if (image) messageType = 'image';
 
       const newMessage = new Message({
         sender,
         receiver,
         content: content?.trim() || '',
-        image: imageUrl ? { url: imageUrl, public_id: publicId } : null,
+        image: image ? { url: image, public_id: '' } : null,
         messageType
       });
       await newMessage.save();
