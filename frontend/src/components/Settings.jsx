@@ -103,9 +103,9 @@ const Settings = ({ onClose }) => {
   };
 
   return (
-    <div className="h-full w-full flex flex-col bg-zinc-900">
+    <div className="h-full w-full flex flex-col ">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800">
+      <div className="sticky top-0 z-10  backdrop-blur-sm border-b border-zinc-800">
         <div className="p-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button

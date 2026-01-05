@@ -176,7 +176,7 @@ const GroupChat = ({
                   >
                     <div className={`flex gap-2 max-w-[70%] ${isOwn ? 'flex-row-reverse' : ''}`}>
                       {!isOwn && (
-                        <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
+                        <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
                           {msg.sender?.profilePicture ? (
                             <img src={msg.sender.profilePicture} alt="" className="w-full h-full object-cover" />
                           ) : (

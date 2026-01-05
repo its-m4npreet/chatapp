@@ -46,7 +46,7 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile }) => {
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-purple-600 to-pink-500"></div>
+            <div className="absolute inset-0 bg-linear-to-br from-blue-600 via-purple-600 to-pink-500"></div>
           )}
           <div className="absolute inset-0 bg-black/20"></div>
         </div>
@@ -116,7 +116,7 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile }) => {
           <div>
             <h3 className="text-white font-semibold mb-3">About me</h3>
             <p className="text-gray-400 text-sm leading-relaxed">
-              {user.bio || 'Tell people about yourself. Share your interests, what you\'re working on, or anything else you\'d like others to know.'}
+              {user.aboutMe || 'Tell people about yourself. Share your interests, what you\'re working on, or anything else you\'d like others to know.'}
             </p>
           </div>
 

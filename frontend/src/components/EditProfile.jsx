@@ -8,6 +8,7 @@ import { ButtonLoading } from './Loading';
 const EditProfile = ({ currentUser, onClose, onSave }) => {
   const [name, setName] = useState(currentUser?.name || '');
   const [bio, setBio] = useState(currentUser?.bio || '');
+  const [about, setAbout] = useState(currentUser?.aboutMe || '');
   const [location, setLocation] = useState(currentUser?.location || '');
   const [website, setWebsite] = useState(currentUser?.website || '');
   const [portfolio, setPortfolio] = useState(currentUser?.portfolio || '');
@@ -24,6 +25,7 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
     if (currentUser) {
       setName(currentUser.name || '');
       setBio(currentUser.bio || '');
+      setAbout(currentUser.aboutMe || '');
       setLocation(currentUser.location || '');
       setWebsite(currentUser.website || '');
       setPortfolio(currentUser.portfolio || '');
@@ -167,7 +169,7 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-blue-600 via-purple-600 to-pink-500"></div>
+            <div className="w-full h-full bg-linear-to-br from-blue-600 via-purple-600 to-pink-500"></div>
           )}
           <div className="absolute inset-0 bg-black/20"></div>
           
@@ -248,10 +250,23 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
               onChange={(e) => setBio(e.target.value)}
               className="w-full p-4 rounded-xl bg-[#1a1f26] border border-gray-700 text-white outline-none focus:border-blue-500 resize-none transition-all placeholder:text-gray-600"
               placeholder="Tell people about yourself, your experience, skills, and interests..."
-              rows={4}
-              maxLength={300}
+              rows={1}
+              maxLength={160}
             />
-            <p className="text-gray-600 text-xs mt-1 text-right">{bio.length}/300</p>
+            <p className={`text-xs mt-1 text-right ${bio.length>160 ? 'text-red-500' : 'text-gray-600'}`}>{bio.length}/160</p>
+          </div>
+           {/* about Me Field */}
+          <div>
+            <label className="block text-gray-400 text-sm font-medium mb-2">About</label>
+            <textarea
+              value={about}
+              onChange={(e) => setAbout(e.target.value)}
+              className="w-full p-4 rounded-xl bg-[#1a1f26] border border-gray-700 text-white outline-none focus:border-blue-500 resize-none transition-all placeholder:text-gray-600"
+              placeholder="Tell people about yourself, your experience, skills, and interests..."
+              rows={4}
+              maxLength={500}
+            />
+            <p className="text-gray-600 text-xs mt-1 text-right">{bio.length}/500</p>
           </div>
 
           {/* Location Field */}
