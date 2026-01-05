@@ -1,36 +1,47 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './Sidebar.css';
 import { FaCircleUser } from "react-icons/fa6";
-import { MdOutlineSettings } from "react-icons/md";
-import { IoChatboxEllipsesOutline } from "react-icons/io5";
+import { MdOutlineSettings,MdPersonAddAlt1  } from "react-icons/md";
+import { IoChatboxEllipses, IoNotifications } from "react-icons/io5";
 import { TiGroup } from "react-icons/ti";
 import axios from '../lib/axios';
+import { ContentLoading } from './Loading';
 
-const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick, showProfile, onSettingsClick, showSettings, onTabChange, viewingUserProfile }) => {
+const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick, showProfile, onSettingsClick, showSettings, onTabChange, viewingUserProfile, onlineUsers = [], refreshFriends, onNotificationClick, unreadNotifications = 0, groups = [], selectedGroup, onSelectGroup, onCreateGroup, refreshGroups }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState('chats'); // 'chats' or 'groups'
   const [searchQuery, setSearchQuery] = useState('');
+  const prevRefreshFriends = useRef(refreshFriends);
 
   // Check if viewing another user's profile (from chat)
   const isViewingOtherUserProfile = showProfile && viewingUserProfile;
 
+  const fetchFriends = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get('/friends');
+      setUsers(res.data.friends || []);
+      setLoading(false);
+    } catch {
+      setError("Failed to load friends");
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        setLoading(true);
-        const res = await axios.get('/users');
-        setUsers(res.data.users);
-        setLoading(false);
-      } catch {
-        setError("Failed to load users");
-        setLoading(false);
-      }
-    };
-    fetchUsers();
+    fetchFriends();
   }, []);
+
+  // Refresh friends list when refreshFriends prop changes (not on initial render)
+  useEffect(() => {
+    if (prevRefreshFriends.current !== refreshFriends && refreshFriends > 0) {
+      fetchFriends();
+    }
+    prevRefreshFriends.current = refreshFriends;
+  }, [refreshFriends]);
 
   // Filter users based on search query
   const filteredUsers = users.filter((user) =>
@@ -44,6 +55,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
 
   const renderChat = (user) => {
     const unreadCount = unreadCounts[user._id] || 0;
+    const isOnline = onlineUsers.includes(user._id);
     return (
       <div
         className={`sidebar-chat${selectedUser && selectedUser._id === user._id ? ' sidebar-chat-active' : ''}`}
@@ -59,17 +71,34 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
               <FaCircleUser size={24} />
             </div>
           )}
-          {unreadCount > 0 && (
+          {/* Online status indicator */}
+          {isOnline && (
             <span
               style={{
                 position: 'absolute',
-                top: '-4px',
-                right: '-4px',
+                bottom: '0px',
+                right: '0px',
+                width: '12px',
+                height: '12px',
+                background: '#22c55e',
+                borderRadius: '50%',
+                border: '2px solid #18181b',
+              }}
+              title="Online"
+            />
+          )}
+        </div>
+        <div className="chat-info">
+          <div className="chat-name-row">
+            <span className="chat-name">{user.name}</span>
+                       {unreadCount > 0 && (
+            <span
+              style={{
                 background: '#ef4444',
                 color: '#fff',
                 borderRadius: '50%',
-                minWidth: '18px',
-                height: '18px',
+                minWidth: '25px',
+                height: '25px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -80,26 +109,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
             >
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
-          )}
-        </div>
-        <div className="chat-info">
-          <div className="chat-name-row">
-            <span className="chat-name">{user.name}</span>
-            {unreadCount > 0 && (
-              <span
-                style={{
-                  marginLeft: 'auto',
-                  background: '#ef4444',
-                  color: '#fff',
-                  borderRadius: '10px',
-                  padding: '2px 8px',
-                  fontSize: '11px',
-                  fontWeight: 'bold',
-                }}
-              >
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            )}
+          )} 
           </div>
           <div className="chat-message-row">
             <span className="chat-message">{user.email}</span>
@@ -114,6 +124,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
     if (showSettings) return 'settings';
     if (showProfile && !isViewingOtherUserProfile) return 'profile';
     if (activeTab === 'groups' && !showProfile && !showSettings) return 'groups';
+    if (activeTab === 'adduser' && !showProfile && !showSettings) return 'adduser';
     return 'chats'; // Default to chats (also when viewing other user's profile)
   };
 
@@ -125,7 +136,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
   {/* Top icons */}
   <div className="flex flex-col gap-6 relative">
         <div className="relative group" data-section="chats">
-          <IoChatboxEllipsesOutline 
+          <IoChatboxEllipses 
             size={22} 
             className={`${activeSection === 'chats' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
             title='chat'
@@ -147,6 +158,33 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
             }}
           />
           <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'groups' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
+        </div>
+         <div className="relative group" data-section="adduser">
+          <MdPersonAddAlt1  
+            size={22} 
+            className={`${activeSection === 'adduser' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
+            title='add user'
+            onClick={() => {
+              setActiveTab('adduser');
+              if (onTabChange) onTabChange('adduser');
+            }}
+          />
+          <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'adduser' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
+        </div>
+        <div className="relative group" data-section="notifications">
+          <div className="relative">
+            <IoNotifications 
+              size={22} 
+              className="text-gray-400 hover:text-white cursor-pointer transition-colors duration-200" 
+              title='notifications'
+              onClick={onNotificationClick}
+            />
+            {unreadNotifications > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {unreadNotifications > 9 ? '9+' : unreadNotifications}
+              </span>
+            )}
+          </div>
         </div>
   </div>
 
@@ -203,14 +241,14 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
         
         {activeTab === 'chats' ? (
           <div className="sidebar-section">
-            <div className="section-title">Users</div>
+            <div className="section-title">Chats</div>
             {loading ? (
-              <div className="sidebar-loading">Loading users...</div>
+              <ContentLoading text="Loading friends..." />
             ) : error ? (
               <div className="sidebar-error">{error}</div>
             ) : filteredUsers.length === 0 ? (
               <div className="text-gray-500 text-sm text-center py-4">
-                {searchQuery ? 'No users found' : 'No users available'}
+                {searchQuery ? 'No friends found' : 'No friends yet. Add users to start chatting!'}
               </div>
             ) : (
               filteredUsers.map(renderChat)
@@ -219,15 +257,54 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
         ) : (
           <div className="sidebar-section">
             <div className="section-title">Groups</div>
-            <div className="flex flex-col items-center justify-center py-8 text-gray-500">
-              <TiGroup size={48} className="mb-3 text-gray-600" />
-              <p className="text-sm">No groups yet</p>
-              <button 
-                className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
-              >
-                Create Group
-              </button>
-            </div>
+            {groups.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+                <TiGroup size={48} className="mb-3 text-gray-600" />
+                <p className="text-sm">No groups yet</p>
+                <button 
+                  onClick={onCreateGroup}
+                  className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                >
+                  Create Group
+                </button>
+              </div>
+            ) : (
+              <>
+                <button 
+                  onClick={onCreateGroup}
+                  className="w-full mb-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+                >
+                  <TiGroup size={18} />
+                  Create Group
+                </button>
+                {groups.map((group) => (
+                  <div
+                    key={group._id}
+                    className={`sidebar-chat${selectedGroup && selectedGroup._id === group._id ? ' sidebar-chat-active' : ''}`}
+                    onClick={() => onSelectGroup && onSelectGroup(group)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div className="chat-avatar">
+                      {group.avatar ? (
+                        <img src={group.avatar} alt={group.name} className="avatar-img" />
+                      ) : (
+                        <div className="avatar-placeholder bg-blue-600">
+                          <TiGroup size={24} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="chat-info">
+                      <div className="chat-name-row">
+                        <span className="chat-name">{group.name}</span>
+                      </div>
+                      <div className="chat-message-row">
+                        <span className="chat-message text-gray-400">{group.members?.length || 0} members</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>

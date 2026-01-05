@@ -35,7 +35,8 @@ const signUp = async (req, res) => {
         await newUser.save();
         res.status(201).json({ message: "User created successfully" });
     } catch (error) {
-        res.status(500).json({ message: "Server error" });
+        console.error("SignUp error:", error);
+        res.status(500).json({ message: error.message || "Server error" });
     }
 };
 
@@ -89,24 +90,25 @@ const logout = (req, res) => {
 
 const updateProfile = async (req, res) => {
     // Implementation for updating user profile
-    const { name, profilePicture, bio } = req.body;
+    const { name, profilePicture, bio, banner, location, website, portfolio } = req.body;
     const userId = req.userId; // Assuming you have user ID from authentication middleware
 
     try {
-        const updatedProfilePicture = req.file;
-        if (updatedProfilePicture) {
-            // Upload new profile picture to Cloudinary
-            const result = await cloudinary.uploader.upload(updatedProfilePicture.path, {
-                folder: 'profile_pictures',
-                width: 150,
-                crop: 'scale'
-            });
-            updatedUser.profilePicture = result.secure_url;
-            await updatedUser.save();
+        const updateData = { name, bio, location, website, portfolio };
+        
+        // Only update profilePicture if provided
+        if (profilePicture) {
+            updateData.profilePicture = profilePicture;
         }
+        
+        // Only update banner if provided
+        if (banner !== undefined) {
+            updateData.banner = banner;
+        }
+
         const updatedUser = await User.findByIdAndUpdate(
             userId,
-            { name, profilePicture, bio },
+            updateData,
             { new: true, runValidators: true }
         );
 
@@ -119,18 +121,140 @@ const updateProfile = async (req, res) => {
             user: updatedUser
         });
     } catch (error) {
-        res.status(500).json({ message: "Server error" });
+        console.error("Update profile error:", error);
+        res.status(500).json({ message: error.message || "Server error" });
     }
 }
 
 // Get all users except the current user
 const getAllUsers = async (req, res) => {
     try {
-        const users = await User.find({ _id: { $ne: req.userId } }).select('name email profilePicture');
+        const users = await User.find({ _id: { $ne: req.userId } }).select('name email profilePicture bio username');
         res.status(200).json({ users });
     } catch (error) {
         res.status(500).json({ message: "Server error" });
     }
 };
 
-module.exports = { signUp, signIn, logout, updateProfile, getAllUsers };
+// Get current user's friends
+const getFriends = async (req, res) => {
+    try {
+        const user = await User.findById(req.userId).populate('friends', 'name email profilePicture bio username');
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        res.status(200).json({ friends: user.friends });
+    } catch (error) {
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+// Add a friend (bidirectional - adds both users to each other's friend list)
+const addFriend = async (req, res) => {
+    try {
+        const { friendId } = req.body;
+        if (!friendId) {
+            return res.status(400).json({ message: "Friend ID is required" });
+        }
+
+        const user = await User.findById(req.userId);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Check if friend exists
+        const friend = await User.findById(friendId);
+        if (!friend) {
+            return res.status(404).json({ message: "Friend not found" });
+        }
+
+        // Check if already friends
+        if (user.friends.some(f => f.toString() === friendId)) {
+            return res.status(400).json({ message: "Already friends" });
+        }
+
+        // Add friend to current user's friend list
+        await User.findByIdAndUpdate(
+            req.userId,
+            { $addToSet: { friends: friendId } },
+            { new: true }
+        );
+
+        // Add current user to friend's friend list (bidirectional)
+        await User.findByIdAndUpdate(
+            friendId,
+            { $addToSet: { friends: req.userId } },
+            { new: true }
+        );
+
+        // Populate the newly added friend's info
+        const populatedUser = await User.findById(req.userId).populate('friends', 'name email profilePicture bio username');
+
+        // Emit socket event to notify the friend that they've been added
+        const io = req.app.get('io');
+        if (io) {
+            // Send the current user's info to the friend so they can update their list
+            const currentUserInfo = {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                profilePicture: user.profilePicture,
+                bio: user.bio,
+                username: user.username
+            };
+            io.to(friendId).emit('friendAdded', { friend: currentUserInfo });
+        }
+
+        res.status(200).json({ 
+            message: "Friend added successfully",
+            friends: populatedUser.friends
+        });
+    } catch (error) {
+        console.error('Add friend error:', error);
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+};
+
+// Remove a friend (bidirectional - removes both users from each other's friend list)
+const removeFriend = async (req, res) => {
+    try {
+        const { friendId } = req.body;
+        if (!friendId) {
+            return res.status(400).json({ message: "Friend ID is required" });
+        }
+
+        // Remove friend from current user's friend list
+        const updatedUser = await User.findByIdAndUpdate(
+            req.userId,
+            { $pull: { friends: friendId } },
+            { new: true }
+        );
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Remove current user from friend's friend list (bidirectional)
+        await User.findByIdAndUpdate(
+            friendId,
+            { $pull: { friends: req.userId } },
+            { new: true }
+        );
+
+        // Emit socket event to notify the friend that they've been removed
+        const io = req.app.get('io');
+        if (io) {
+            io.to(friendId).emit('friendRemoved', { odId: req.userId });
+        }
+
+        res.status(200).json({ 
+            message: "Friend removed successfully",
+            friends: updatedUser.friends
+        });
+    } catch (error) {
+        console.error('Remove friend error:', error);
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+};
+
+module.exports = { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend };

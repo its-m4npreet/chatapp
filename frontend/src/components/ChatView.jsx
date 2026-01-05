@@ -4,8 +4,9 @@ import { IoMdSend } from 'react-icons/io';
 import { FaRegSmile } from 'react-icons/fa';
 import { IoImageOutline, IoClose } from 'react-icons/io5';
 import EmojiPicker from 'emoji-picker-react';
+import { ButtonLoading } from './Loading';
 
-const ChatView = ({ user, socket, currentUser, onViewProfile }) => {
+const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUserTyping }) => {
       // Join current user's room for real-time updates
       useEffect(() => {
         if (socket && currentUser && currentUser._id) {
@@ -24,6 +25,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile }) => {
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
   const [inputValue, setInputValue] = useState('');
   const [messages, setMessages] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -209,6 +211,11 @@ const ChatView = ({ user, socket, currentUser, onViewProfile }) => {
     };
     console.log('Sending message:', msg);
     socket.emit('sendMessage', msg);
+    // Stop typing indicator when message is sent
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    socket.emit('stopTyping', { senderId: currentUser._id, receiverId: user._id });
     // Do NOT update messages here; rely on socket event for real-time update
     setInputValue('');
     handleRemoveImage();
@@ -285,12 +292,33 @@ const ChatView = ({ user, socket, currentUser, onViewProfile }) => {
           className="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={() => onViewProfile && onViewProfile(user)}
         >
-          <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-lg">
+          <div className="relative w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-lg">
             {user.name[0]}
+            {isUserOnline && (
+              <span
+                className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"
+                title="Online"
+              />
+            )}
           </div>
           <div>
             <div className="font-semibold text-white">{user.name}</div>
-            <div className="text-xs text-gray-400">{user.bio || 'No bio available.'}</div>
+            <div className="text-xs text-gray-400">
+              {isUserTyping ? (
+                <span className="text-green-400 flex items-end gap-1">
+                  typing
+                  <span className="flex gap-0.5">
+                    <span className="w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                    <span className="w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                    <span className="w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                  </span>
+                </span>
+              ) : isUserOnline ? (
+                <span className="text-green-400">Online</span>
+              ) : (
+                user.bio || 'Offline'
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -379,11 +407,25 @@ const ChatView = ({ user, socket, currentUser, onViewProfile }) => {
           className="flex-1 p-2 rounded border border-gray-700 text-white outline-none bg-transparent"
           placeholder="Type a message..."
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={(e) => {
+            setInputValue(e.target.value);
+            // Emit typing event
+            if (socket && currentUser && user) {
+              socket.emit('typing', { senderId: currentUser._id, receiverId: user._id });
+              // Clear previous timeout
+              if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+              }
+              // Stop typing after 2 seconds of inactivity
+              typingTimeoutRef.current = setTimeout(() => {
+                socket.emit('stopTyping', { senderId: currentUser._id, receiverId: user._id });
+              }, 2000);
+            }
+          }}
         />
         <button type="submit" className="p-2 text-gray-400 hover:text-white disabled:opacity-50" disabled={isUploading}>
           {isUploading ? (
-            <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+            <ButtonLoading color="#9ca3af" />
           ) : (
             <IoMdSend size={22} />
           )}

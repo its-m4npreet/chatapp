@@ -1,24 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { FaCircleUser } from 'react-icons/fa6';
 import { MdEdit, MdLogout, MdVerified, MdEmail, MdLocationOn, MdLink, MdWork } from 'react-icons/md';
 import { IoArrowBack } from 'react-icons/io5';
 import axios from '../lib/axios';
 import { useNavigate } from 'react-router-dom';
+import { ContentLoading } from './Loading';
 
 const Profile = ({ currentUser, viewingUser, onClose, onEditProfile }) => {
   // If viewingUser is provided, show their profile (read-only), otherwise show currentUser's profile (editable)
   const isViewingOther = viewingUser && viewingUser._id !== currentUser?._id;
-  const displayUser = isViewingOther ? viewingUser : currentUser;
+  const user = isViewingOther ? viewingUser : currentUser;
   
-  const [user, setUser] = useState(displayUser);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const targetUser = isViewingOther ? viewingUser : currentUser;
-    if (targetUser) {
-      setUser(targetUser);
-    }
-  }, [currentUser, viewingUser, isViewingOther]);
 
   const handleLogout = async () => {
     try {
@@ -34,8 +27,8 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile }) => {
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-400 bg-[#0f1419]">
-        <span>Loading profile...</span>
+      <div className="flex items-center justify-center h-full bg-[#0f1419]">
+        <ContentLoading text="Loading profile..." />
       </div>
     );
   }
@@ -45,9 +38,17 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile }) => {
       {/* Banner Section */}
       <div className="relative">
         {/* Banner Image */}
-        <div className="h-40 md:h-52 w-full bg-linear-to-br from-green-800 via-emerald-700 to-teal-600 relative overflow-hidden">
-          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=800')] bg-cover bg-center opacity-60 rounded-b-2xl"></div>
-          {/* <div className="absolute inset-0 bg-linear-to-t from-black via-transparent to-transparent"></div> */}
+        <div className="h-40 md:h-52 w-full relative overflow-hidden">
+          {user.banner ? (
+            <img 
+              src={user.banner} 
+              alt="Banner" 
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-purple-600 to-pink-500"></div>
+          )}
+          <div className="absolute inset-0 bg-black/20"></div>
         </div>
 
         {/* Back Button */}

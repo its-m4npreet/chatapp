@@ -7,6 +7,8 @@ const cors = require("cors");
 const http = require('http');
 const { Server } = require('socket.io');
 const createMessageController = require('./controllers/message.controller');
+const createGroupController = require('./controllers/group.controller');
+const createNotificationController = require('./controllers/notification.controller');
 
 const app = express();
 const server = http.createServer(app);
@@ -30,10 +32,23 @@ app.use(cors({
 
 app.use('/api', userRouter);
 
+// Make io accessible to routes
+app.set('io', io);
+
 // Use message controller with io
 const messageController = createMessageController(io);
 const messageRouter = require('./routes/message.routes')(messageController);
 app.use('/api/messages', messageRouter);
+
+// Use group controller with io
+const groupController = createGroupController(io);
+const groupRouter = require('./routes/group.routes')(groupController);
+app.use('/api/groups', groupRouter);
+
+// Use notification controller with io
+const notificationController = createNotificationController(io);
+const notificationRouter = require('./routes/notification.routes')(notificationController);
+app.use('/api/notifications', notificationRouter);
 
 app.get('/', (req, res) => {
   res.send('chatApp is running ....');
@@ -54,10 +69,34 @@ server.listen(PORT, () => {
 const Message = require('./model/message');
 const User = require('./model/user');
 
+// Track online users: { odId: odId }
+const onlineUsers = new Map();
+
 io.on('connection', (socket) => {
   // Join room by userId for bi-directional messaging
   socket.on('join', (userId) => {
     socket.join(userId);
+    socket.userId = userId;
+    onlineUsers.set(userId, socket.id);
+    // Broadcast updated online users list to all connected clients
+    io.emit('onlineUsers', Array.from(onlineUsers.keys()));
+  });
+
+  // Handle typing events
+  socket.on('typing', ({ senderId, receiverId }) => {
+    io.to(receiverId).emit('userTyping', { senderId });
+  });
+
+  socket.on('stopTyping', ({ senderId, receiverId }) => {
+    io.to(receiverId).emit('userStopTyping', { senderId });
+  });
+
+  // Handle disconnection
+  socket.on('disconnect', () => {
+    if (socket.userId) {
+      onlineUsers.delete(socket.userId);
+      io.emit('onlineUsers', Array.from(onlineUsers.keys()));
+    }
   });
 
   // Real-time message sending

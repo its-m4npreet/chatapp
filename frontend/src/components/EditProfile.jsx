@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaCircleUser, FaCamera } from 'react-icons/fa6';
+import { FaCircleUser, FaCamera, FaImage } from 'react-icons/fa6';
 import { IoArrowBack } from 'react-icons/io5';
 import { MdSave } from 'react-icons/md';
 import axios from '../lib/axios';
+import { ButtonLoading } from './Loading';
 
 const EditProfile = ({ currentUser, onClose, onSave }) => {
   const [name, setName] = useState(currentUser?.name || '');
@@ -11,10 +12,13 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
   const [website, setWebsite] = useState(currentUser?.website || '');
   const [portfolio, setPortfolio] = useState(currentUser?.portfolio || '');
   const [profilePicture, setProfilePicture] = useState(currentUser?.profilePicture || '');
+  const [banner, setBanner] = useState(currentUser?.banner || '');
   const [previewImage, setPreviewImage] = useState(null);
+  const [previewBanner, setPreviewBanner] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
+  const bannerInputRef = useRef(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -24,6 +28,7 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
       setWebsite(currentUser.website || '');
       setPortfolio(currentUser.portfolio || '');
       setProfilePicture(currentUser.profilePicture || '');
+      setBanner(currentUser.banner || '');
     }
   }, [currentUser]);
 
@@ -48,6 +53,27 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
     }
   };
 
+  const handleBannerSelect = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        setError('Banner size should be less than 10MB');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        setError('Please select an image file');
+        return;
+      }
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewBanner(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSave = async () => {
     if (!name.trim()) {
       setError('Name is required');
@@ -66,19 +92,14 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
         portfolio: portfolio.trim()
       };
 
-      // If there's a new profile picture, upload it first
+      // If there's a new profile picture, include it
       if (previewImage) {
-        try {
-          const uploadRes = await axios.post('/uploadProfilePicture', {
-            image: previewImage
-          });
-          if (uploadRes.data?.url) {
-            updateData.profilePicture = uploadRes.data.url;
-          }
-        } catch (uploadError) {
-          console.error('Failed to upload profile picture:', uploadError);
-          // Continue without updating profile picture
-        }
+        updateData.profilePicture = previewImage;
+      }
+
+      // If there's a new banner, include it
+      if (previewBanner) {
+        updateData.banner = previewBanner;
       }
 
       const res = await axios.put('/updateProfile', updateData);
@@ -119,7 +140,7 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
             className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-full font-semibold flex items-center gap-2 transition-all"
           >
             {loading ? (
-              <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+              <ButtonLoading color="#ffffff" />
             ) : (
               <MdSave size={18} />
             )}
@@ -138,11 +159,34 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
       {/* Banner & Profile Picture Section */}
       <div className="relative">
         {/* Banner */}
-        <div className="h-32 md:h-40 w-full bg-gradient-to-br from-blue-600 via-purple-600 to-pink-500 relative">
+        <div className="h-32 md:h-40 w-full relative overflow-hidden group">
+          {previewBanner || banner ? (
+            <img 
+              src={previewBanner || banner} 
+              alt="Banner" 
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-blue-600 via-purple-600 to-pink-500"></div>
+          )}
           <div className="absolute inset-0 bg-black/20"></div>
-          {/* <button className="absolute bottom-3 right-3 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white backdrop-blur-sm transition-all">
-            <FaCamera size={16} />
-          </button> */}
+          
+          {/* Banner edit button */}
+          <button 
+            onClick={() => bannerInputRef.current?.click()}
+            className="absolute bottom-3 right-3 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 cursor-pointer flex items-center gap-2"
+          >
+            <FaImage size={16} />
+            <span className="text-sm">Change Banner</span>
+          </button>
+          
+          <input
+            type="file"
+            ref={bannerInputRef}
+            onChange={handleBannerSelect}
+            accept="image/*"
+            className="hidden"
+          />
         </div>
 
         {/* Profile Picture */}

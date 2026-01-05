@@ -4,7 +4,13 @@ import ChatView from '../components/ChatView';
 import Profile from '../components/Profile';
 import EditProfile from '../components/EditProfile';
 import Settings from '../components/Settings';
+import AddUser from '../components/addUser';
+import GroupChat from '../components/GroupChat';
+import NotificationPopup from '../components/NotificationPopup';
+import CreateGroupModal from '../components/CreateGroupModal';
+import InviteToGroupModal from '../components/InviteToGroupModal';
 import socket from '../lib/socket';
+import axios from '../lib/axios';
 
 export const Home = () => {
   const [selectedUser, setSelectedUser] = useState(null);
@@ -13,7 +19,23 @@ export const Home = () => {
   const [showProfile, setShowProfile] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAddUser, setShowAddUser] = useState(false);
   const [viewingUserProfile, setViewingUserProfile] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [typingUsers, setTypingUsers] = useState({});
+  const [refreshFriends, setRefreshFriends] = useState(0);
+  
+  // Group states
+  const [groups, setGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showInviteToGroup, setShowInviteToGroup] = useState(false);
+  const [inviteGroup, setInviteGroup] = useState(null);
+  const [refreshGroups, setRefreshGroups] = useState(0);
+  
+  // Notification states
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   // Fetch current user info on mount and when localStorage changes
   useEffect(() => {
@@ -57,6 +79,121 @@ export const Home = () => {
     }
   }, [currentUser]);
 
+  // Listen for online users updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOnlineUsers = (users) => {
+      setOnlineUsers(users);
+    };
+
+    socket.on('onlineUsers', handleOnlineUsers);
+    return () => {
+      socket.off('onlineUsers', handleOnlineUsers);
+    };
+  }, []);
+
+  // Listen for typing events
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleUserTyping = ({ senderId }) => {
+      setTypingUsers((prev) => ({ ...prev, [senderId]: true }));
+    };
+
+    const handleUserStopTyping = ({ senderId }) => {
+      setTypingUsers((prev) => {
+        const updated = { ...prev };
+        delete updated[senderId];
+        return updated;
+      });
+    };
+
+    socket.on('userTyping', handleUserTyping);
+    socket.on('userStopTyping', handleUserStopTyping);
+    return () => {
+      socket.off('userTyping', handleUserTyping);
+      socket.off('userStopTyping', handleUserStopTyping);
+    };
+  }, []);
+
+  // Listen for friend added/removed events (real-time updates)
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleFriendAdded = () => {
+      // Trigger sidebar to refresh friends list
+      setRefreshFriends(prev => prev + 1);
+    };
+
+    const handleFriendRemoved = () => {
+      // Trigger sidebar to refresh friends list
+      setRefreshFriends(prev => prev + 1);
+    };
+
+    socket.on('friendAdded', handleFriendAdded);
+    socket.on('friendRemoved', handleFriendRemoved);
+    return () => {
+      socket.off('friendAdded', handleFriendAdded);
+      socket.off('friendRemoved', handleFriendRemoved);
+    };
+  }, []);
+
+  // Fetch groups
+  const fetchGroups = async () => {
+    try {
+      const res = await axios.get('/groups/my-groups');
+      setGroups(res.data.groups || []);
+    } catch (error) {
+      console.error('Failed to fetch groups:', error);
+    }
+  };
+
+  // Fetch unread notification count
+  const fetchUnreadNotifications = async () => {
+    try {
+      const res = await axios.get('/notifications/unread-count');
+      setUnreadNotifications(res.data.unreadCount || 0);
+    } catch (error) {
+      console.error('Failed to fetch notification count:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchGroups();
+    fetchUnreadNotifications();
+  }, [refreshGroups]);
+
+  // Listen for new notifications
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewNotification = () => {
+      setUnreadNotifications(prev => prev + 1);
+    };
+
+    const handleGroupMemberJoined = () => {
+      fetchGroups();
+    };
+
+    const handleGroupDeleted = ({ groupId }) => {
+      setGroups(prev => prev.filter(g => g._id !== groupId));
+      if (selectedGroup?._id === groupId) {
+        setSelectedGroup(null);
+      }
+    };
+
+    socket.on('newNotification', handleNewNotification);
+    socket.on('groupMemberJoined', handleGroupMemberJoined);
+    socket.on('groupDeleted', handleGroupDeleted);
+
+    return () => {
+      socket.off('newNotification', handleNewNotification);
+      socket.off('groupMemberJoined', handleGroupMemberJoined);
+      socket.off('groupDeleted', handleGroupDeleted);
+    };
+  }, [selectedGroup]);
+
   // Listen for new messages to update unread counts
   useEffect(() => {
     if (!socket || !currentUser) return;
@@ -81,14 +218,31 @@ export const Home = () => {
   // Clear unread count when selecting a user
   const handleSelectUser = (user) => {
     setSelectedUser(user);
+    setSelectedGroup(null);
     setShowProfile(false);
     setShowSettings(false);
+    setShowAddUser(false);
     if (user && user._id) {
       setUnreadCounts((prev) => {
         const updated = { ...prev };
         delete updated[user._id];
         return updated;
       });
+    }
+  };
+
+  const handleSelectGroup = async (group) => {
+    try {
+      // Fetch full group details
+      const res = await axios.get(`/groups/${group._id}`);
+      setSelectedGroup(res.data.group);
+      setSelectedUser(null);
+      setShowProfile(false);
+      setShowSettings(false);
+      setShowAddUser(false);
+    } catch (error) {
+      console.error('Failed to fetch group details:', error);
+      setSelectedGroup(group);
     }
   };
 
@@ -140,9 +294,56 @@ export const Home = () => {
     setShowSettings(false);
   };
 
-  const handleTabChange = () => {
+  const handleTabChange = (tab) => {
     setShowProfile(false);
     setShowSettings(false);
+    if (tab === 'adduser') {
+      setShowAddUser(true);
+      setSelectedUser(null);
+      setSelectedGroup(null);
+    } else {
+      setShowAddUser(false);
+    }
+  };
+
+  const handleCloseAddUser = () => {
+    setShowAddUser(false);
+  };
+
+  const handleFriendAdded = () => {
+    // Trigger sidebar to refresh friends list
+    setRefreshFriends(prev => prev + 1);
+  };
+
+  const handleNotificationClick = () => {
+    setShowNotifications(true);
+  };
+
+  const handleNotificationAction = (action) => {
+    if (action === 'accepted') {
+      // Refresh groups after accepting invite
+      setRefreshGroups(prev => prev + 1);
+    }
+    fetchUnreadNotifications();
+  };
+
+  const handleCreateGroup = () => {
+    setShowCreateGroup(true);
+  };
+
+  const handleGroupCreated = (newGroup) => {
+    setGroups(prev => [newGroup, ...prev]);
+    setSelectedGroup(newGroup);
+    setSelectedUser(null);
+  };
+
+  const handleOpenInvite = (group) => {
+    setInviteGroup(group);
+    setShowInviteToGroup(true);
+  };
+
+  const handleGroupUpdated = () => {
+    fetchGroups();
   };
 
   return (
@@ -157,6 +358,15 @@ export const Home = () => {
         showSettings={showSettings}
         onTabChange={handleTabChange}
         viewingUserProfile={viewingUserProfile}
+        onlineUsers={onlineUsers}
+        refreshFriends={refreshFriends}
+        onNotificationClick={handleNotificationClick}
+        unreadNotifications={unreadNotifications}
+        groups={groups}
+        selectedGroup={selectedGroup}
+        onSelectGroup={handleSelectGroup}
+        onCreateGroup={handleCreateGroup}
+        refreshGroups={refreshGroups}
       />
       <div className='w-full h-full'>
         {showEditProfile ? (
@@ -174,15 +384,60 @@ export const Home = () => {
           />
         ) : showSettings ? (
           <Settings onClose={handleCloseSettings} />
+        ) : showAddUser ? (
+          <AddUser 
+            onClose={handleCloseAddUser}
+            onSelectUser={handleSelectUser}
+            currentUser={currentUser}
+            onFriendAdded={handleFriendAdded}
+          />
+        ) : selectedGroup ? (
+          <GroupChat
+            group={selectedGroup}
+            socket={socket}
+            currentUser={currentUser}
+            onClose={() => setSelectedGroup(null)}
+            onOpenInvite={handleOpenInvite}
+            onGroupUpdated={handleGroupUpdated}
+          />
         ) : (
           <ChatView 
             user={selectedUser} 
             socket={socket} 
             currentUser={currentUser} 
             onViewProfile={handleViewUserProfile}
+            isUserOnline={selectedUser && onlineUsers.includes(selectedUser._id)}
+            isUserTyping={selectedUser && typingUsers[selectedUser._id]}
           />
         )}
       </div>
+
+      {/* Notification Popup */}
+      <NotificationPopup
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        socket={socket}
+        onNotificationAction={handleNotificationAction}
+      />
+
+      {/* Create Group Modal */}
+      <CreateGroupModal
+        isOpen={showCreateGroup}
+        onClose={() => setShowCreateGroup(false)}
+        onGroupCreated={handleGroupCreated}
+        currentUser={currentUser}
+      />
+
+      {/* Invite to Group Modal */}
+      <InviteToGroupModal
+        isOpen={showInviteToGroup}
+        onClose={() => {
+          setShowInviteToGroup(false);
+          setInviteGroup(null);
+        }}
+        group={inviteGroup}
+        currentUser={currentUser}
+      />
     </div>
   );
 };

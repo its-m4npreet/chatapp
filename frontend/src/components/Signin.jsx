@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "../lib/axios";
+import { ButtonLoading } from './Loading';
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
@@ -102,9 +103,10 @@ export default function SignIn() {
 
           <button
             onClick={handleSubmit}
-            className="w-full border border-slate-600 hover:border-white text-white font-medium py-3 rounded-lg transition-colors duration-200 cursor-pointer"
+            className="w-full border border-slate-600 hover:border-white text-white font-medium py-3 rounded-lg transition-colors duration-200 cursor-pointer flex items-center justify-center gap-2"
             disabled={loading}
           >
+            {loading && <ButtonLoading color="#ffffff" />}
             {loading ? "Signing in..." : "Sign in"}
           </button>
           {error && (

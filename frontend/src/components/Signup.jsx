@@ -3,9 +3,10 @@ import React, { useState, useEffect } from "react";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "../lib/axios";
+import { ButtonLoading } from './Loading';
 
 export default function SignUp() {
-  const [username, setUsername] = useState("");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -24,11 +25,11 @@ export default function SignUp() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (!username || !email || !password || password.length < 8) return;
+    if (!name || !email || !password || password.length < 8) return;
     setLoading(true);
     try {
       await axios.post("/signup", {
-        name: username,
+        name,
         email,
         password,
       });
@@ -58,21 +59,21 @@ export default function SignUp() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Username Field */}
+            {/* Name Field */}
             <div>
               <label className="block text-sm font-medium text-slate-200 mb-2">
-                Username
+                Name
               </label>
               <input
                 type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="johndoe"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="John Doe"
                 required
                 className="w-full px-4 py-3.5 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-white transition-all duration-300"
               />
               <p className="mt-2 text-xs text-slate-400">
-                Your unique username (letters, numbers, and underscores only)
+                Your display name
               </p>
             </div>
 
@@ -133,9 +134,7 @@ export default function SignUp() {
               }`}
               disabled={loading}
             >
-              {loading && (
-                <span className="inline-block animate-spin rounded-full border-2 border-t-transparent border-white h-5 w-5"></span>
-              )}
+              {loading && <ButtonLoading color="#ffffff" />}
               {loading ? "Creating..." : "Sign Up"}
             </button>
             {error && (
