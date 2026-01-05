@@ -8,13 +8,19 @@ import { TiGroup } from "react-icons/ti";
 import axios from '../lib/axios';
 import { ContentLoading } from './Loading';
 
-const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick, showProfile, onSettingsClick, showSettings, onTabChange, viewingUserProfile, onlineUsers = [], refreshFriends, onNotificationClick, unreadNotifications = 0, groups = [], selectedGroup, onSelectGroup, onCreateGroup, refreshGroups }) => {
+const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick, showProfile, onSettingsClick, showSettings, onTabChange, viewingUserProfile, onlineUsers = [], refreshFriends, onNotificationClick, unreadNotifications = 0, groups = [], selectedGroup, onSelectGroup, onCreateGroup, externalActiveTab }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState('chats'); // 'chats' or 'groups'
+  const [internalActiveTab, setInternalActiveTab] = useState('chats'); // 'chats' or 'groups'
   const [searchQuery, setSearchQuery] = useState('');
   const prevRefreshFriends = useRef(refreshFriends);
+
+  // Use externalActiveTab if provided, otherwise use internal state
+  const activeTab = externalActiveTab || internalActiveTab;
+  const setActiveTab = (tab) => {
+    setInternalActiveTab(tab);
+  };
 
   // Check if viewing another user's profile (from chat)
   const isViewingOtherUserProfile = showProfile && viewingUserProfile;
@@ -142,7 +148,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
             title='chat'
             onClick={() => {
               setActiveTab('chats');
-              if (onTabChange) onTabChange();
+              if (onTabChange) onTabChange('chats');
             }}
           />
           <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'chats' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
@@ -154,7 +160,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
             title='group'
             onClick={() => {
               setActiveTab('groups');
-              if (onTabChange) onTabChange();
+              if (onTabChange) onTabChange('groups');
             }}
           />
           <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'groups' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>

@@ -8,6 +8,7 @@
   color: rgba(255, 255, 255, 0.87);
   /* background-color: #17171a; */
   background-color: color-mix(in oklab, var(--color-black) 80%, transparent);
+  /* background-color: #18181b; */
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;

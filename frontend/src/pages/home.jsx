@@ -37,6 +37,9 @@ export const Home = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
+  // Sidebar tab state
+  const [sidebarActiveTab, setSidebarActiveTab] = useState('chats');
+
   // Fetch current user info on mount and when localStorage changes
   useEffect(() => {
     const updateUser = () => {
@@ -222,6 +225,7 @@ export const Home = () => {
     setShowProfile(false);
     setShowSettings(false);
     setShowAddUser(false);
+    setSidebarActiveTab('chats'); // Switch to chats tab when selecting a user
     if (user && user._id) {
       setUnreadCounts((prev) => {
         const updated = { ...prev };
@@ -240,9 +244,11 @@ export const Home = () => {
       setShowProfile(false);
       setShowSettings(false);
       setShowAddUser(false);
+      setSidebarActiveTab('groups'); // Switch to groups tab when selecting a group
     } catch (error) {
       console.error('Failed to fetch group details:', error);
       setSelectedGroup(group);
+      setSidebarActiveTab('groups');
     }
   };
 
@@ -301,6 +307,13 @@ export const Home = () => {
       setShowAddUser(true);
       setSelectedUser(null);
       setSelectedGroup(null);
+      setSidebarActiveTab('adduser');
+    } else if (tab === 'chats') {
+      setShowAddUser(false);
+      setSidebarActiveTab('chats');
+    } else if (tab === 'groups') {
+      setShowAddUser(false);
+      setSidebarActiveTab('groups');
     } else {
       setShowAddUser(false);
     }
@@ -367,6 +380,7 @@ export const Home = () => {
         onSelectGroup={handleSelectGroup}
         onCreateGroup={handleCreateGroup}
         refreshGroups={refreshGroups}
+        externalActiveTab={sidebarActiveTab}
       />
       <div className='w-full h-full'>
         {showEditProfile ? (

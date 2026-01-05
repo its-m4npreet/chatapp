@@ -90,6 +90,18 @@ const GroupChat = ({
     }
   };
 
+  const handleDeleteGroup = async () => {
+    if (!window.confirm('Are you sure you want to permanently delete this group? This action cannot be undone.')) return;
+
+    try {
+      await axios.delete(`/groups/${group._id}`);
+      if (onGroupUpdated) onGroupUpdated();
+      if (onClose) onClose();
+    } catch (error) {
+      alert(error.response?.data?.message || 'Failed to delete group');
+    }
+  };
+
   if (!group) {
     return (
       <div className="flex-1 flex items-center justify-center bg-zinc-900 text-gray-400">
@@ -259,14 +271,24 @@ const GroupChat = ({
                 ))}
               </div>
               
-              {group.creator?._id !== currentUser?._id && (
-                <button
-                  onClick={handleLeaveGroup}
-                  className="w-full mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition"
-                >
-                  Leave Group
-                </button>
-              )}
+              {/* Group Actions */}
+              <div className="mt-6 pt-4 border-t border-gray-700">
+                {group.creator?._id === currentUser?._id ? (
+                  <button
+                    onClick={handleDeleteGroup}
+                    className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition"
+                  >
+                    Delete Group
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleLeaveGroup}
+                    className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition"
+                  >
+                    Leave Group
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}

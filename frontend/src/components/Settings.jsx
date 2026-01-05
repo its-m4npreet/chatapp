@@ -119,9 +119,9 @@ const Settings = ({ onClose }) => {
               <p className="text-gray-500 text-sm">Customize your experience</p>
             </div>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
+          {/* <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
             <MdOutlineSettings size={22} className="text-white" />
-          </div>
+          </div> */}
         </div>
       </div>
 
