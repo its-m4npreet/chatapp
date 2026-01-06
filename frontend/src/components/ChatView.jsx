@@ -1,65 +1,78 @@
+import React, { useState, useRef, useEffect } from "react";
+import { IoMdSend } from "react-icons/io";
+import { FaRegSmile } from "react-icons/fa";
+import { IoImageOutline, IoClose } from "react-icons/io5";
+import EmojiPicker from "emoji-picker-react";
+import { ButtonLoading } from "./Loading";
+import { ContentLoading } from "./Loading";
 
-import React, { useState, useRef, useEffect } from 'react';
-import { IoMdSend } from 'react-icons/io';
-import { FaRegSmile } from 'react-icons/fa';
-import { IoImageOutline, IoClose } from 'react-icons/io5';
-import EmojiPicker from 'emoji-picker-react';
-import { ButtonLoading } from './Loading';
+const ChatView = ({
+  user,
+  socket,
+  currentUser,
+  onViewProfile,
+  isUserOnline,
+  isUserTyping,
+}) => {
+  // Join current user's room for real-time updates
+  useEffect(() => {
+    if (socket && currentUser && currentUser._id) {
+      socket.emit("join", currentUser._id);
+    }
+  }, [socket, currentUser]);
+  // Refs to always have latest user/currentUser in socket listener
+  const userRef = useRef(user);
+  const currentUserRef = useRef(currentUser);
 
-const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUserTyping }) => {
-      // Join current user's room for real-time updates
-      useEffect(() => {
-        if (socket && currentUser && currentUser._id) {
-          socket.emit('join', currentUser._id);
-        }
-      }, [socket, currentUser]);
-    // Refs to always have latest user/currentUser in socket listener
-    const userRef = useRef(user);
-    const currentUserRef = useRef(currentUser);
-
-    useEffect(() => {
-      userRef.current = user;
-      currentUserRef.current = currentUser;
-    }, [user, currentUser]);
+  useEffect(() => {
+    userRef.current = user;
+    currentUserRef.current = currentUser;
+  }, [user, currentUser]);
   const [showEmoji, setShowEmoji] = useState(false);
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState("");
   const [messages, setMessages] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
   // Listen for incoming messages
   useEffect(() => {
     if (!socket) return;
     const handleNewMessage = (msg) => {
-      console.log('Received newMessage:', msg);
+      console.log("Received newMessage:", msg);
       // Use refs to always get latest user/currentUser
       const u = userRef.current;
       const cu = currentUserRef.current;
       // Extract sender/receiver IDs (handle both object and string)
-      const senderId = typeof msg.sender === 'object' ? msg.sender._id : msg.sender;
-      const receiverId = typeof msg.receiver === 'object' ? msg.receiver._id : msg.receiver;
+      const senderId =
+        typeof msg.sender === "object" ? msg.sender._id : msg.sender;
+      const receiverId =
+        typeof msg.receiver === "object" ? msg.receiver._id : msg.receiver;
       setMessages((prev) => {
         if (
-          u && cu &&
+          u &&
+          cu &&
           ((senderId === u._id && receiverId === cu._id) ||
-           (senderId === cu._id && receiverId === u._id))
+            (senderId === cu._id && receiverId === u._id))
         ) {
           // Avoid duplicates by checking if message already exists
-          const exists = prev.some(m => m._id && msg._id && m._id === msg._id);
+          const exists = prev.some(
+            (m) => m._id && msg._id && m._id === msg._id
+          );
           if (exists) return prev;
           return [...prev, msg];
         }
         return prev;
       });
     };
-    socket.on('newMessage', handleNewMessage);
+    socket.on("newMessage", handleNewMessage);
     return () => {
-      socket.off('newMessage', handleNewMessage);
+      socket.off("newMessage", handleNewMessage);
     };
     // Only set up once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -73,15 +86,19 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     }
     setMessages([]);
     // Fetch previous messages from backend
-    import('../lib/axios').then(({ default: axios }) => {
-      axios.get(`/messages/${user._id}`)
-        .then(res => {
+    setIsLoadingMessages(true);
+    import("../lib/axios").then(({ default: axios }) => {
+      axios
+        .get(`/messages/${user._id}`)
+        .then((res) => {
           if (res.data && res.data.data) {
             setMessages(res.data.data);
+            setIsLoadingMessages(false);
           }
         })
-        .catch(err => {
-          console.error('Failed to fetch messages:', err);
+        .catch((err) => {
+          console.error("Failed to fetch messages:", err);
+          setIsLoadingMessages(false);
         });
     });
   }, [user, currentUser]);
@@ -93,13 +110,13 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       if (
         emojiPickerRef.current &&
         !emojiPickerRef.current.contains(event.target) &&
-        event.target.getAttribute('data-emoji-button') !== 'true'
+        event.target.getAttribute("data-emoji-button") !== "true"
       ) {
         setShowEmoji(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showEmoji]);
 
   const handleEmojiClick = (emojiData) => {
@@ -115,21 +132,21 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          const canvas = document.createElement('canvas');
+          const canvas = document.createElement("canvas");
           let { width, height } = img;
-          
+
           if (width > maxWidth) {
             height = (height * maxWidth) / width;
             width = maxWidth;
           }
-          
+
           canvas.width = width;
           canvas.height = height;
-          
-          const ctx = canvas.getContext('2d');
+
+          const ctx = canvas.getContext("2d");
           ctx.drawImage(img, 0, 0, width, height);
-          
-          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+
+          const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
           resolve(compressedBase64);
         };
         img.src = e.target.result;
@@ -143,15 +160,15 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     const file = e.target.files[0];
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
-        alert('Image size should be less than 10MB');
+        alert("Image size should be less than 10MB");
         return;
       }
-      if (!file.type.startsWith('image/')) {
-        alert('Please select an image file');
+      if (!file.type.startsWith("image/")) {
+        alert("Please select an image file");
         return;
       }
       setSelectedImage(file);
-      
+
       // Compress image for preview and upload
       const compressedImage = await compressImage(file);
       setImagePreview(compressedImage);
@@ -163,22 +180,22 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     setSelectedImage(null);
     setImagePreview(null);
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = "";
     }
   };
 
   const handleSend = async (e) => {
     e.preventDefault();
     if (!inputValue.trim() && !selectedImage) {
-      console.log('No message content or image');
+      console.log("No message content or image");
       return;
     }
     if (!user) {
-      console.log('No selected user');
+      console.log("No selected user");
       return;
     }
     if (!currentUser) {
-      console.log('No current user');
+      console.log("No current user");
       return;
     }
 
@@ -188,14 +205,14 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     if (imagePreview) {
       setIsUploading(true);
       try {
-        const { default: axios } = await import('../lib/axios');
-        const response = await axios.post('/messages/upload', {
-          image: imagePreview
+        const { default: axios } = await import("../lib/axios");
+        const response = await axios.post("/messages/upload", {
+          image: imagePreview,
         });
         imageUrl = response.data.url;
       } catch (error) {
-        console.error('Failed to upload image:', error);
-        alert('Failed to upload image. Please try again.');
+        console.error("Failed to upload image:", error);
+        alert("Failed to upload image. Please try again.");
         setIsUploading(false);
         return;
       }
@@ -209,15 +226,18 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       sender: currentUser._id,
       createdAt: new Date().toISOString(),
     };
-    console.log('Sending message:', msg);
-    socket.emit('sendMessage', msg);
+    console.log("Sending message:", msg);
+    socket.emit("sendMessage", msg);
     // Stop typing indicator when message is sent
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-    socket.emit('stopTyping', { senderId: currentUser._id, receiverId: user._id });
+    socket.emit("stopTyping", {
+      senderId: currentUser._id,
+      receiverId: user._id,
+    });
     // Do NOT update messages here; rely on socket event for real-time update
-    setInputValue('');
+    setInputValue("");
     handleRemoveImage();
   };
 
@@ -227,30 +247,42 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
         {/* Animated chat illustration */}
         <div className="relative mb-8">
           <div className="w-32 h-32 rounded-full bg-linear-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <svg 
-              className="w-16 h-16 text-white" 
-              fill="none" 
-              stroke="currentColor" 
+            <svg
+              className="w-16 h-16 text-white"
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
             >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={1.5} 
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" 
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
               />
             </svg>
           </div>
           {/* Floating bubbles animation */}
-          <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0s' }}></div>
-          <div className="absolute -bottom-1 -left-3 w-4 h-4 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-          <div className="absolute top-1/2 -right-4 w-3 h-3 rounded-full bg-pink-400 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+          <div
+            className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-blue-400 animate-bounce"
+            style={{ animationDelay: "0s" }}
+          ></div>
+          <div
+            className="absolute -bottom-1 -left-3 w-4 h-4 rounded-full bg-purple-400 animate-bounce"
+            style={{ animationDelay: "0.2s" }}
+          ></div>
+          <div
+            className="absolute top-1/2 -right-4 w-3 h-3 rounded-full bg-pink-400 animate-bounce"
+            style={{ animationDelay: "0.4s" }}
+          ></div>
         </div>
 
         {/* Welcome text */}
-        <h2 className="text-2xl font-bold text-white mb-2">Welcome to ChatApp</h2>
+        <h2 className="text-2xl font-bold text-white mb-2">
+          Welcome to ChatApp
+        </h2>
         <p className="text-gray-400 text-center max-w-sm mb-6 px-4">
-          Select a conversation from the sidebar to start chatting with your friends
+          Select a conversation from the sidebar to start chatting with your
+          friends
         </p>
 
         {/* Features list */}
@@ -288,12 +320,16 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   return (
     <div className="chat-view h-full w-full flex flex-col relative">
       <div className="chat-header p-4 border-b border-gray-700 flex items-center gap-4 ">
-        <div 
+        <div
           className="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={() => onViewProfile && onViewProfile(user)}
         >
           <div className="relative w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-lg">
-            {user.name[0]}
+            <img
+              src={user.profilePicture}
+              alt={user.name}
+              className="w-full h-full rounded-full object-cover"
+            />{" "}
             {isUserOnline && (
               <span
                 className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"
@@ -308,42 +344,75 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
                 <span className="text-green-400 flex items-end gap-1">
                   typing
                   <span className="flex gap-0.5">
-                    <span className="w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                    <span className="w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                    <span className="w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                    <span
+                      className="w-1 h-1 bg-green-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "0ms" }}
+                    ></span>
+                    <span
+                      className="w-1 h-1 bg-green-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "150ms" }}
+                    ></span>
+                    <span
+                      className="w-1 h-1 bg-green-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "300ms" }}
+                    ></span>
                   </span>
                 </span>
               ) : isUserOnline ? (
                 <span className="text-green-400">Online</span>
               ) : (
-                user.bio || 'Offline'
+                user.bio || "Offline"
               )}
             </div>
           </div>
         </div>
       </div>
-      <div className="flex-1 p-6 overflow-y-auto text-white scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-        {messages.length === 0 ? (
+      <div
+        className="flex-1 p-6 overflow-y-auto text-white scrollbar-hide"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      >
+        {isLoadingMessages ? (
+          <ContentLoading />
+        ) : messages.length === 0 ? (
           <div className="text-center text-gray-500 my-4">No messages yet.</div>
         ) : (
           messages.map((msg, idx) => {
-            const senderId = typeof msg.sender === 'object' ? msg.sender._id : msg.sender;
+            const senderId =
+              typeof msg.sender === "object" ? msg.sender._id : msg.sender;
             const isCurrentUser = currentUser && senderId === currentUser._id;
             const imageUrl = msg.image?.url || msg.image;
             return (
-              <div key={msg._id || idx} className={`my-2 flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-xs ${isCurrentUser ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'} p-3 rounded-lg shadow-md`}>
+              <>
+              <div
+                key={msg._id || idx}
+                className={`my-2 flex flex-col ${
+                  isCurrentUser ? "items-end" : "items-start"
+                }`}
+              >
+                <div
+                  className={`max-w-xs p-3 rounded-2xl shadow-md ${
+                    isCurrentUser
+                      ? "bg-blue-600 text-white rounded-br-md "
+                      : "bg-gray-800 text-white rounded-bl-md"
+                  } `}
+                >
                   {imageUrl && (
-                    <img 
-                      src={imageUrl} 
-                      alt="Shared" 
-                      className="max-w-full rounded-lg mb-2 cursor-pointer hover:opacity-90"
-                      onClick={() => window.open(imageUrl, '_blank')}
+                    <img
+                      src={imageUrl}
+                      alt="Shared"
+                      className="max-w-full rounded-lg cursor-pointer hover:opacity-90"
+                      onClick={() => window.open(imageUrl, "_blank")}
                     />
                   )}
                   {msg.content && <span>{msg.content}</span>}
+                  
                 </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
               </div>
+              
+                        </>
             );
           })
         )}
@@ -352,9 +421,9 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       {imagePreview && (
         <div className="px-4 py-2 ">
           <div className="relative inline-block">
-            <img 
-              src={imagePreview} 
-              alt="Preview" 
+            <img
+              src={imagePreview}
+              alt="Preview"
               className="max-h-32 rounded-lg"
             />
             <button
@@ -367,7 +436,10 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
           </div>
         </div>
       )}
-      <form className="p-4 border-t border-gray-700 flex items-center gap-2 relative" onSubmit={handleSend}>
+      <form
+        className="p-4 border-t border-gray-700 flex items-center gap-2 relative"
+        onSubmit={handleSend}
+      >
         {/* Hidden file input */}
         <input
           type="file"
@@ -379,7 +451,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
         {/* Image upload button */}
         <button
           type="button"
-          className="p-2 text-gray-400 hover:text-white transition-colors"
+          className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer"
           onClick={() => fileInputRef.current?.click()}
           title="Upload image"
         >
@@ -391,7 +463,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
           onClick={() => setShowEmoji((v) => !v)}
           data-emoji-button="true"
         >
-          <FaRegSmile size={22} />
+          <FaRegSmile size={22} className="cursor-pointer" />
         </button>
         {showEmoji && (
           <div
@@ -399,7 +471,11 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
             className="absolute bottom-12 left-0 z-50 "
             style={{ minWidth: 320 }}
           >
-            <EmojiPicker onEmojiClick={handleEmojiClick} theme="dark" searchDisabled={false} />
+            <EmojiPicker
+              onEmojiClick={handleEmojiClick}
+              theme="dark"
+              searchDisabled={false}
+            />
           </div>
         )}
         <input
@@ -411,19 +487,29 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
             setInputValue(e.target.value);
             // Emit typing event
             if (socket && currentUser && user) {
-              socket.emit('typing', { senderId: currentUser._id, receiverId: user._id });
+              socket.emit("typing", {
+                senderId: currentUser._id,
+                receiverId: user._id,
+              });
               // Clear previous timeout
               if (typingTimeoutRef.current) {
                 clearTimeout(typingTimeoutRef.current);
               }
               // Stop typing after 2 seconds of inactivity
               typingTimeoutRef.current = setTimeout(() => {
-                socket.emit('stopTyping', { senderId: currentUser._id, receiverId: user._id });
+                socket.emit("stopTyping", {
+                  senderId: currentUser._id,
+                  receiverId: user._id,
+                });
               }, 2000);
             }
           }}
         />
-        <button type="submit" className="p-2 text-gray-400 hover:text-white disabled:opacity-50" disabled={isUploading}>
+        <button
+          type="submit"
+          className="p-2 text-gray-400 hover:text-white disabled:opacity-50 cursor-pointer"
+          disabled={isUploading}
+        >
           {isUploading ? (
             <ButtonLoading color="#9ca3af" />
           ) : (
