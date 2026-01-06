@@ -8,6 +8,7 @@ module.exports = (groupController) => {
     router.post('/create', authMiddleware, groupController.createGroup);
     router.get('/my-groups', authMiddleware, groupController.getMyGroups);
     router.get('/:groupId', authMiddleware, groupController.getGroupById);
+    router.put('/:groupId', authMiddleware, groupController.updateGroup);
     router.delete('/:groupId', authMiddleware, groupController.deleteGroup);
 
     // Group invitations
@@ -17,6 +18,8 @@ module.exports = (groupController) => {
 
     // Group membership
     router.post('/:groupId/leave', authMiddleware, groupController.leaveGroup);
+    router.post('/:groupId/remove-member', authMiddleware, groupController.removeMember);
+    router.post('/:groupId/toggle-admin', authMiddleware, groupController.toggleAdmin);
 
     // Group messages
     router.get('/:groupId/messages', authMiddleware, groupController.getGroupMessages);

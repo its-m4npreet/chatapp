@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { IoClose, IoSend, IoImageOutline, IoSettingsOutline, IoPersonAddOutline } from 'react-icons/io5';
+import { MdEdit } from 'react-icons/md';
 import { TiGroup } from 'react-icons/ti';
 import { FaCircleUser } from 'react-icons/fa6';
 import axios from '../lib/axios';
 import { ContentLoading } from './Loading';
+import EditGroupModal from './EditGroupModal';
 
 const GroupChat = ({ 
   group, 
@@ -18,7 +20,11 @@ const GroupChat = ({
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
+  const [showEditGroup, setShowEditGroup] = useState(false);
   const messagesEndRef = useRef(null);
+
+  const isCreator = group?.creator?._id === currentUser?._id;
+  const isAdmin = group?.admins?.some(a => a._id === currentUser?._id);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -104,7 +110,7 @@ const GroupChat = ({
 
   if (!group) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-zinc-900 text-gray-400">
+      <div className="flex-1 flex items-center justify-center text-gray-400">
         <div className="text-center">
           <TiGroup size={64} className="mx-auto mb-4 text-gray-600" />
           <p>Select a group to start chatting</p>
@@ -114,9 +120,9 @@ const GroupChat = ({
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-zinc-900">
+    <div className="flex-1 flex flex-col h-full ">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-zinc-800">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 ">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
             {group.avatar ? (
@@ -131,6 +137,15 @@ const GroupChat = ({
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {(isCreator || isAdmin) && (
+            <button
+              onClick={() => setShowEditGroup(true)}
+              className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
+              title="Edit group"
+            >
+              <MdEdit size={20} />
+            </button>
+          )}
           <button
             onClick={() => onOpenInvite && onOpenInvite(group)}
             className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
@@ -228,7 +243,7 @@ const GroupChat = ({
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 placeholder="Type a message..."
-                className="flex-1 bg-zinc-800 text-white px-4 py-2 rounded-lg outline-none border border-gray-700 focus:border-blue-500"
+                className="flex-1  text-white px-4 py-2 rounded-lg outline-none border border-gray-700 focus:border-blue-500"
               />
               <button
                 type="submit"
@@ -293,6 +308,18 @@ const GroupChat = ({
           </div>
         )}
       </div>
+
+      {/* Edit Group Modal */}
+      <EditGroupModal
+        isOpen={showEditGroup}
+        group={group}
+        currentUser={currentUser}
+        onClose={() => setShowEditGroup(false)}
+        onGroupUpdated={() => {
+          if (onGroupUpdated) onGroupUpdated();
+          setShowEditGroup(false);
+        }}
+      />
     </div>
   );
 };

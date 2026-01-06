@@ -186,14 +186,33 @@ export const Home = () => {
       }
     };
 
+    const handleGroupUpdated = ({ group }) => {
+      setGroups(prev => prev.map(g => g._id === group._id ? group : g));
+      if (selectedGroup?._id === group._id) {
+        setSelectedGroup(group);
+      }
+    };
+
+    const handleRemovedFromGroup = ({ groupId, groupName }) => {
+      setGroups(prev => prev.filter(g => g._id !== groupId));
+      if (selectedGroup?._id === groupId) {
+        setSelectedGroup(null);
+        alert(`You have been removed from the group "${groupName}"`);
+      }
+    };
+
     socket.on('newNotification', handleNewNotification);
     socket.on('groupMemberJoined', handleGroupMemberJoined);
     socket.on('groupDeleted', handleGroupDeleted);
+    socket.on('groupUpdated', handleGroupUpdated);
+    socket.on('removedFromGroup', handleRemovedFromGroup);
 
     return () => {
       socket.off('newNotification', handleNewNotification);
       socket.off('groupMemberJoined', handleGroupMemberJoined);
       socket.off('groupDeleted', handleGroupDeleted);
+      socket.off('groupUpdated', handleGroupUpdated);
+      socket.off('removedFromGroup', handleRemovedFromGroup);
     };
   }, [selectedGroup]);
 

@@ -21,6 +21,14 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
   const fileInputRef = useRef(null);
   const bannerInputRef = useRef(null);
 
+  // Max length constants
+  const MAX_LENGTHS = {
+    name: 50,
+    bio: 160,
+    about: 500,
+    location: 100
+  };
+
   useEffect(() => {
     if (currentUser) {
       setName(currentUser.name || '');
@@ -33,6 +41,33 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
       setBanner(currentUser.banner || '');
     }
   }, [currentUser]);
+
+  // Check if any field exceeds max length
+  const hasLengthError = () => {
+    return (
+      name.length > MAX_LENGTHS.name ||
+      bio.length > MAX_LENGTHS.bio ||
+      about.length > MAX_LENGTHS.about ||
+      location.length > MAX_LENGTHS.location
+    );
+  };
+
+  // Get specific field error message
+  const getFieldError = () => {
+    if (name.length > MAX_LENGTHS.name) {
+      return `Name must be ${MAX_LENGTHS.name} characters or less`;
+    }
+    if (bio.length > MAX_LENGTHS.bio) {
+      return `Bio must be ${MAX_LENGTHS.bio} characters or less`;
+    }
+    if (about.length > MAX_LENGTHS.about) {
+      return `About Me must be ${MAX_LENGTHS.about} characters or less`;
+    }
+    if (location.length > MAX_LENGTHS.location) {
+      return `Location must be ${MAX_LENGTHS.location} characters or less`;
+    }
+    return '';
+  };
 
   const handleImageSelect = async (e) => {
     const file = e.target.files[0];
@@ -82,6 +117,12 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
       return;
     }
 
+    // Check for length errors
+    if (hasLengthError()) {
+      setError(getFieldError());
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -89,6 +130,7 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
       const updateData = { 
         name: name.trim(), 
         bio: bio.trim(),
+        aboutMe: about.trim(),
         location: location.trim(),
         website: website.trim(),
         portfolio: portfolio.trim()
@@ -132,14 +174,14 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
               <IoArrowBack size={20} />
             </button>
             <div>
-              <h1 className="text-xl font-bold text-white">Edit Profile</h1>
+              <h2 className="text-xl font-semibold text-white">Edit Profile</h2>
               <p className="text-gray-500 text-sm">Update your information</p>
             </div>
           </div>
-          <button
+          {/* <button
             onClick={handleSave}
-            disabled={loading}
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-full font-semibold flex items-center gap-2 transition-all"
+            disabled={loading || hasLengthError()}
+            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white rounded-full font-semibold flex items-center gap-2 transition-all"
           >
             {loading ? (
               <ButtonLoading color="#ffffff" />
@@ -147,7 +189,7 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
               <MdSave size={18} />
             )}
             {loading ? 'Saving...' : 'Save'}
-          </button>
+          </button> */}
         </div>
       </div>
 
@@ -235,11 +277,20 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full p-4 rounded-xl bg-[#1a1f26] border border-gray-700 text-white outline-none focus:border-blue-500 transition-all placeholder:text-gray-600"
+              className={`w-full p-4 rounded-xl bg-[#131315] border ${
+                name.length > MAX_LENGTHS.name 
+                  ? 'border-red-500 focus:border-red-500' 
+                  : 'border-[#29292e]   focus:border-blue-500'
+              } ${
+                name.length > MAX_LENGTHS.name ? 'text-red-400' : 'text-white'
+              } outline-none transition-all placeholder:text-gray-600`}
               placeholder="Your full name"
-              maxLength={50}
             />
-            <p className="text-gray-600 text-xs mt-1 text-right">{name.length}/50</p>
+            <p className={`text-xs mt-1 text-right ${
+              name.length > MAX_LENGTHS.name ? 'text-red-500' : 'text-gray-600'
+            }`}>
+              {name.length}/{MAX_LENGTHS.name}
+            </p>
           </div>
 
           {/* Bio Field */}
@@ -248,25 +299,44 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              className="w-full p-4 rounded-xl bg-[#1a1f26] border border-gray-700 text-white outline-none focus:border-blue-500 resize-none transition-all placeholder:text-gray-600"
-              placeholder="Tell people about yourself, your experience, skills, and interests..."
-              rows={1}
-              maxLength={160}
+              className={`w-full p-4 rounded-xl bg-[#131315] border ${
+                bio.length > MAX_LENGTHS.bio 
+                  ? 'border-red-500 focus:border-red-500' 
+                  : 'border-[#29292e]   focus:border-blue-500'
+              } ${
+                bio.length > MAX_LENGTHS.bio ? 'text-red-400' : 'text-white'
+              } outline-none resize-none transition-all placeholder:text-gray-600`}
+              placeholder="Tell people about yourself..."
+              rows={2}
             />
-            <p className={`text-xs mt-1 text-right ${bio.length>160 ? 'text-red-500' : 'text-gray-600'}`}>{bio.length}/160</p>
+            <p className={`text-xs mt-1 text-right ${
+              bio.length > MAX_LENGTHS.bio ? 'text-red-500' : 'text-gray-600'
+            }`}>
+              {bio.length}/{MAX_LENGTHS.bio}
+            </p>
           </div>
-           {/* about Me Field */}
+
+          {/* About Me Field */}
           <div>
-            <label className="block text-gray-400 text-sm font-medium mb-2">About</label>
+            <label className="block text-gray-400 text-sm font-medium mb-2">About Me</label>
             <textarea
               value={about}
               onChange={(e) => setAbout(e.target.value)}
-              className="w-full p-4 rounded-xl bg-[#1a1f26] border border-gray-700 text-white outline-none focus:border-blue-500 resize-none transition-all placeholder:text-gray-600"
+              className={`w-full p-4 rounded-xl bg-[#131315] border ${
+                about.length > MAX_LENGTHS.about 
+                  ? 'border-red-500 focus:border-red-500' 
+                  : 'border-[#29292e]   focus:border-blue-500'
+              } ${
+                about.length > MAX_LENGTHS.about ? 'text-red-400' : 'text-white'
+              } outline-none resize-none transition-all placeholder:text-gray-600`}
               placeholder="Tell people about yourself, your experience, skills, and interests..."
               rows={4}
-              maxLength={500}
             />
-            <p className="text-gray-600 text-xs mt-1 text-right">{bio.length}/500</p>
+            <p className={`text-xs mt-1 text-right ${
+              about.length > MAX_LENGTHS.about ? 'text-red-500' : 'text-gray-600'
+            }`}>
+              {about.length}/{MAX_LENGTHS.about}
+            </p>
           </div>
 
           {/* Location Field */}
@@ -276,10 +346,20 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
               type="text"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              className="w-full p-4 rounded-xl bg-[#1a1f26] border border-gray-700 text-white outline-none focus:border-blue-500 transition-all placeholder:text-gray-600"
+              className={`w-full p-4 rounded-xl bg-[#131315] border ${
+                location.length > MAX_LENGTHS.location 
+                  ? 'border-red-500 focus:border-red-500' 
+                  : 'border-[#29292e]   focus:border-blue-500'
+              } ${
+                location.length > MAX_LENGTHS.location ? 'text-red-400' : 'text-white'
+              } outline-none transition-all placeholder:text-gray-600`}
               placeholder="e.g. Melbourne, AU"
-              maxLength={100}
             />
+            <p className={`text-xs mt-1 text-right ${
+              location.length > MAX_LENGTHS.location ? 'text-red-500' : 'text-gray-600'
+            }`}>
+              {location.length}/{MAX_LENGTHS.location}
+            </p>
           </div>
 
           {/* Website Field */}
@@ -289,7 +369,7 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
               type="url"
               value={website}
               onChange={(e) => setWebsite(e.target.value)}
-              className="w-full p-4 rounded-xl bg-[#1a1f26] border border-gray-700 text-white outline-none focus:border-blue-500 transition-all placeholder:text-gray-600"
+              className="w-full p-4 rounded-xl bg-[#131315] border border-[#29292e]  text-white outline-none focus:border-blue-500 transition-all placeholder:text-gray-600"
               placeholder="https://yourwebsite.com"
             />
           </div>
@@ -301,16 +381,28 @@ const EditProfile = ({ currentUser, onClose, onSave }) => {
               type="url"
               value={portfolio}
               onChange={(e) => setPortfolio(e.target.value)}
-              className="w-full p-4 rounded-xl bg-[#1a1f26] border border-gray-700 text-white outline-none focus:border-blue-500 transition-all placeholder:text-gray-600"
+              className="w-full p-4 rounded-xl bg-[#131315] border border-[#29292e]  text-white outline-none focus:border-blue-500 transition-all placeholder:text-gray-600"
               placeholder="https://yourportfolio.com"
             />
           </div>
 
           {/* Cancel Button */}
-          <div className="pt-4">
+          <div className="pt-4 flex gap-4">
+            <button
+            onClick={handleSave}
+            disabled={loading || hasLengthError()}
+            className="flex-1 px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white rounded-xl font-medium flex items-center justify-center gap-2 transition-all cursor-pointer"
+          >
+            {loading ? (
+              <ButtonLoading color="#ffffff" />
+            ) : (
+              <MdSave size={18} />
+            )}
+            {loading ? 'Saving...' : 'Save'}
+          </button>
             <button
               onClick={onClose}
-              className="w-full py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-xl font-medium transition-all"
+              className="flex-1 py-3 bg-[#131315] hover:bg-[#29292e] text-white rounded-xl font-medium transition-all cursor-pointer flex items-center justify-center"
             >
               Cancel
             </button>

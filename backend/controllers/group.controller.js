@@ -262,6 +262,149 @@ const createGroupController = (io) => {
         }
     };
 
+    // Update group (creator or admin only)
+    const updateGroup = async (req, res) => {
+        try {
+            const { groupId } = req.params;
+            const { name, description, avatar } = req.body;
+            const userId = req.userId;
+
+            const group = await Group.findById(groupId);
+            if (!group) {
+                return res.status(404).json({ message: 'Group not found' });
+            }
+
+            // Check if user is creator or admin
+            const isCreator = group.creator.toString() === userId;
+            const isAdmin = group.admins.some(a => a.toString() === userId);
+
+            if (!isCreator && !isAdmin) {
+                return res.status(403).json({ message: 'Only creator or admin can update the group' });
+            }
+
+            if (name && name.trim()) {
+                group.name = name.trim();
+            }
+
+            if (description !== undefined) {
+                group.description = description.trim();
+            }
+
+            if (avatar) {
+                group.avatar = avatar;
+            }
+
+            await group.save();
+            await group.populate('creator', 'name profilePicture');
+            await group.populate('members', 'name profilePicture email');
+            await group.populate('admins', 'name profilePicture');
+
+            // Notify all members about the update
+            group.members.forEach(member => {
+                io.to(member._id.toString()).emit('groupUpdated', { group });
+            });
+
+            res.status(200).json({ message: 'Group updated successfully', group });
+        } catch (error) {
+            console.error('Update group error:', error);
+            res.status(500).json({ message: error.message || 'Server error' });
+        }
+    };
+
+    // Remove member from group (creator or admin only)
+    const removeMember = async (req, res) => {
+        try {
+            const { groupId } = req.params;
+            const { memberId } = req.body;
+            const userId = req.userId;
+
+            const group = await Group.findById(groupId);
+            if (!group) {
+                return res.status(404).json({ message: 'Group not found' });
+            }
+
+            // Check if user is creator or admin
+            const isCreator = group.creator.toString() === userId;
+            const isAdmin = group.admins.some(a => a.toString() === userId);
+
+            if (!isCreator && !isAdmin) {
+                return res.status(403).json({ message: 'Only creator or admin can remove members' });
+            }
+
+            // Cannot remove the creator
+            if (memberId === group.creator.toString()) {
+                return res.status(400).json({ message: 'Cannot remove the group creator' });
+            }
+
+            // Admins cannot remove other admins (only creator can)
+            const isTargetAdmin = group.admins.some(a => a.toString() === memberId);
+            if (isTargetAdmin && !isCreator) {
+                return res.status(403).json({ message: 'Only the creator can remove admins' });
+            }
+
+            // Remove from members and admins
+            group.members = group.members.filter(m => m.toString() !== memberId);
+            group.admins = group.admins.filter(a => a.toString() !== memberId);
+            await group.save();
+
+            // Notify the removed member
+            io.to(memberId).emit('removedFromGroup', { groupId, groupName: group.name });
+
+            res.status(200).json({ message: 'Member removed successfully' });
+        } catch (error) {
+            console.error('Remove member error:', error);
+            res.status(500).json({ message: error.message || 'Server error' });
+        }
+    };
+
+    // Toggle admin status (creator only)
+    const toggleAdmin = async (req, res) => {
+        try {
+            const { groupId } = req.params;
+            const { memberId, makeAdmin } = req.body;
+            const userId = req.userId;
+
+            const group = await Group.findById(groupId);
+            if (!group) {
+                return res.status(404).json({ message: 'Group not found' });
+            }
+
+            // Only creator can manage admins
+            if (group.creator.toString() !== userId) {
+                return res.status(403).json({ message: 'Only the creator can manage admins' });
+            }
+
+            // Cannot change creator's admin status
+            if (memberId === group.creator.toString()) {
+                return res.status(400).json({ message: 'Cannot change creator admin status' });
+            }
+
+            // Check if member exists in group
+            if (!group.members.some(m => m.toString() === memberId)) {
+                return res.status(400).json({ message: 'User is not a member of this group' });
+            }
+
+            const isCurrentlyAdmin = group.admins.some(a => a.toString() === memberId);
+
+            if (makeAdmin && !isCurrentlyAdmin) {
+                group.admins.push(memberId);
+            } else if (!makeAdmin && isCurrentlyAdmin) {
+                group.admins = group.admins.filter(a => a.toString() !== memberId);
+            }
+
+            await group.save();
+            await group.populate('admins', 'name profilePicture');
+
+            res.status(200).json({ 
+                message: makeAdmin ? 'User is now an admin' : 'Admin status removed',
+                admins: group.admins 
+            });
+        } catch (error) {
+            console.error('Toggle admin error:', error);
+            res.status(500).json({ message: error.message || 'Server error' });
+        }
+    };
+
     // Delete group (creator only)
     const deleteGroup = async (req, res) => {
         try {
@@ -376,11 +519,14 @@ const createGroupController = (io) => {
         createGroup,
         getMyGroups,
         getGroupById,
+        updateGroup,
         inviteToGroup,
         acceptGroupInvite,
         declineGroupInvite,
         leaveGroup,
         deleteGroup,
+        removeMember,
+        toggleAdmin,
         getGroupMessages,
         sendGroupMessage,
     };

@@ -131,7 +131,7 @@ const NotificationPopup = ({ isOpen, onClose, socket, onNotificationAction }) =>
       <div className="absolute inset-0" onClick={onClose} />
       
       {/* Popup */}
-      <div className="relative w-96 max-h-[calc(100vh-100px)] bg-zinc-800 rounded-xl shadow-2xl border border-gray-700 flex flex-col overflow-hidden">
+      <div className="relative w-96 max-h-[calc(100vh-100px)] bg-[#131315] rounded-xl shadow-2xl border border-gray-700 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
           <h3 className="text-white font-semibold text-lg">Notifications</h3>
@@ -180,7 +180,7 @@ const NotificationPopup = ({ isOpen, onClose, socket, onNotificationAction }) =>
                 >
                   <div className="flex gap-3">
                     {/* Icon/Avatar */}
-                    <div className="flex-shrink-0">
+                    <div className="shrink-0">
                       {notification.type === 'group_invite' ? (
                         <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
                           <TiGroup size={20} className="text-white" />

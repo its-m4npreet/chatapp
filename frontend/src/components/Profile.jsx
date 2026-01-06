@@ -73,8 +73,8 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile }) => {
                 <FaCircleUser size={80} className="text-gray-600" />
               </div>
             )}
-            <div className="absolute bottom-1 right-1 bg-blue-500 rounded-full p-1">
-              <MdVerified size={16} className="text-white" />
+            <div className="absolute bottom-1 right-1 bg-[#EAB308] rounded-full p-1">
+              <MdVerified size={16} className="text-white " />
             </div>
           </div>
         </div>
@@ -98,7 +98,10 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile }) => {
         {/* Name and Title */}
         <div className="flex items-center gap-2 mb-1">
           <h1 className="text-2xl md:text-3xl font-bold text-white">{user.name}</h1>
-          <MdVerified size={22} className="text-blue-500" />
+          <div className='flex justify-center items-center mt-4'>
+                      <MdVerified size={22} className="text-[#EAB308] flex justify-center items-center" />
+
+          </div>
         </div>
         <p className="text-gray-400 text-sm md:text-base">{user.email}</p>
 
