@@ -21,6 +21,12 @@ const messageSchema = new mongoose.Schema(
       enum: ["text", "image", "mixed"],
       default: "text",
     },
+    reactions: [
+      {
+        user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        reaction: { type: String },
+      },
+    ],
     readAt: { type: Date }
   },
   { timestamps: true }

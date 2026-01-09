@@ -86,7 +86,7 @@
   border-radius: 8px;
 }
 .sidebar-chat:hover, .sidebar-chat.sidebar-chat-active {
-  background: #232733;
+  background: #181c23;
 }
 .chat-avatar {
   position: relative;

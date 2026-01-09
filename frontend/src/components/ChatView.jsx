@@ -381,38 +381,45 @@ const ChatView = ({
               typeof msg.sender === "object" ? msg.sender._id : msg.sender;
             const isCurrentUser = currentUser && senderId === currentUser._id;
             const imageUrl = msg.image?.url || msg.image;
+            const isImageOnly = imageUrl && !msg.content;
+            const bubbleClass = `max-w-xs shadow-md ${
+              isImageOnly
+                ? "p-0 bg-transparent rounded-2xl " +
+                  (isCurrentUser ? "rounded-br-md" : "rounded-bl-md")
+                : "p-3 rounded-2xl " +
+                  (isCurrentUser
+                    ? "bg-blue-600 text-white rounded-br-md"
+                    : "bg-gray-800 text-white rounded-bl-md")
+            }`;
             return (
               <>
-              <div
-                key={msg._id || idx}
-                className={`my-2 flex flex-col ${
-                  isCurrentUser ? "items-end" : "items-start"
-                }`}
-              >
                 <div
-                  className={`max-w-xs p-3 rounded-2xl shadow-md ${
-                    isCurrentUser
-                      ? "bg-blue-600 text-white rounded-br-md "
-                      : "bg-gray-800 text-white rounded-bl-md"
-                  } `}
+                  key={msg._id || idx}
+                  className={`my-2 flex flex-col ${
+                    isCurrentUser ? "items-end" : "items-start"
+                  }`}
                 >
-                  {imageUrl && (
-                    <img
-                      src={imageUrl}
-                      alt="Shared"
-                      className="max-w-full rounded-lg cursor-pointer hover:opacity-90"
-                      onClick={() => window.open(imageUrl, "_blank")}
-                    />
-                  )}
-                  {msg.content && <span>{msg.content}</span>}
-                  
-                </div>
+                  <div className={bubbleClass}>
+                    {imageUrl && (
+                      <img
+                        src={imageUrl}
+                        alt="Shared"
+                        className={`${
+                          isImageOnly ? "rounded-2xl" : "rounded-lg mb-2"
+                        } max-w-full cursor-pointer hover:opacity-90`}
+                        onClick={() => window.open(imageUrl, "_blank")}
+                      />
+                    )}
+                    {msg.content && <span>{msg.content}</span>}
+                  </div>
                   <p className="text-xs text-gray-500 mt-1">
-                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-              </div>
-              
-                        </>
+                    {new Date(msg.createdAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                </div>
+              </>
             );
           })
         )}
@@ -424,7 +431,7 @@ const ChatView = ({
             <img
               src={imagePreview}
               alt="Preview"
-              className="max-h-32 rounded-lg"
+              className="max-h-32 rounded-2xl"
             />
             <button
               type="button"
