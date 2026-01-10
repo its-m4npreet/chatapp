@@ -1,27 +1,27 @@
-import React, { useState } from 'react';
-import { 
-  MdOutlineSettings, 
-  MdDarkMode, 
-  MdLightMode, 
-  MdNotifications, 
-  MdNotificationsOff, 
-  MdVolumeUp, 
-  MdVolumeOff, 
-  MdLock, 
+import React, { useState } from "react";
+import {
+  MdOutlineSettings,
+  MdDarkMode,
+  MdLightMode,
+  MdNotifications,
+  MdNotificationsOff,
+  MdVolumeUp,
+  MdVolumeOff,
+  MdLock,
   MdInfo,
   MdKeyboardArrowRight,
   MdColorLens,
   MdSecurity,
   MdHelp,
   MdBugReport,
-  MdPrivacyTip
-} from 'react-icons/md';
-import { IoLanguage, IoArrowBack, IoShieldCheckmark } from 'react-icons/io5';
-import { FaUserShield, FaDatabase } from 'react-icons/fa6';
+  MdPrivacyTip,
+} from "react-icons/md";
+import { IoLanguage, IoArrowBack, IoShieldCheckmark } from "react-icons/io5";
+import { FaUserShield, FaDatabase } from "react-icons/fa6";
 
 // Helper function to get initial settings from localStorage
 const getInitialSettings = () => {
-  const savedSettings = localStorage.getItem('chatAppSettings');
+  const savedSettings = localStorage.getItem("chatAppSettings");
   if (savedSettings) {
     return JSON.parse(savedSettings);
   }
@@ -29,7 +29,7 @@ const getInitialSettings = () => {
     darkMode: true,
     notifications: true,
     sound: true,
-    language: 'English',
+    language: "English",
     onlineStatus: true,
     readReceipts: true,
     typingIndicator: true,
@@ -41,42 +41,61 @@ const Toggle = ({ enabled, onChange }) => (
   <button
     onClick={() => onChange(!enabled)}
     className={`relative w-12 h-6 rounded-full transition-all duration-300 ${
-      enabled ? 'bg-blue-600' : 'bg-zinc-600'
+      enabled ? "bg-blue-600" : "bg-zinc-600"
     }`}
   >
     <span
       className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 ${
-        enabled ? 'translate-x-6' : 'translate-x-0'
+        enabled ? "translate-x-6" : "translate-x-0"
       }`}
     />
   </button>
 );
 
 // SettingCard component for grouped settings
-const SettingCard = ({ children, className = '' }) => (
-  <div className={`bg-zinc-800/50 backdrop-blur-sm rounded-2xl border border-zinc-700/50 overflow-hidden ${className}`}>
+const SettingCard = ({ children, className = "" }) => (
+  <div
+    className={`bg-zinc-800/50 backdrop-blur-sm rounded-2xl border border-zinc-700/50 overflow-hidden ${className}`}
+  >
     {children}
   </div>
 );
 
 // SettingRow component for individual settings
-const SettingRow = ({ icon: Icon, title, description, children, onClick, showArrow = false, iconBg = 'bg-zinc-700', iconColor = 'text-gray-300' }) => (
-  <div 
-    className={`flex items-center justify-between p-4 hover:bg-zinc-700/30 transition-colors ${onClick ? 'cursor-pointer' : ''}`}
+const SettingRow = ({
+  icon: Icon,
+  title,
+  description,
+  children,
+  onClick,
+  showArrow = false,
+  iconBg = "bg-zinc-700",
+  iconColor = "text-gray-300",
+}) => (
+  <div
+    className={`flex items-center justify-between p-4 hover:bg-zinc-700/30 transition-colors ${
+      onClick ? "cursor-pointer" : ""
+    }`}
     onClick={onClick}
   >
     <div className="flex items-center gap-4">
-      <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center`}>
-        <Icon size={20} className={iconColor} />
+      <div
+        className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center`}
+      >
+        {Icon && <Icon size={20} className={iconColor} />}
       </div>
       <div>
         <h4 className="text-white font-medium">{title}</h4>
-        {description && <p className="text-gray-500 text-sm mt-0.5">{description}</p>}
+        {description && (
+          <p className="text-gray-500 text-sm mt-0.5">{description}</p>
+        )}
       </div>
     </div>
     <div className="flex items-center gap-2">
       {children}
-      {showArrow && <MdKeyboardArrowRight size={24} className="text-gray-500" />}
+      {showArrow && (
+        <MdKeyboardArrowRight size={24} className="text-gray-500" />
+      )}
     </div>
   </div>
 );
@@ -88,7 +107,9 @@ const Divider = () => <div className="h-px bg-zinc-700/50 mx-4" />;
 const SectionHeader = ({ title, icon: Icon }) => (
   <div className="flex items-center gap-2 mb-3 px-1">
     {Icon && <Icon size={16} className="text-gray-500" />}
-    <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider">{title}</h3>
+    <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider">
+      {title}
+    </h3>
   </div>
 );
 
@@ -99,7 +120,7 @@ const Settings = ({ onClose }) => {
   const updateSetting = (key, value) => {
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
-    localStorage.setItem('chatAppSettings', JSON.stringify(newSettings));
+    localStorage.setItem("chatAppSettings", JSON.stringify(newSettings));
   };
 
   return (
@@ -126,9 +147,11 @@ const Settings = ({ onClose }) => {
       </div>
 
       {/* Settings Content */}
-      <div className="flex-1 p-4 md:p-6 overflow-y-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+      <div
+        className="flex-1 p-4 md:p-6 overflow-y-auto scrollbar-hide"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      >
         <div className="max-w-2xl mx-auto space-y-6">
-          
           {/* Appearance Section */}
           <div>
             <SectionHeader title="Appearance" icon={MdColorLens} />
@@ -142,7 +165,7 @@ const Settings = ({ onClose }) => {
               >
                 <Toggle
                   enabled={settings.darkMode}
-                  onChange={(value) => updateSetting('darkMode', value)}
+                  onChange={(value) => updateSetting("darkMode", value)}
                 />
               </SettingRow>
             </SettingCard>
@@ -153,7 +176,9 @@ const Settings = ({ onClose }) => {
             <SectionHeader title="Notifications" icon={MdNotifications} />
             <SettingCard>
               <SettingRow
-                icon={settings.notifications ? MdNotifications : MdNotificationsOff}
+                icon={
+                  settings.notifications ? MdNotifications : MdNotificationsOff
+                }
                 title="Push Notifications"
                 description="Receive notifications for new messages"
                 iconBg="bg-green-600/20"
@@ -161,7 +186,7 @@ const Settings = ({ onClose }) => {
               >
                 <Toggle
                   enabled={settings.notifications}
-                  onChange={(value) => updateSetting('notifications', value)}
+                  onChange={(value) => updateSetting("notifications", value)}
                 />
               </SettingRow>
               <Divider />
@@ -174,7 +199,7 @@ const Settings = ({ onClose }) => {
               >
                 <Toggle
                   enabled={settings.sound}
-                  onChange={(value) => updateSetting('sound', value)}
+                  onChange={(value) => updateSetting("sound", value)}
                 />
               </SettingRow>
             </SettingCard>
@@ -193,7 +218,7 @@ const Settings = ({ onClose }) => {
               >
                 <Toggle
                   enabled={settings.onlineStatus}
-                  onChange={(value) => updateSetting('onlineStatus', value)}
+                  onChange={(value) => updateSetting("onlineStatus", value)}
                 />
               </SettingRow>
               <Divider />
@@ -206,7 +231,7 @@ const Settings = ({ onClose }) => {
               >
                 <Toggle
                   enabled={settings.readReceipts}
-                  onChange={(value) => updateSetting('readReceipts', value)}
+                  onChange={(value) => updateSetting("readReceipts", value)}
                 />
               </SettingRow>
               <Divider />
@@ -219,7 +244,7 @@ const Settings = ({ onClose }) => {
               >
                 <Toggle
                   enabled={settings.typingIndicator}
-                  onChange={(value) => updateSetting('typingIndicator', value)}
+                  onChange={(value) => updateSetting("typingIndicator", value)}
                 />
               </SettingRow>
             </SettingCard>
@@ -238,7 +263,7 @@ const Settings = ({ onClose }) => {
               >
                 <select
                   value={settings.language}
-                  onChange={(e) => updateSetting('language', e.target.value)}
+                  onChange={(e) => updateSetting("language", e.target.value)}
                   className="bg-zinc-700 text-white px-3 py-2 rounded-lg outline-none border border-zinc-600 focus:border-blue-500 text-sm"
                 >
                   <option value="English">English</option>
@@ -264,7 +289,9 @@ const Settings = ({ onClose }) => {
                 iconBg="bg-red-600/20"
                 iconColor="text-red-400"
                 showArrow
-                onClick={() => {/* TODO: Implement change password modal */}}
+                onClick={() => {
+                  /* TODO: Implement change password modal */
+                }}
               />
               <Divider />
               <SettingRow
@@ -274,7 +301,9 @@ const Settings = ({ onClose }) => {
                 iconBg="bg-teal-600/20"
                 iconColor="text-teal-400"
                 showArrow
-                onClick={() => {/* TODO: Implement data management */}}
+                onClick={() => {
+                  /* TODO: Implement data management */
+                }}
               />
             </SettingCard>
           </div>
@@ -290,7 +319,9 @@ const Settings = ({ onClose }) => {
                 iconBg="bg-sky-600/20"
                 iconColor="text-sky-400"
                 showArrow
-                onClick={() => {/* TODO: Implement help center */}}
+                onClick={() => {
+                  /* TODO: Implement help center */
+                }}
               />
               <Divider />
               <SettingRow
@@ -300,7 +331,9 @@ const Settings = ({ onClose }) => {
                 iconBg="bg-amber-600/20"
                 iconColor="text-amber-400"
                 showArrow
-                onClick={() => {/* TODO: Implement bug report */}}
+                onClick={() => {
+                  /* TODO: Implement bug report */
+                }}
               />
             </SettingCard>
           </div>
@@ -329,13 +362,16 @@ const Settings = ({ onClose }) => {
             <SettingCard className="border-red-900/50">
               <div className="p-4">
                 <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-red-600/20 flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-red-600/20 flex items-center justify-center shrink-0">
                     <MdSecurity size={20} className="text-red-400" />
                   </div>
                   <div className="flex-1">
-                    <h4 className="text-white font-medium mb-1">Delete Account</h4>
+                    <h4 className="text-white font-medium mb-1">
+                      Delete Account
+                    </h4>
                     <p className="text-gray-500 text-sm mb-4">
-                      Permanently delete your account and all associated data. This action cannot be undone.
+                      Permanently delete your account and all associated data.
+                      This action cannot be undone.
                     </p>
                     <button className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/50 hover:border-red-600 rounded-xl text-sm font-medium transition-all">
                       Delete My Account

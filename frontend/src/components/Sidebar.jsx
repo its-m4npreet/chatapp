@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import './Sidebar.css';
 import { FaCircleUser } from "react-icons/fa6";
@@ -38,7 +37,32 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
   };
 
   useEffect(() => {
-    fetchFriends();
+    let isMounted = true;
+
+    const loadFriends = async () => {
+      try {
+        setLoading(true);
+        const res = await axios.get('/friends');
+        if (isMounted) {
+          setUsers(res.data.friends || []);
+          setError("");
+        }
+      } catch {
+        if (isMounted) {
+          setError("Failed to load friends");
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadFriends();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Refresh friends list when refreshFriends prop changes (not on initial render)

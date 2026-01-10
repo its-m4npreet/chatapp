@@ -45,7 +45,8 @@ const GroupChat = ({
   const reactionPickerRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
-  const getId = (val) => (typeof val === "object" && val !== null ? val._id : val);
+  const getId = (val) =>
+    typeof val === "object" && val !== null ? val._id : val;
 
   const isCreator = group?.creator?._id === currentUser?._id;
   const isAdmin = group?.admins?.some((a) => a._id === currentUser?._id);
@@ -82,7 +83,9 @@ const GroupChat = ({
       if (groupId === group._id) {
         setMessages((prev) => {
           // Reconcile optimistic message first
-          const optimisticIdx = prev.findIndex((m) => m.tempId && m.tempId === message.tempId);
+          const optimisticIdx = prev.findIndex(
+            (m) => m.tempId && m.tempId === message.tempId
+          );
           if (optimisticIdx !== -1) {
             const updated = [...prev];
             updated[optimisticIdx] = { ...message, tempId: undefined };
@@ -90,7 +93,9 @@ const GroupChat = ({
           }
 
           // Fallback to id check
-          const exists = prev.some((m) => m._id && message._id && m._id === message._id);
+          const exists = prev.some(
+            (m) => m._id && message._id && m._id === message._id
+          );
           if (exists) return prev;
           return [...prev, message];
         });
@@ -111,12 +116,15 @@ const GroupChat = ({
       if (payload.groupId !== group._id) return;
       setMessages((prev) =>
         prev.map((m) =>
-          m._id === payload.messageId ? { ...m, reactions: payload.reactions } : m
+          m._id === payload.messageId
+            ? { ...m, reactions: payload.reactions }
+            : m
         )
       );
     };
     socket.on("groupMessageReactionUpdated", handleReactionUpdate);
-    return () => socket.off("groupMessageReactionUpdated", handleReactionUpdate);
+    return () =>
+      socket.off("groupMessageReactionUpdated", handleReactionUpdate);
   }, [socket, group?._id]);
 
   // Compress image before upload
@@ -205,7 +213,7 @@ const GroupChat = ({
       }
 
       const tempId = `temp_${Date.now()}_${Math.random()}`;
-      
+
       // Optimistically add message to UI
       const optimisticMessage = {
         tempId,
@@ -214,7 +222,7 @@ const GroupChat = ({
         content: newMessage.trim(),
         image: imageUrl ? { url: imageUrl } : null,
         createdAt: new Date().toISOString(),
-        status: 'sending',
+        status: "sending",
         reactions: [],
         readBy: [],
       };
@@ -295,7 +303,7 @@ const GroupChat = ({
       if (
         reactionPickerRef.current &&
         !reactionPickerRef.current.contains(event.target) &&
-        !event.target.closest('[data-reaction-button]')
+        !event.target.closest("[data-reaction-button]")
       ) {
         setShowReactionPicker(null);
       }
@@ -306,20 +314,66 @@ const GroupChat = ({
 
   // Handle reaction selection from quick bar
   const handleReaction = async (msg, symbol) => {
-    const existing = msg.reactions?.find((r) => getId(r.user) === currentUser?._id);
-    const next = existing?.reaction === symbol ? null : symbol;
-    try {
-      const res = await axios.post(
-        `/groups/${group._id}/messages/${msg._id}/react`,
-        { reaction: next }
-      );
-      if (res.data?.data) {
-        setMessages((prev) => prev.map((m) => (m._id === msg._id ? res.data.data : m)));
+  const existing = msg.reactions?.find(
+    (r) => getId(r.user) === currentUser?._id
+  );
+
+  const next = existing?.reaction === symbol ? null : symbol;
+
+  // 🔥 1. Optimistic UI update (instant)
+  setMessages((prev) =>
+    prev.map((m) => {
+      if (m._id !== msg._id) return m;
+
+      let reactions = m.reactions || [];
+
+      if (next === null) {
+        // remove reaction
+        reactions = reactions.filter(
+          (r) => getId(r.user) !== currentUser?._id
+        );
+      } else if (existing) {
+        // update existing reaction
+        reactions = reactions.map((r) =>
+          getId(r.user) === currentUser?._id
+            ? { ...r, reaction: next }
+            : r
+        );
+      } else {
+        // add new reaction
+        reactions = [
+          ...reactions,
+          { user: currentUser._id, reaction: next },
+        ];
       }
-    } catch (e) {
-      console.error("React failed", e);
+
+      return { ...m, reactions };
+    })
+  );
+
+  // 🔁 2. Sync with backend
+  try {
+    const res = await axios.post(
+      `/groups/${group._id}/messages/${msg._id}/react`,
+      { reaction: next }
+    );
+
+    // 🔄 3. Replace with server response (source of truth)
+    if (res.data?.data) {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === msg._id ? res.data.data : m))
+      );
     }
-  };
+  } catch (e) {
+    console.error("React failed", e);
+
+    // ❌ Optional rollback if API fails
+    setMessages((prev) =>
+      prev.map((m) => (m._id === msg._id ? msg : m))
+    );
+  }
+};
+
 
   // Handle reaction from emoji picker
   const handleReactionEmojiClick = async (emojiData, messageId) => {
@@ -327,7 +381,9 @@ const GroupChat = ({
     const msg = messages.find((m) => m._id === messageId);
     if (!msg) return;
 
-    const existing = msg.reactions?.find((r) => getId(r.user) === currentUser?._id);
+    const existing = msg.reactions?.find(
+      (r) => getId(r.user) === currentUser?._id
+    );
     const next = existing?.reaction === emoji ? null : emoji;
     try {
       const res = await axios.post(
@@ -335,12 +391,25 @@ const GroupChat = ({
         { reaction: next }
       );
       if (res.data?.data) {
-        setMessages((prev) => prev.map((m) => (m._id === messageId ? res.data.data : m)));
+        setMessages((prev) =>
+          prev.map((m) => (m._id === messageId ? res.data.data : m))
+        );
       }
     } catch (e) {
       console.error("React failed", e);
     }
     setShowReactionPicker(null);
+  };
+  const splitIntoLines = (text, limit = 30) => {
+    const lines = [];
+    let start = 0;
+
+    while (start < text.length) {
+      lines.push(text.slice(start, start + limit));
+      start += limit;
+    }
+
+    return lines;
   };
 
   if (!group) {
@@ -415,8 +484,10 @@ const GroupChat = ({
       <div className="flex-1 flex overflow-hidden">
         {/* Messages */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide"
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          <div
+            className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          >
             {loading ? (
               <ContentLoading text="Loading messages..." />
             ) : messages.length === 0 ? (
@@ -428,9 +499,13 @@ const GroupChat = ({
                 const isOwn = msg.sender?._id === currentUser?._id;
                 const hasImage = !!msg.image?.url;
                 const hasContent = !!msg.content;
-                let messageClass = `rounded-2xl ${isOwn ? "rounded-br-md" : "rounded-bl-md"}`;
+                let messageClass = `rounded-2xl ${
+                  isOwn ? "rounded-br-md" : "rounded-bl-md"
+                }`;
                 if (hasContent || (hasContent && hasImage)) {
-                  messageClass += ` px-4 py-2 ${isOwn ? "bg-blue-600 text-white" : "bg-zinc-700 text-white"}`;
+                  messageClass += ` px-4 py-2 ${
+                    isOwn ? "bg-blue-600 text-white" : "bg-zinc-700 text-white"
+                  }`;
                 } else if (hasImage) {
                   messageClass += " p-0 bg-transparent";
                 }
@@ -440,7 +515,8 @@ const GroupChat = ({
                 if (Array.isArray(msg.reactions)) {
                   msg.reactions.forEach((r) => {
                     if (r.reaction) {
-                      reactionCounts[r.reaction] = (reactionCounts[r.reaction] || 0) + 1;
+                      reactionCounts[r.reaction] =
+                        (reactionCounts[r.reaction] || 0) + 1;
                     }
                   });
                 }
@@ -453,7 +529,11 @@ const GroupChat = ({
                     }`}
                   >
                     <div className="relative">
-                      <div className={`flex gap-2 max-w-[70vw] ${isOwn ? "flex-row-reverse" : ""}`}>
+                      <div
+                        className={`flex gap-2 max-w-[70vw] ${
+                          isOwn ? "flex-row-reverse" : ""
+                        }`}
+                      >
                         {!isOwn && (
                           <div className="flex flex-col items-center shrink-0">
                             <div className="w-8 h-8 rounded-full overflow-hidden mt-1">
@@ -474,31 +554,39 @@ const GroupChat = ({
                             </p>
                           </div>
                         )}
-                        <div className={`${isOwn ? "text-right" : "text-left"}`}>
+                        <div
+                          className={`${isOwn ? "text-right" : "text-left"}`}
+                        >
                           <div className={messageClass}>
                             {hasImage && (
                               <img
                                 src={msg.image.url}
                                 alt=""
-                                className={`max-w-full max-h-96 object-contain rounded-2xl ${hasContent ? "mb-2" : ""}`}
+                                className={`max-w-full max-h-96 object-contain rounded-2xl ${
+                                  hasContent ? "mb-2" : ""
+                                }`}
                               />
                             )}
-                            {hasContent && <p>{msg.content}</p>}
+                            {hasContent &&
+                              splitIntoLines(msg.content).map((line, index) => (
+                                <span key={index} style={{ display: "block" }}>
+                                  {line}
+                                </span>
+                              ))}
                           </div>
 
                           {/* Quick Reactions Bar */}
                           <div
-                            className={`absolute ${isOwn ? "right-0" : "left-0"} -bottom-10 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center gap-1 bg-gray-800/95 backdrop-blur-sm rounded-full px-2 py-1 shadow-lg border border-gray-700 z-999`}
+                            className={`absolute ${
+                              isOwn ? "right-0" : "left-0"
+                            } -bottom-10 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center gap-1 bg-gray-800/95 backdrop-blur-sm rounded-full px-2 py-1 shadow-lg border border-gray-700 z-999`}
                             style={{
                               transform: "translateX(0)",
-                              animation: "slideInFromRight 0.3s ease-out",
+                              // animation: "slideInFromRight 0.3s ease-out",
                             }}
                           >
                             <style>{`
-                              @keyframes slideInFromRight {
-                                from { transform: translateX(20px); opacity: 0; }
-                                to { transform: translateX(0); opacity: 1; }
-                              }
+                             
                               @keyframes popIn {
                                 0% { transform: scale(0) translateX(10px); opacity: 0; }
                                 50% { transform: scale(1.2) translateX(0); }
@@ -508,7 +596,9 @@ const GroupChat = ({
                             `}</style>
                             {REACTIONS.map((symbol, index) => {
                               const mine = msg.reactions?.some(
-                                (r) => getId(r.user) === currentUser?._id && r.reaction === symbol
+                                (r) =>
+                                  getId(r.user) === currentUser?._id &&
+                                  r.reaction === symbol
                               );
                               return (
                                 <button
@@ -519,7 +609,9 @@ const GroupChat = ({
                                   }`}
                                   style={{ animationDelay: `${index * 0.05}s` }}
                                   onClick={() => handleReaction(msg, symbol)}
-                                  title={mine ? "Remove reaction" : "Add reaction"}
+                                  title={
+                                    mine ? "Remove reaction" : "Add reaction"
+                                  }
                                 >
                                   {symbol}
                                 </button>
@@ -537,37 +629,60 @@ const GroupChat = ({
                             </button>
                           </div>
 
-                          <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
+                          <div className={`${isOwn ? "text-right justify-end" : "text-left"} mt-1 flex items-center gap-2 text-xs text-gray-500`}>
                             <span>
                               {new Date(msg.createdAt).toLocaleTimeString([], {
                                 hour: "2-digit",
                                 minute: "2-digit",
                               })}
                             </span>
-                            
+
                             {/* Message status indicator (only for own messages) */}
                             {isOwn && (
                               <span className="flex items-center">
-                                {msg.status === 'sending' ? (
-                                  <span className="w-3 h-3 rounded-full bg-gray-400 animate-pulse" title="Sending" />
-                                ) : msg.status === 'read' || (msg.readBy && msg.readBy.length > 0) ? (
-                                  <IoCheckmarkDone size={16} className="text-blue-400" title="Read" />
-                                ) : msg.status === 'delivered' ? (
-                                  <IoCheckmarkDone size={16} className="text-gray-400" title="Delivered" />
+                                {msg.status === "sending" ? (
+                                  <span
+                                    className="w-3 h-3 rounded-full bg-gray-400 animate-pulse"
+                                    title="Sending"
+                                  />
+                                ) : msg.status === "read" ||
+                                  (msg.readBy && msg.readBy.length > 0) ? (
+                                  <IoCheckmarkDone
+                                    size={16}
+                                    className="text-blue-400"
+                                    title="Read"
+                                  />
+                                ) : msg.status === "delivered" ? (
+                                  <IoCheckmarkDone
+                                    size={16}
+                                    className="text-gray-400"
+                                    title="Delivered"
+                                  />
                                 ) : (
-                                  <IoCheckmark size={16} className="text-gray-400" title="Sent" />
+                                  <IoCheckmark
+                                    size={16}
+                                    className="text-gray-400"
+                                    title="Sent"
+                                  />
                                 )}
                               </span>
                             )}
-                            
+
                             {Object.keys(reactionCounts).length > 0 && (
                               <div className="flex items-center gap-1 bg-zinc-800/70 px-2 py-1 rounded-full">
-                                {Object.entries(reactionCounts).map(([emoji, count]) => (
-                                  <span key={emoji} className="flex items-center gap-1">
-                                    <span>{emoji}</span>
-                                    <span className="text-[10px]">{count}</span>
-                                  </span>
-                                ))}
+                                {Object.entries(reactionCounts).map(
+                                  ([emoji, count]) => (
+                                    <span
+                                      key={emoji}
+                                      className="flex items-center gap-1"
+                                    >
+                                      <span>{emoji}</span>
+                                      <span className="text-[10px]">
+                                        {count}
+                                      </span>
+                                    </span>
+                                  )
+                                )}
                               </div>
                             )}
                           </div>
@@ -588,7 +703,9 @@ const GroupChat = ({
                           style={{ maxWidth: "350px" }}
                         >
                           <EmojiPicker
-                            onEmojiClick={(emojiData) => handleReactionEmojiClick(emojiData, msg._id)}
+                            onEmojiClick={(emojiData) =>
+                              handleReactionEmojiClick(emojiData, msg._id)
+                            }
                             theme="dark"
                             searchDisabled={false}
                             height={400}
@@ -605,10 +722,7 @@ const GroupChat = ({
           </div>
 
           {/* Message Input */}
-          <form
-            onSubmit={handleSendMessage}
-            className="p-4 "
-          >
+          <form onSubmit={handleSendMessage} className="p-4 ">
             {/* Image Preview */}
             {imagePreview && (
               <div className="mb-3 relative inline-block">
