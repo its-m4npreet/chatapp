@@ -27,6 +27,11 @@ const messageSchema = new mongoose.Schema(
         reaction: { type: String },
       },
     ],
+    status: {
+      type: String,
+      enum: ["sent", "delivered", "read"],
+      default: "sent",
+    },
     readAt: { type: Date }
   },
   { timestamps: true }

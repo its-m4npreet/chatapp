@@ -1,6 +1,7 @@
 
 const Message = require('../model/message');
 const cloudinary = require('../config/cloudinary');
+const cacheService = require('../services/cacheService');
 
 // Factory function to inject io
 const createMessageController = (io) => {
@@ -87,8 +88,19 @@ const createMessageController = (io) => {
                 messageType
             });
 
+            // Save to database
             await newMessage.save();
             await newMessage.populate('sender', 'name profilePicture');
+
+            // Cache the message with 5-second TTL
+            const cacheKey = `message:${newMessage._id}`;
+            await cacheService.setCache(cacheKey, newMessage, 5);
+
+            // Also cache for quick retrieval by conversation
+            const conversationKey = `messages:${Math.min(senderId, receiverId)}:${Math.max(senderId, receiverId)}`;
+            const cachedConversation = await cacheService.getCache(conversationKey) || [];
+            cachedConversation.push(newMessage);
+            await cacheService.setCache(conversationKey, cachedConversation, 5);
 
             // Emit to both sender and receiver rooms for full duplex communication
             io.to(receiverId).emit('newMessage', newMessage);
@@ -134,7 +146,67 @@ const createMessageController = (io) => {
         }
     };
 
-    return { sendMessage, getMessages, uploadImage };
+    // Add or remove a reaction on a direct message
+    const reactToMessage = async (req, res) => {
+        try {
+            const { messageId } = req.params;
+            const { reaction } = req.body;
+            const userId = req.userId;
+
+            if (!messageId) {
+                return res.status(400).json({ message: "messageId is required" });
+            }
+
+            const message = await Message.findById(messageId);
+            if (!message) {
+                return res.status(404).json({ message: "Message not found" });
+            }
+
+            if (
+                message.sender.toString() !== userId &&
+                message.receiver.toString() !== userId
+            ) {
+                return res.status(403).json({ message: "Not authorized for this message" });
+            }
+
+            const existingIndex = message.reactions.findIndex(
+                (r) => r.user.toString() === userId
+            );
+
+            if (reaction) {
+                if (existingIndex !== -1) {
+                    message.reactions[existingIndex].reaction = reaction;
+                } else {
+                    message.reactions.push({ user: userId, reaction });
+                }
+            } else if (existingIndex !== -1) {
+                message.reactions.splice(existingIndex, 1);
+            }
+
+            await message.save();
+            await message.populate('sender', 'name profilePicture');
+            await message.populate('receiver', 'name profilePicture');
+
+            const payload = {
+                messageId: message._id,
+                reactions: message.reactions,
+                updatedBy: userId,
+            };
+
+            io.to(message.sender.toString()).emit('messageReactionUpdated', payload);
+            io.to(message.receiver.toString()).emit('messageReactionUpdated', payload);
+
+            res.status(200).json({
+                message: "Reaction updated",
+                data: message,
+            });
+        } catch (error) {
+            console.error('React to message error:', error);
+            res.status(500).json({ message: "Server error" });
+        }
+    };
+
+    return { sendMessage, getMessages, uploadImage, reactToMessage };
 };
 
 module.exports = createMessageController;

@@ -9,6 +9,7 @@ const { Server } = require('socket.io');
 const createMessageController = require('./controllers/message.controller');
 const createGroupController = require('./controllers/group.controller');
 const createNotificationController = require('./controllers/notification.controller');
+const CachePersistenceWorker = require('./workers/cachePersistenceWorker');
 
 const app = express();
 const server = http.createServer(app);
@@ -60,6 +61,20 @@ server.listen(PORT, () => {
     connectDB();
     console.log('Database is connected');
     console.log(`Server is running on  http://localhost:${PORT}`);
+
+    // Initialize Redis and Cache Persistence Worker
+    const cachePersistenceWorker = new CachePersistenceWorker(1000); // Check every 1 second
+    cachePersistenceWorker.start();
+
+    // Graceful shutdown
+    process.on('SIGINT', () => {
+      console.log('\nShutting down gracefully...');
+      cachePersistenceWorker.stop();
+      server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+      });
+    });
   } catch (error) {
     console.error('Error connecting to the database:', error.message);
   }
@@ -68,6 +83,7 @@ server.listen(PORT, () => {
 // Socket.IO connection handler
 const Message = require('./model/message');
 const User = require('./model/user');
+const cacheService = require('./services/cacheService');
 
 // Track online users: { odId: odId }
 const onlineUsers = new Map();
@@ -102,7 +118,7 @@ io.on('connection', (socket) => {
   // Real-time message sending
   socket.on('sendMessage', async (msg) => {
     try {
-      const { sender, receiver, content, image } = msg;
+      const { sender, receiver, content, image, tempId } = msg;
       if (!receiver || (!content?.trim() && !image)) return;
 
       let messageType = 'text';
@@ -114,16 +130,70 @@ io.on('connection', (socket) => {
         receiver,
         content: content?.trim() || '',
         image: image ? { url: image, public_id: '' } : null,
-        messageType
+        messageType,
+        status: 'sent'
       });
       await newMessage.save();
       await newMessage.populate('sender', 'name profilePicture');
 
+      // Attach tempId for client-side optimistic update reconciliation (not stored in DB)
+      if (tempId) newMessage.tempId = tempId;
+
+      // Cache the message with 5-second TTL
+      const cacheKey = `message:${newMessage._id}`;
+      await cacheService.setCache(cacheKey, newMessage, 5);
+
       // Emit to both sender and receiver rooms
       io.to(receiver).emit('newMessage', newMessage);
       io.to(sender).emit('newMessage', newMessage);
+
+      // Update status to delivered if receiver is online
+      if (onlineUsers.has(receiver)) {
+        newMessage.status = 'delivered';
+        await newMessage.save();
+        io.to(sender).emit('messageStatusUpdate', {
+          messageId: newMessage._id,
+          status: 'delivered'
+        });
+      }
     } catch (error) {
       console.error('Socket sendMessage error:', error);
+    }
+  });
+
+  // Mark message as read
+  socket.on('markMessageRead', async ({ messageId, userId }) => {
+    try {
+      const message = await Message.findById(messageId);
+      if (message && message.receiver.toString() === userId) {
+        message.status = 'read';
+        message.readAt = new Date();
+        await message.save();
+        
+        // Notify sender about read status
+        io.to(message.sender.toString()).emit('messageStatusUpdate', {
+          messageId: message._id,
+          status: 'read'
+        });
+      }
+    } catch (error) {
+      console.error('markMessageRead error:', error);
+    }
+  });
+
+  // Mark all messages from a user as read
+  socket.on('markAllMessagesRead', async ({ senderId, receiverId }) => {
+    try {
+      const result = await Message.updateMany(
+        { sender: senderId, receiver: receiverId, status: { $ne: 'read' } },
+        { status: 'read', readAt: new Date() }
+      );
+      
+      if (result.modifiedCount > 0) {
+        io.to(senderId).emit('messagesMarkedRead', { receiverId });
+      }
+    } catch (error) {
+      console.error('markAllMessagesRead error:', error);
     }
   });
 });

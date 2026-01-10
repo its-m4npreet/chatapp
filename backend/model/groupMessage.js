@@ -31,6 +31,11 @@ const groupMessageSchema = new mongoose.Schema({
             reaction: { type: String },
           },
         ],
+    status: {
+        type: String,
+        enum: ['sent', 'delivered', 'read'],
+        default: 'sent',
+    },
     readBy: [{
         user: {
             type: mongoose.Schema.Types.ObjectId,

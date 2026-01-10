@@ -1,10 +1,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import { IoMdSend } from "react-icons/io";
 import { FaRegSmile } from "react-icons/fa";
-import { IoImageOutline, IoClose } from "react-icons/io5";
+import { IoImageOutline, IoClose, IoAddCircleOutline } from "react-icons/io5";
+import { IoCheckmark, IoCheckmarkDone } from "react-icons/io5";
 import EmojiPicker from "emoji-picker-react";
 import { ButtonLoading } from "./Loading";
 import { ContentLoading } from "./Loading";
+
+const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+const getId = (u) => (typeof u === "object" ? u?._id : u);
 
 const ChatView = ({
   user,
@@ -20,6 +24,7 @@ const ChatView = ({
       socket.emit("join", currentUser._id);
     }
   }, [socket, currentUser]);
+  
   // Refs to always have latest user/currentUser in socket listener
   const userRef = useRef(user);
   const currentUserRef = useRef(currentUser);
@@ -28,9 +33,12 @@ const ChatView = ({
     userRef.current = user;
     currentUserRef.current = currentUser;
   }, [user, currentUser]);
+  
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showReactionPicker, setShowReactionPicker] = useState(null); // Track which message's reaction picker is open
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
+  const reactionPickerRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const [inputValue, setInputValue] = useState("");
@@ -44,38 +52,96 @@ const ChatView = ({
   useEffect(() => {
     if (!socket) return;
     const handleNewMessage = (msg) => {
-      console.log("Received newMessage:", msg);
-      // Use refs to always get latest user/currentUser
       const u = userRef.current;
       const cu = currentUserRef.current;
-      // Extract sender/receiver IDs (handle both object and string)
-      const senderId =
-        typeof msg.sender === "object" ? msg.sender._id : msg.sender;
-      const receiverId =
-        typeof msg.receiver === "object" ? msg.receiver._id : msg.receiver;
+      const senderId = typeof msg.sender === "object" ? msg.sender._id : msg.sender;
+      const receiverId = typeof msg.receiver === "object" ? msg.receiver._id : msg.receiver;
       setMessages((prev) => {
         if (
           u &&
           cu &&
-          ((senderId === u._id && receiverId === cu._id) ||
-            (senderId === cu._id && receiverId === u._id))
+          ((senderId === u._id && receiverId === cu._id) || (senderId === cu._id && receiverId === u._id))
         ) {
-          // Avoid duplicates by checking if message already exists
-          const exists = prev.some(
-            (m) => m._id && msg._id && m._id === msg._id
+          // Try to reconcile optimistic message
+          const optimisticIdx = prev.findIndex((m) =>
+            m.tempId && m.tempId === msg.tempId && getId(m.sender) === senderId && getId(m.receiver) === receiverId
           );
+          if (optimisticIdx !== -1) {
+            const updated = [...prev];
+            updated[optimisticIdx] = { ...msg, tempId: undefined };
+            return updated;
+          }
+
+          // Fallback: reconcile by matching sender/receiver/content when tempId missing
+          const fuzzyIdx = prev.findIndex((m) => {
+            const prevImage = m.image ? m.image.url || m.image : '';
+            const incomingImage = msg.image ? msg.image.url || msg.image : '';
+            return (
+              m.tempId &&
+              getId(m.sender) === senderId &&
+              getId(m.receiver) === receiverId &&
+              (m.content || '') === (msg.content || '') &&
+              prevImage === incomingImage
+            );
+          });
+          if (fuzzyIdx !== -1) {
+            const updated = [...prev];
+            updated[fuzzyIdx] = { ...msg, tempId: undefined };
+            return updated;
+          }
+
+          const exists = prev.some((m) => (m._id && msg._id && m._id === msg._id));
           if (exists) return prev;
           return [...prev, msg];
         }
         return prev;
       });
+      
+      // Mark message as read if it's from the other user
+      if (cu && senderId === u._id && receiverId === cu._id) {
+        socket.emit('markMessageRead', { messageId: msg._id, userId: cu._id });
+      }
     };
     socket.on("newMessage", handleNewMessage);
-    return () => {
-      socket.off("newMessage", handleNewMessage);
+    return () => socket.off("newMessage", handleNewMessage);
+  }, [socket]);
+
+  // Listen for reaction updates
+  useEffect(() => {
+    if (!socket) return;
+    const handleReactionUpdate = (payload) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === payload.messageId ? { ...m, reactions: payload.reactions } : m))
+      );
     };
-    // Only set up once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    socket.on("messageReactionUpdated", handleReactionUpdate);
+    return () => socket.off("messageReactionUpdated", handleReactionUpdate);
+  }, [socket]);
+
+  // Listen for message status updates
+  useEffect(() => {
+    if (!socket) return;
+    const handleStatusUpdate = ({ messageId, status }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === messageId ? { ...m, status } : m))
+      );
+    };
+    const handleMessagesMarkedRead = ({ receiverId }) => {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.receiver === receiverId || (typeof m.receiver === 'object' && m.receiver._id === receiverId)) {
+            return { ...m, status: 'read' };
+          }
+          return m;
+        })
+      );
+    };
+    socket.on("messageStatusUpdate", handleStatusUpdate);
+    socket.on("messagesMarkedRead", handleMessagesMarkedRead);
+    return () => {
+      socket.off("messageStatusUpdate", handleStatusUpdate);
+      socket.off("messagesMarkedRead", handleMessagesMarkedRead);
+    };
   }, [socket]);
 
   // Fetch previous messages when user changes
@@ -85,7 +151,6 @@ const ChatView = ({
       return;
     }
     setMessages([]);
-    // Fetch previous messages from backend
     setIsLoadingMessages(true);
     import("../lib/axios").then(({ default: axios }) => {
       axios
@@ -102,8 +167,8 @@ const ChatView = ({
         });
     });
   }, [user, currentUser]);
-
-  // Close emoji picker only when clicking outside, not on search or emoji picker itself
+  
+  // Close emoji picker when clicking outside
   useEffect(() => {
     if (!showEmoji) return;
     const handleClickOutside = (event) => {
@@ -119,10 +184,47 @@ const ChatView = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showEmoji]);
 
+  // Close reaction picker when clicking outside
+  useEffect(() => {
+    if (!showReactionPicker) return;
+    const handleClickOutside = (event) => {
+      if (
+        reactionPickerRef.current &&
+        !reactionPickerRef.current.contains(event.target) &&
+        !event.target.closest('[data-reaction-button]')
+      ) {
+        setShowReactionPicker(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showReactionPicker]);
+
   const handleEmojiClick = (emojiData) => {
     setInputValue((prev) => prev + emojiData.emoji);
     if (inputRef.current) inputRef.current.focus();
-    // Do not close the picker on emoji select
+  };
+
+  // Handle reaction emoji selection
+  const handleReactionEmojiClick = async (emojiData, messageId) => {
+    const emoji = emojiData.emoji;
+    const msg = messages.find(m => m._id === messageId);
+    if (!msg) return;
+
+    const existing = msg.reactions?.find((r) => getId(r.user) === currentUser?._id);
+    const next = existing?.reaction === emoji ? null : emoji;
+    
+    const { default: axios } = await import("../lib/axios");
+    try {
+      const res = await axios.post(`/messages/${messageId}/react`, { reaction: next });
+      if (res.data?.data) {
+        setMessages((prev) => prev.map((m) => (m._id === messageId ? res.data.data : m)));
+      }
+    } catch (e) {
+      console.error("React failed", e);
+    }
+    
+    setShowReactionPicker(null);
   };
 
   // Compress image before upload
@@ -185,7 +287,7 @@ const ChatView = ({
   };
 
   const handleSend = async (e) => {
-    e.preventDefault();
+    e?.preventDefault();
     if (!inputValue.trim() && !selectedImage) {
       console.log("No message content or image");
       return;
@@ -219,15 +321,29 @@ const ChatView = ({
       setIsUploading(false);
     }
 
+    const tempId = `temp_${Date.now()}_${Math.random()}`;
     const msg = {
       content: inputValue,
       image: imageUrl,
       receiver: user._id,
       sender: currentUser._id,
       createdAt: new Date().toISOString(),
+      tempId,
     };
+
+    // Optimistically add message to UI
+    const optimisticMessage = {
+      ...msg,
+      status: 'sending',
+      sender: currentUser,
+      receiver: user,
+      image: imageUrl ? { url: imageUrl } : null,
+    };
+    setMessages((prev) => [...prev, optimisticMessage]);
+
     console.log("Sending message:", msg);
     socket.emit("sendMessage", msg);
+    
     // Stop typing indicator when message is sent
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
@@ -236,9 +352,30 @@ const ChatView = ({
       senderId: currentUser._id,
       receiverId: user._id,
     });
-    // Do NOT update messages here; rely on socket event for real-time update
+    
     setInputValue("");
     handleRemoveImage();
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const handleReaction = async (msg, symbol) => {
+    const existing = msg.reactions?.find((r) => getId(r.user) === currentUser?._id);
+    const next = existing?.reaction === symbol ? null : symbol;
+    const { default: axios } = await import("../lib/axios");
+    try {
+      const res = await axios.post(`/messages/${msg._id}/react`, { reaction: next });
+      if (res.data?.data) {
+        setMessages((prev) => prev.map((m) => (m._id === msg._id ? res.data.data : m)));
+      }
+    } catch (e) {
+      console.error("React failed", e);
+    }
   };
 
   if (!user) {
@@ -284,39 +421,10 @@ const ChatView = ({
           Select a conversation from the sidebar to start chatting with your
           friends
         </p>
-
-        {/* Features list */}
-        {/* <div className="flex flex-col gap-3 text-sm">
-          <div className="flex items-center gap-3 text-gray-400">
-            <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-              <span className="text-blue-400">🔒</span>
-            </div>
-            <span>End-to-end encrypted messages</span>
-          </div>
-          <div className="flex items-center gap-3 text-gray-400">
-            <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-              <span className="text-green-400">⚡</span>
-            </div>
-            <span>Real-time message delivery</span>
-          </div>
-          <div className="flex items-center gap-3 text-gray-400">
-            <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
-              <span className="text-purple-400">😊</span>
-            </div>
-            <span>Express yourself with emojis</span>
-          </div>
-        </div> */}
-
-        {/* Keyboard shortcut hint */}
-        {/* <div className="mt-8 text-xs text-gray-500">
-          <span className="px-2 py-1 bg-gray-800 rounded text-gray-400 mr-1">Ctrl</span>
-          +
-          <span className="px-2 py-1 bg-gray-800 rounded text-gray-400 mx-1">K</span>
-          to search users
-        </div> */}
       </div>
     );
   }
+
   return (
     <div className="chat-view h-full w-full flex flex-col relative">
       <div className="chat-header p-4 border-b border-gray-700 flex items-center gap-4 ">
@@ -329,7 +437,7 @@ const ChatView = ({
               src={user.profilePicture}
               alt={user.name}
               className="w-full h-full rounded-full object-cover"
-            />{" "}
+            />
             {isUserOnline && (
               <span
                 className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"
@@ -367,6 +475,7 @@ const ChatView = ({
           </div>
         </div>
       </div>
+      
       <div
         className="flex-1 p-6 overflow-y-auto text-white scrollbar-hide"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
@@ -391,14 +500,25 @@ const ChatView = ({
                     ? "bg-blue-600 text-white rounded-br-md"
                     : "bg-gray-800 text-white rounded-bl-md")
             }`;
+            
+            // Get unique reactions with counts
+            const reactionCounts = {};
+            if (Array.isArray(msg.reactions)) {
+              msg.reactions.forEach(r => {
+                if (r.reaction) {
+                  reactionCounts[r.reaction] = (reactionCounts[r.reaction] || 0) + 1;
+                }
+              });
+            }
+            
             return (
-              <>
-                <div
-                  key={msg._id || idx}
-                  className={`my-2 flex flex-col ${
-                    isCurrentUser ? "items-end" : "items-start"
-                  }`}
-                >
+              <div
+                key={msg._id || idx}
+                className={`reletive my-3 flex flex-col group ${
+                  isCurrentUser ? "items-end" : "items-start"
+                }`}
+              >
+                <div className="relative">
                   <div className={bubbleClass}>
                     {imageUrl && (
                       <img
@@ -412,18 +532,145 @@ const ChatView = ({
                     )}
                     {msg.content && <span>{msg.content}</span>}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
+                  
+                  {/* Quick Reactions Bar - Shows on hover */}
+                  <div className={`absolute ${isCurrentUser ? 'right-0' : 'left-0'} -bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center gap-1 bg-gray-800/95 backdrop-blur-sm rounded-full px-2 py-1 shadow-lg border border-gray-700`}
+                    style={{
+                      transform: 'translateX(0)',
+                      animation: 'slideInFromRight 0.3s ease-out'
+                    }}
+                  >
+                    <style>{`
+                      @keyframes slideInFromRight {
+                        from {
+                          transform: translateX(20px);
+                          opacity: 0;
+                        }
+                        to {
+                          transform: translateX(0);
+                          opacity: 1;
+                        }
+                      }
+                      @keyframes popIn {
+                        0% {
+                          transform: scale(0) translateX(10px);
+                          opacity: 0;
+                        }
+                        50% {
+                          transform: scale(1.2) translateX(0);
+                        }
+                        100% {
+                          transform: scale(1) translateX(0);
+                          opacity: 1;
+                        }
+                      }
+                      .group:hover .reaction-emoji {
+                        animation: popIn 0.3s ease-out forwards;
+                      }
+                    `}</style>
+                    {REACTIONS.map((symbol, index) => {
+                      const mine = msg.reactions?.some(
+                        (r) => getId(r.user) === currentUser?._id && r.reaction === symbol
+                      );
+                      return (
+                        <button
+                          key={symbol}
+                          type="button"
+                          className={`reaction-emoji text-base leading-none p-1.5 rounded-full transition-all hover:scale-125 ${
+                            mine ? "bg-blue-600" : "hover:bg-gray-700"
+                          }`}
+                          style={{
+                            animationDelay: `${index * 0.05}s`
+                          }}
+                          onClick={() => handleReaction(msg, symbol)}
+                          title={mine ? "Remove reaction" : "Add reaction"}
+                        >
+                          {symbol}
+                        </button>
+                      );
+                    })}
+                    <div className="w-px h-4 bg-gray-600 mx-1"></div>
+                    <button
+                      type="button"
+                      data-reaction-button="true"
+                      className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-gray-700 transition-all"
+                      onClick={() => setShowReactionPicker(msg._id)}
+                      title="More reactions"
+                    >
+                      <IoAddCircleOutline size={18} />
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Reaction Summary and Timestamp */}
+                <div className="mt-1 flex items-center gap-2 text-xs text-gray-400">
+                  <span>
                     {new Date(msg.createdAt).toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
-                  </p>
+                  </span>
+                  
+                  {/* Message status indicator (only for current user's messages) */}
+                  {isCurrentUser && (
+                    <span className="flex items-center">
+                      {msg.status === 'sending' ? (
+                        <span className="w-3 h-3 rounded-full bg-gray-400 animate-pulse" title="Sending" />
+                      ) : msg.status === 'read' ? (
+                        <IoCheckmarkDone size={16} className="text-blue-400" title="Read" />
+                      ) : msg.status === 'delivered' ? (
+                        <IoCheckmarkDone size={16} className="text-gray-400" title="Delivered" />
+                      ) : (
+                        <IoCheckmark size={16} className="text-gray-400" title="Sent" />
+                      )}
+                    </span>
+                  )}
+                  
+                  {/* Display reaction counts */}
+                  {Object.keys(reactionCounts).length > 0 && (
+                    <div className="flex items-center gap-1 bg-gray-800/80 px-2 py-1 rounded-full border border-gray-700">
+                      {Object.entries(reactionCounts).map(([emoji, count]) => (
+                        <span key={emoji} className="flex items-center gap-1">
+                          <span className="text-sm">{emoji}</span>
+                          <span className="text-[10px] text-gray-400">{count}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </>
+                
+                {/* Custom Emoji Picker for Reactions */}
+                {showReactionPicker === msg._id && (
+                  <>
+                    {/* Backdrop */}
+                    <div 
+                      className="fixed inset-0 bg-black/50 z-9998"
+                      onClick={() => setShowReactionPicker(null)}
+                    />
+                    {/* Emoji Picker */}
+                    <div
+                      ref={reactionPickerRef}
+                      className="fixed z-9999 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                      style={{ 
+                        maxWidth: '350px'
+                      }}
+                    >
+                      <EmojiPicker
+                        onEmojiClick={(emojiData) => handleReactionEmojiClick(emojiData, msg._id)}
+                        theme="dark"
+                        searchDisabled={false}
+                        height={400}
+                        width={320}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
             );
           })
         )}
       </div>
+      
       {/* Image Preview Section */}
       {imagePreview && (
         <div className="px-4 py-2 ">
@@ -443,10 +690,8 @@ const ChatView = ({
           </div>
         </div>
       )}
-      <form
-        className="p-4 border-t border-gray-700 flex items-center gap-2 relative"
-        onSubmit={handleSend}
-      >
+      
+      <div className="p-4 border-t border-gray-700 flex items-center gap-2 relative">
         {/* Hidden file input */}
         <input
           type="file"
@@ -511,9 +756,11 @@ const ChatView = ({
               }, 2000);
             }
           }}
+          onKeyPress={handleKeyPress}
         />
         <button
-          type="submit"
+          type="button"
+          onClick={handleSend}
           className="p-2 text-gray-400 hover:text-white disabled:opacity-50 cursor-pointer"
           disabled={isUploading}
         >
@@ -523,7 +770,7 @@ const ChatView = ({
             <IoMdSend size={22} />
           )}
         </button>
-      </form>
+      </div>
     </div>
   );
 };

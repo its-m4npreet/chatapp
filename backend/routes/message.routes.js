@@ -7,6 +7,7 @@ module.exports = (messageController) => {
 
   messageRouter.post('/send', authMiddleware, messageController.sendMessage);
   messageRouter.post('/upload', authMiddleware, messageController.uploadImage);
+  messageRouter.post('/:messageId/react', authMiddleware, messageController.reactToMessage);
   messageRouter.get('/:receiverId', authMiddleware, messageController.getMessages);
 
   return messageRouter;

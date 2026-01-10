@@ -473,7 +473,7 @@ const createGroupController = (io) => {
     // Send group message
     const sendGroupMessage = async (req, res) => {
         try {
-            const { groupId, content, image } = req.body;
+            const { groupId, content, image, tempId } = req.body;
             const userId = req.userId;
 
             const group = await Group.findById(groupId);
@@ -495,22 +495,84 @@ const createGroupController = (io) => {
                 content: content?.trim() || '',
                 image: image ? { url: image, public_id: '' } : { url: '', public_id: '' },
                 messageType,
+                status: 'sent',
             });
 
             await message.save();
             await message.populate('sender', 'name profilePicture');
 
-            // Emit to all group members
+            // Emit to all group members with tempId for optimistic updates
+            const messageData = {
+                groupId,
+                message: {
+                    ...message.toObject(),
+                    tempId, // Include tempId to match optimistic message
+                },
+            };
+
             group.members.forEach(member => {
-                io.to(member.toString()).emit('newGroupMessage', {
-                    groupId,
-                    message,
-                });
+                io.to(member.toString()).emit('newGroupMessage', messageData);
             });
 
             res.status(201).json({ message });
         } catch (error) {
             console.error('Send group message error:', error);
+            res.status(500).json({ message: error.message || 'Server error' });
+        }
+    };
+
+    // Add or remove a reaction on a group message
+    const reactToGroupMessage = async (req, res) => {
+        try {
+            const { groupId, messageId } = req.params;
+            const { reaction } = req.body;
+            const userId = req.userId;
+
+            const group = await Group.findById(groupId);
+            if (!group) {
+                return res.status(404).json({ message: 'Group not found' });
+            }
+
+            if (!group.members.some(m => m.toString() === userId)) {
+                return res.status(403).json({ message: 'You are not a member of this group' });
+            }
+
+            const message = await GroupMessage.findById(messageId);
+            if (!message || message.group.toString() !== groupId) {
+                return res.status(404).json({ message: 'Group message not found' });
+            }
+
+            const existingIndex = message.reactions.findIndex(
+                (r) => r.user.toString() === userId
+            );
+
+            if (reaction) {
+                if (existingIndex !== -1) {
+                    message.reactions[existingIndex].reaction = reaction;
+                } else {
+                    message.reactions.push({ user: userId, reaction });
+                }
+            } else if (existingIndex !== -1) {
+                message.reactions.splice(existingIndex, 1);
+            }
+
+            await message.save();
+            await message.populate('sender', 'name profilePicture');
+
+            const payload = {
+                groupId,
+                messageId: message._id,
+                reactions: message.reactions,
+                updatedBy: userId,
+            };
+
+            group.members.forEach(member => {
+                io.to(member.toString()).emit('groupMessageReactionUpdated', payload);
+            });
+
+            res.status(200).json({ message: 'Reaction updated', data: message });
+        } catch (error) {
+            console.error('React to group message error:', error);
             res.status(500).json({ message: error.message || 'Server error' });
         }
     };
@@ -529,6 +591,7 @@ const createGroupController = (io) => {
         toggleAdmin,
         getGroupMessages,
         sendGroupMessage,
+        reactToGroupMessage,
     };
 };
 
