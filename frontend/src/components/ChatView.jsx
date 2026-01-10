@@ -6,9 +6,93 @@ import { IoCheckmark, IoCheckmarkDone } from "react-icons/io5";
 import EmojiPicker from "emoji-picker-react";
 import { ButtonLoading } from "./Loading";
 import { ContentLoading } from "./Loading";
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+import hljs from 'highlight.js';
+import 'highlight.js/styles/github-dark.css';
+import {
+  formatBold,
+  formatItalic,
+  formatUnderline,
+  formatStrikethrough,
+  formatInlineCode,
+  formatHighlight,
+} from "../lib/markdownParser";
+
+// Custom marked extensions for underline and highlight
+const underlineExtension = {
+  name: 'underline',
+  level: 'inline',
+  start(src) { return src.match(/__/)?.index; },
+  tokenizer(src) {
+    const rule = /^__([^_]+)__/;
+    const match = rule.exec(src);
+    if (match) {
+      return {
+        type: 'underline',
+        raw: match[0],
+        text: match[1]
+      };
+    }
+  },
+  renderer(token) {
+    return `<u>${token.text}</u>`;
+  }
+};
+
+const highlightExtension = {
+  name: 'highlight',
+  level: 'inline',
+  start(src) { return src.match(/==/)?.index; },
+  tokenizer(src) {
+    const rule = /^==([^=]+)==/;
+    const match = rule.exec(src);
+    if (match) {
+      return {
+        type: 'highlight',
+        raw: match[0],
+        text: match[1]
+      };
+    }
+  },
+  renderer(token) {
+    return `<mark>${token.text}</mark>`;
+  }
+};
+
+// Configure marked with extensions and highlight.js
+marked.use({ 
+  extensions: [underlineExtension, highlightExtension],
+  gfm: true,
+  breaks: true
+});
+
+marked.setOptions({
+  highlight: function (code, lang) {
+    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+    return hljs.highlight(code, { language }).value;
+  },
+  langPrefix: 'hljs language-',
+});
 
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 const getId = (u) => (typeof u === "object" ? u?._id : u);
+
+// Toolbar button icons using text/emoji for simplicity
+const ToolbarButton = ({ onClick, title, children, active }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title={title}
+    className={`p-1.5 rounded transition-colors ${
+      active
+        ? "bg-blue-600 text-white"
+        : "text-gray-400 hover:text-white hover:bg-gray-700"
+    }`}
+  >
+    {children}
+  </button>
+);
 
 const ChatView = ({
   user,
@@ -35,6 +119,7 @@ const ChatView = ({
   }, [user, currentUser]);
 
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showToolbar, setShowToolbar] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(null); // Track which message's reaction picker is open
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
@@ -219,6 +304,67 @@ const ChatView = ({
   const handleEmojiClick = (emojiData) => {
     setInputValue((prev) => prev + emojiData.emoji);
     if (inputRef.current) inputRef.current.focus();
+  };
+
+  // Handle markdown formatting
+  const handleFormat = (formatter) => {
+    if (!inputRef.current) return;
+    
+    const start = inputRef.current.selectionStart;
+    const end = inputRef.current.selectionEnd;
+    
+    if (start === end) {
+      // No selection, just insert markers
+      const marker = getMarker(formatter);
+      const newText = inputValue.substring(0, start) + marker + marker + inputValue.substring(end);
+      setInputValue(newText);
+      // Set cursor position between markers
+      setTimeout(() => {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(start + marker.length, start + marker.length);
+      }, 0);
+    } else {
+      // Wrap selection with markers
+      const { newText } = formatter(inputValue, start, end);
+      setInputValue(newText);
+      // Restore selection
+      setTimeout(() => {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(start, end + getMarkerLength(formatter));
+      }, 0);
+    }
+  };
+
+  const getMarker = (formatter) => {
+    switch (formatter) {
+      case formatBold: return '**';
+      case formatItalic: return '*';
+      case formatUnderline: return '__';
+      case formatStrikethrough: return '~~';
+      case formatInlineCode: return '`';
+      case formatHighlight: return '==';
+      default: return '';
+    }
+  };
+
+  const getMarkerLength = (formatter) => {
+    return getMarker(formatter).length * 2;
+  };
+
+  // Render markdown content
+  const renderMarkdown = (content) => {
+    if (!content) return null;
+    
+    try {
+      // Parse markdown to HTML
+      const html = marked.parse(content);
+      // Sanitize HTML to prevent XSS
+      const sanitized = DOMPurify.sanitize(html);
+      return { __html: sanitized };
+    } catch (error) {
+      console.error('Markdown parsing error:', error);
+      return { __html: content };
+    }
   };
 
   // Handle reaction emoji selection
@@ -448,18 +594,6 @@ const ChatView = ({
 };
 
 
-  const splitIntoLines = (text, limit = 30) => {
-    const lines = [];
-    let start = 0;
-
-    while (start < text.length) {
-      lines.push(text.slice(start, start + limit));
-      start += limit;
-    }
-
-    return lines;
-  };
-
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center h-full w-full ">
@@ -613,19 +747,19 @@ const ChatView = ({
                         onClick={() => window.open(imageUrl, "_blank")}
                       />
                     )}
-                    {msg.content &&
-                      splitIntoLines(msg.content).map((line, index) => (
-                        <span key={index} style={{ display: "block" }}>
-                          {line}
-                        </span>
-                      ))}
+                    {msg.content && (
+                      <div
+                        className="markdown-content prose prose-invert max-w-none"
+                        dangerouslySetInnerHTML={renderMarkdown(msg.content)}
+                      />
+                    )}
                   </div>
 
                   {/* Quick Reactions Bar - Shows on hover */}
                   <div
                     className={`absolute ${
                       isCurrentUser ? "right-0" : "left-0"
-                    } -bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center gap-1 bg-gray-800/95 backdrop-blur-sm rounded-full px-2 py-1 shadow-lg border border-gray-700`}
+                    } -bottom-8 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center gap-1 bg-gray-800/95 backdrop-blur-sm rounded-full px-2 py-1 shadow-lg border border-gray-700 cursor-pointer`}
                     style={{
                       transform: "translateX(0)",
                       // animation: "slideInFromRight 0.3s ease-out",
@@ -665,7 +799,7 @@ const ChatView = ({
                         <button
                           key={symbol}
                           type="button"
-                          className={`reaction-emoji text-base leading-none p-1.5 rounded-full transition-all hover:scale-125 ${
+                          className={`reaction-emoji text-base leading-none p-1.5 rounded-full transition-all hover:scale-125 cursor-pointer${
                             mine ? "bg-blue-600" : "hover:bg-gray-700"
                           }`}
                           style={{
@@ -838,6 +972,72 @@ const ChatView = ({
             />
           </div>
         )}
+        
+        {/* Markdown Toolbar Toggle */}
+        <button
+          type="button"
+          className={`p-2 transition-colors cursor-pointer ${
+            showToolbar ? "text-blue-400" : "text-gray-400 hover:text-white"
+          }`}
+          onClick={() => setShowToolbar(!showToolbar)}
+          title="Formatting options"
+        >
+          <span className="font-bold text-sm">Aa</span>
+        </button>
+        
+        {/* Markdown Toolbar */}
+        {showToolbar && (
+          <div className="absolute bottom-14 left-0 z-50 flex flex-col gap-2">
+            {/* Main toolbar */}
+            <div className="flex items-center gap-1 bg-gray-800/95 backdrop-blur-sm rounded-lg px-2 py-1 border border-gray-700 shadow-lg">
+              <ToolbarButton
+                onClick={() => handleFormat(formatBold)}
+                title="Bold (**text**)"
+              >
+                <span className="font-bold text-sm">B</span>
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => handleFormat(formatItalic)}
+                title="Italic (*text*)"
+              >
+                <span className="italic text-sm">I</span>
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => handleFormat(formatUnderline)}
+                title="Underline (__text__)"
+              >
+                <span className="underline text-sm">U</span>
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => handleFormat(formatStrikethrough)}
+                title="Strikethrough (~~text~~)"
+              >
+                <span className="line-through text-sm">S</span>
+              </ToolbarButton>
+              <div className="w-px h-5 bg-gray-600 mx-1"></div>
+              <ToolbarButton
+                onClick={() => handleFormat(formatInlineCode)}
+                title="Inline Code (`code`)"
+              >
+                <span className="font-mono text-xs" style={{ fontSize: '10px' }}>&lt;/&gt;</span>
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => handleFormat(formatHighlight)}
+                title="Highlight (==text==)"
+              >
+                <span className="text-xs bg-yellow-500/30 text-yellow-300 px-1 rounded">
+                  H
+                </span>
+              </ToolbarButton>
+            </div>
+            
+            {/* Help text */}
+            <div className="text-xs text-gray-400 bg-gray-800/90 backdrop-blur-sm rounded px-2 py-1 border border-gray-700">
+              Tip: Select text and click a button to format, or click to insert markers
+            </div>
+          </div>
+        )}
+        
         <input
           ref={inputRef}
           className="flex-1 p-2 rounded border border-gray-700 text-white outline-none bg-transparent"
@@ -884,3 +1084,4 @@ const ChatView = ({
 };
 
 export default ChatView;
+
