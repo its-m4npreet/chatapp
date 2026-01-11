@@ -787,6 +787,7 @@ const ChatView = ({
                       }
                       .group:hover .reaction-emoji {
                         animation: popIn 0.3s ease-out forwards;
+                        cursor: pointer;
                       }
                     `}</style>
                     {REACTIONS.map((symbol, index) => {
