@@ -6,10 +6,10 @@ import { IoCheckmark, IoCheckmarkDone } from "react-icons/io5";
 import EmojiPicker from "emoji-picker-react";
 import { ButtonLoading } from "./Loading";
 import { ContentLoading } from "./Loading";
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
-import hljs from 'highlight.js';
-import 'highlight.js/styles/github-dark.css';
+import { marked } from "marked";
+import DOMPurify from "dompurify";
+import hljs from "highlight.js";
+import "highlight.js/styles/github-dark.css";
 import {
   formatBold,
   formatItalic,
@@ -21,58 +21,62 @@ import {
 
 // Custom marked extensions for underline and highlight
 const underlineExtension = {
-  name: 'underline',
-  level: 'inline',
-  start(src) { return src.match(/__/)?.index; },
+  name: "underline",
+  level: "inline",
+  start(src) {
+    return src.match(/__/)?.index;
+  },
   tokenizer(src) {
     const rule = /^__([^_]+)__/;
     const match = rule.exec(src);
     if (match) {
       return {
-        type: 'underline',
+        type: "underline",
         raw: match[0],
-        text: match[1]
+        text: match[1],
       };
     }
   },
   renderer(token) {
     return `<u>${token.text}</u>`;
-  }
+  },
 };
 
 const highlightExtension = {
-  name: 'highlight',
-  level: 'inline',
-  start(src) { return src.match(/==/)?.index; },
+  name: "highlight",
+  level: "inline",
+  start(src) {
+    return src.match(/==/)?.index;
+  },
   tokenizer(src) {
     const rule = /^==([^=]+)==/;
     const match = rule.exec(src);
     if (match) {
       return {
-        type: 'highlight',
+        type: "highlight",
         raw: match[0],
-        text: match[1]
+        text: match[1],
       };
     }
   },
   renderer(token) {
     return `<mark>${token.text}</mark>`;
-  }
+  },
 };
 
 // Configure marked with extensions and highlight.js
-marked.use({ 
+marked.use({
   extensions: [underlineExtension, highlightExtension],
   gfm: true,
-  breaks: true
+  breaks: true,
 });
 
 marked.setOptions({
   highlight: function (code, lang) {
-    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+    const language = hljs.getLanguage(lang) ? lang : "plaintext";
     return hljs.highlight(code, { language }).value;
   },
-  langPrefix: 'hljs language-',
+  langPrefix: "hljs language-",
 });
 
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -309,19 +313,26 @@ const ChatView = ({
   // Handle markdown formatting
   const handleFormat = (formatter) => {
     if (!inputRef.current) return;
-    
+
     const start = inputRef.current.selectionStart;
     const end = inputRef.current.selectionEnd;
-    
+
     if (start === end) {
       // No selection, just insert markers
       const marker = getMarker(formatter);
-      const newText = inputValue.substring(0, start) + marker + marker + inputValue.substring(end);
+      const newText =
+        inputValue.substring(0, start) +
+        marker +
+        marker +
+        inputValue.substring(end);
       setInputValue(newText);
       // Set cursor position between markers
       setTimeout(() => {
         inputRef.current.focus();
-        inputRef.current.setSelectionRange(start + marker.length, start + marker.length);
+        inputRef.current.setSelectionRange(
+          start + marker.length,
+          start + marker.length
+        );
       }, 0);
     } else {
       // Wrap selection with markers
@@ -330,20 +341,30 @@ const ChatView = ({
       // Restore selection
       setTimeout(() => {
         inputRef.current.focus();
-        inputRef.current.setSelectionRange(start, end + getMarkerLength(formatter));
+        inputRef.current.setSelectionRange(
+          start,
+          end + getMarkerLength(formatter)
+        );
       }, 0);
     }
   };
 
   const getMarker = (formatter) => {
     switch (formatter) {
-      case formatBold: return '**';
-      case formatItalic: return '*';
-      case formatUnderline: return '__';
-      case formatStrikethrough: return '~~';
-      case formatInlineCode: return '`';
-      case formatHighlight: return '==';
-      default: return '';
+      case formatBold:
+        return "**";
+      case formatItalic:
+        return "*";
+      case formatUnderline:
+        return "__";
+      case formatStrikethrough:
+        return "~~";
+      case formatInlineCode:
+        return "`";
+      case formatHighlight:
+        return "==";
+      default:
+        return "";
     }
   };
 
@@ -354,7 +375,7 @@ const ChatView = ({
   // Render markdown content
   const renderMarkdown = (content) => {
     if (!content) return null;
-    
+
     try {
       // Parse markdown to HTML
       const html = marked.parse(content);
@@ -362,7 +383,7 @@ const ChatView = ({
       const sanitized = DOMPurify.sanitize(html);
       return { __html: sanitized };
     } catch (error) {
-      console.error('Markdown parsing error:', error);
+      console.error("Markdown parsing error:", error);
       return { __html: content };
     }
   };
@@ -533,64 +554,75 @@ const ChatView = ({
   };
 
   const handleReaction = async (msg, symbol) => {
-  const existing = msg.reactions?.find(
-    (r) => getId(r.user) === currentUser?._id
-  );
-
-  const next = existing?.reaction === symbol ? null : symbol;
-
-  // 🔥 1. Optimistically update UI
-  setMessages((prev) =>
-    prev.map((m) => {
-      if (m._id !== msg._id) return m;
-
-      let reactions = m.reactions || [];
-
-      if (next === null) {
-        // remove reaction
-        reactions = reactions.filter(
-          (r) => getId(r.user) !== currentUser?._id
-        );
-      } else if (existing) {
-        // update existing reaction
-        reactions = reactions.map((r) =>
-          getId(r.user) === currentUser?._id
-            ? { ...r, reaction: next }
-            : r
-        );
-      } else {
-        // add new reaction
-        reactions = [
-          ...reactions,
-          { user: currentUser._id, reaction: next },
-        ];
-      }
-
-      return { ...m, reactions };
-    })
-  );
-
-  // 🔁 2. Sync with backend
-  try {
-    const { default: axios } = await import("../lib/axios");
-    const res = await axios.post(`/messages/${msg._id}/react`, {
-      reaction: next,
-    });
-
-    // 🔄 3. Replace with server truth (optional but recommended)
-    if (res.data?.data) {
-      setMessages((prev) =>
-        prev.map((m) => (m._id === msg._id ? res.data.data : m))
-      );
-    }
-  } catch (e) {
-    console.error("React failed", e);
-
-    //  Optional: rollback if API fails
-    setMessages((prev) =>
-      prev.map((m) => (m._id === msg._id ? msg : m))
+    const existing = msg.reactions?.find(
+      (r) => getId(r.user) === currentUser?._id
     );
+
+    const next = existing?.reaction === symbol ? null : symbol;
+
+    // 🔥 1. Optimistically update UI
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m._id !== msg._id) return m;
+
+        let reactions = m.reactions || [];
+
+        if (next === null) {
+          // remove reaction
+          reactions = reactions.filter(
+            (r) => getId(r.user) !== currentUser?._id
+          );
+        } else if (existing) {
+          // update existing reaction
+          reactions = reactions.map((r) =>
+            getId(r.user) === currentUser?._id ? { ...r, reaction: next } : r
+          );
+        } else {
+          // add new reaction
+          reactions = [...reactions, { user: currentUser._id, reaction: next }];
+        }
+
+        return { ...m, reactions };
+      })
+    );
+
+    // 🔁 2. Sync with backend
+    try {
+      const { default: axios } = await import("../lib/axios");
+      const res = await axios.post(`/messages/${msg._id}/react`, {
+        reaction: next,
+      });
+
+      // 🔄 3. Replace with server truth (optional but recommended)
+      if (res.data?.data) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === msg._id ? res.data.data : m))
+        );
+      }
+    } catch (e) {
+      console.error("React failed", e);
+
+      //  Optional: rollback if API fails
+      setMessages((prev) => prev.map((m) => (m._id === msg._id ? msg : m)));
+    }
+  };
+
+  const splitIntoLines = (text, limit = 30) => {
+  const words = text.split(" ");
+  const lines = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    if ((currentLine + word).length > limit) {
+      lines.push(currentLine.trim());
+      currentLine = word + " ";
+    } else {
+      currentLine += word + " ";
+    }
   }
+
+  if (currentLine) lines.push(currentLine.trim());
+  return lines;
 };
 
 
@@ -747,12 +779,14 @@ const ChatView = ({
                         onClick={() => window.open(imageUrl, "_blank")}
                       />
                     )}
-                    {msg.content && (
-                      <div
-                        className="markdown-content prose prose-invert max-w-none"
-                        dangerouslySetInnerHTML={renderMarkdown(msg.content)}
-                      />
-                    )}
+                    {msg.content &&
+                      splitIntoLines(msg.content).map((chunk, index) => (
+                        <div
+                          key={index}
+                          className="markdown-content prose prose-invert max-w-none"
+                          dangerouslySetInnerHTML={renderMarkdown(chunk)}
+                        />
+                      ))}
                   </div>
 
                   {/* Quick Reactions Bar - Shows on hover */}
@@ -973,7 +1007,7 @@ const ChatView = ({
             />
           </div>
         )}
-        
+
         {/* Markdown Toolbar Toggle */}
         <button
           type="button"
@@ -985,7 +1019,7 @@ const ChatView = ({
         >
           <span className="font-bold text-sm">Aa</span>
         </button>
-        
+
         {/* Markdown Toolbar */}
         {showToolbar && (
           <div className="absolute bottom-14 left-0 z-50 flex flex-col gap-2">
@@ -1020,7 +1054,12 @@ const ChatView = ({
                 onClick={() => handleFormat(formatInlineCode)}
                 title="Inline Code (`code`)"
               >
-                <span className="font-mono text-xs" style={{ fontSize: '10px' }}>&lt;/&gt;</span>
+                <span
+                  className="font-mono text-xs"
+                  style={{ fontSize: "10px" }}
+                >
+                  &lt;/&gt;
+                </span>
               </ToolbarButton>
               <ToolbarButton
                 onClick={() => handleFormat(formatHighlight)}
@@ -1031,41 +1070,48 @@ const ChatView = ({
                 </span>
               </ToolbarButton>
             </div>
-            
+
             {/* Help text */}
             <div className="text-xs text-gray-400 bg-gray-800/90 backdrop-blur-sm rounded px-2 py-1 border border-gray-700">
-              Tip: Select text and click a button to format, or click to insert markers
+              Tip: Select text and click a button to format, or click to insert
+              markers
             </div>
           </div>
         )}
-        
-        <input
+
+       <input
           ref={inputRef}
           className="flex-1 p-2 rounded border border-gray-700 text-white outline-none bg-transparent"
           placeholder="Type a message..."
           value={inputValue}
           onChange={(e) => {
-            setInputValue(e.target.value);
-            // Emit typing event
+            const value = e.target.value;
+            setInputValue(value);
+            
+            // Debounced typing event
             if (socket && currentUser && user) {
-              socket.emit("typing", {
-                senderId: currentUser._id,
-                receiverId: user._id,
-              });
               // Clear previous timeout
               if (typingTimeoutRef.current) {
                 clearTimeout(typingTimeoutRef.current);
+              } else if (value.length === 1) {
+                // Only emit typing on first character
+                socket.emit("typing", {
+                  senderId: currentUser._id,
+                  receiverId: user._id,
+                });
               }
+              
               // Stop typing after 2 seconds of inactivity
               typingTimeoutRef.current = setTimeout(() => {
                 socket.emit("stopTyping", {
                   senderId: currentUser._id,
                   receiverId: user._id,
                 });
+                typingTimeoutRef.current = null;
               }, 2000);
             }
           }}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyPress}
         />
         <button
           type="button"
@@ -1085,4 +1131,3 @@ const ChatView = ({
 };
 
 export default ChatView;
-

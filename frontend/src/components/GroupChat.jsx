@@ -13,10 +13,88 @@ import { MdEdit } from "react-icons/md";
 import { TiGroup } from "react-icons/ti";
 import { FaCircleUser } from "react-icons/fa6";
 import axios from "../lib/axios";
-import { ContentLoading, ButtonLoading } from "./Loading";
+import { ContentLoading } from "./Loading";
 import EditGroupModal from "./EditGroupModal";
 import { FaRegSmile } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
+import hljs from "highlight.js";
+import "highlight.js/styles/github-dark.css";
+import {
+  formatBold,
+  formatItalic,
+  formatUnderline,
+  formatStrikethrough,
+  formatInlineCode,
+  formatHighlight,
+} from "../lib/markdownParser";
+
+// Support underline and highlight formatting just like ChatPage
+const underlineExtension = {
+  name: "underline",
+  level: "inline",
+  start(src) {
+    return src.match(/__/)?.index;
+  },
+  tokenizer(src) {
+    const rule = /^__([^_]+)__/;
+    const match = rule.exec(src);
+    if (match) {
+      return { type: "underline", raw: match[0], text: match[1] };
+    }
+  },
+  renderer(token) {
+    return `<u>${token.text}</u>`;
+  },
+};
+
+const highlightExtension = {
+  name: "highlight",
+  level: "inline",
+  start(src) {
+    return src.match(/==/)?.index;
+  },
+  tokenizer(src) {
+    const rule = /^==([^=]+)==/;
+    const match = rule.exec(src);
+    if (match) {
+      return { type: "highlight", raw: match[0], text: match[1] };
+    }
+  },
+  renderer(token) {
+    return `<mark>${token.text}</mark>`;
+  },
+};
+
+marked.use({
+  extensions: [underlineExtension, highlightExtension],
+  gfm: true,
+  breaks: true,
+});
+marked.setOptions({
+  highlight(code, lang) {
+    const language = hljs.getLanguage(lang) ? lang : "plaintext";
+    return hljs.highlight(code, { language }).value;
+  },
+  langPrefix: "hljs language-",
+});
+
+// Toolbar button icons using text/emoji for simplicity
+const ToolbarButton = ({ onClick, title, children, active }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title={title}
+    className={`p-1.5 rounded transition-colors ${
+      active
+        ? "bg-blue-600 text-white"
+        : "text-gray-400 hover:text-white hover:bg-gray-700"
+    }`}
+  >
+    {children}
+  </button>
+);
 
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
@@ -39,6 +117,7 @@ const GroupChat = ({
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [showToolbar, setShowToolbar] = useState(false); // ADD THIS
 
   const messagesEndRef = useRef(null);
   const emojiPickerRef = useRef(null);
@@ -157,6 +236,80 @@ const GroupChat = ({
     });
   };
 
+  // Handle markdown formatting - FIXED
+  const handleFormat = (formatter) => {
+    if (!inputRef.current) return;
+
+    const start = inputRef.current.selectionStart;
+    const end = inputRef.current.selectionEnd;
+
+    if (start === end) {
+      const marker = getMarker(formatter);
+      const newText =
+        newMessage.substring(0, start) +
+        marker +
+        marker +
+        newMessage.substring(end);
+      setNewMessage(newText);
+      setTimeout(() => {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(
+          start + marker.length,
+          start + marker.length
+        );
+      }, 0);
+    } else {
+      const { newText } = formatter(newMessage, start, end);
+      setNewMessage(newText);
+      setTimeout(() => {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(
+          start,
+          end + getMarkerLength(formatter)
+        );
+      }, 0);
+    }
+  };
+
+  const getMarker = (formatter) => {
+    switch (formatter) {
+      case formatBold:
+        return "**";
+      case formatItalic:
+        return "*";
+      case formatUnderline:
+        return "__";
+      case formatStrikethrough:
+        return "~~";
+      case formatInlineCode:
+        return "`";
+      case formatHighlight:
+        return "==";
+      default:
+        return "";
+    }
+  };
+
+  const getMarkerLength = (formatter) => {
+    return getMarker(formatter).length * 2;
+  };
+
+  // Render markdown content
+  const renderMarkdown = (content) => {
+    if (!content) return null;
+
+    try {
+      // Parse markdown to HTML
+      const html = marked.parse(content);
+      // Sanitize HTML to prevent XSS
+      const sanitized = DOMPurify.sanitize(html);
+      return { __html: sanitized };
+    } catch (error) {
+      console.error("Markdown parsing error:", error);
+      return { __html: content };
+    }
+  };
+
   // Handle image selection
   const handleImageSelect = async (e) => {
     const file = e.target.files[0];
@@ -229,6 +382,10 @@ const GroupChat = ({
       setMessages((prev) => [...prev, optimisticMessage]);
       setTimeout(scrollToBottom, 100);
 
+      
+      setNewMessage("");
+      handleRemoveImage();
+
       await axios.post("/groups/message", {
         groupId: group._id,
         content: newMessage.trim(),
@@ -236,8 +393,7 @@ const GroupChat = ({
         tempId,
       });
 
-      setNewMessage("");
-      handleRemoveImage();
+  
     } catch (error) {
       console.error("Failed to send message:", error);
       // Remove optimistic message on error
@@ -314,66 +470,58 @@ const GroupChat = ({
 
   // Handle reaction selection from quick bar
   const handleReaction = async (msg, symbol) => {
-  const existing = msg.reactions?.find(
-    (r) => getId(r.user) === currentUser?._id
-  );
-
-  const next = existing?.reaction === symbol ? null : symbol;
-
-  // 🔥 1. Optimistic UI update (instant)
-  setMessages((prev) =>
-    prev.map((m) => {
-      if (m._id !== msg._id) return m;
-
-      let reactions = m.reactions || [];
-
-      if (next === null) {
-        // remove reaction
-        reactions = reactions.filter(
-          (r) => getId(r.user) !== currentUser?._id
-        );
-      } else if (existing) {
-        // update existing reaction
-        reactions = reactions.map((r) =>
-          getId(r.user) === currentUser?._id
-            ? { ...r, reaction: next }
-            : r
-        );
-      } else {
-        // add new reaction
-        reactions = [
-          ...reactions,
-          { user: currentUser._id, reaction: next },
-        ];
-      }
-
-      return { ...m, reactions };
-    })
-  );
-
-  // 🔁 2. Sync with backend
-  try {
-    const res = await axios.post(
-      `/groups/${group._id}/messages/${msg._id}/react`,
-      { reaction: next }
+    const existing = msg.reactions?.find(
+      (r) => getId(r.user) === currentUser?._id
     );
 
-    // 🔄 3. Replace with server response (source of truth)
-    if (res.data?.data) {
-      setMessages((prev) =>
-        prev.map((m) => (m._id === msg._id ? res.data.data : m))
-      );
-    }
-  } catch (e) {
-    console.error("React failed", e);
+    const next = existing?.reaction === symbol ? null : symbol;
 
-    // ❌ Optional rollback if API fails
+    // 🔥 1. Optimistic UI update (instant)
     setMessages((prev) =>
-      prev.map((m) => (m._id === msg._id ? msg : m))
-    );
-  }
-};
+      prev.map((m) => {
+        if (m._id !== msg._id) return m;
 
+        let reactions = m.reactions || [];
+
+        if (next === null) {
+          // remove reaction
+          reactions = reactions.filter(
+            (r) => getId(r.user) !== currentUser?._id
+          );
+        } else if (existing) {
+          // update existing reaction
+          reactions = reactions.map((r) =>
+            getId(r.user) === currentUser?._id ? { ...r, reaction: next } : r
+          );
+        } else {
+          // add new reaction
+          reactions = [...reactions, { user: currentUser._id, reaction: next }];
+        }
+
+        return { ...m, reactions };
+      })
+    );
+
+    // 🔁 2. Sync with backend
+    try {
+      const res = await axios.post(
+        `/groups/${group._id}/messages/${msg._id}/react`,
+        { reaction: next }
+      );
+
+      // 🔄 3. Replace with server response (source of truth)
+      if (res.data?.data) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === msg._id ? res.data.data : m))
+        );
+      }
+    } catch (e) {
+      console.error("React failed", e);
+
+      //  Optional rollback if API fails
+      setMessages((prev) => prev.map((m) => (m._id === msg._id ? msg : m)));
+    }
+  };
 
   // Handle reaction from emoji picker
   const handleReactionEmojiClick = async (emojiData, messageId) => {
@@ -401,14 +549,30 @@ const GroupChat = ({
     setShowReactionPicker(null);
   };
   const splitIntoLines = (text, limit = 30) => {
+    const words = text.split(" ");
     const lines = [];
-    let start = 0;
+    let currentLine = "";
 
-    while (start < text.length) {
-      lines.push(text.slice(start, start + limit));
-      start += limit;
+    for (const word of words) {
+      // Break long words that exceed limit
+      if (word.length > limit) {
+        if (currentLine) {
+          lines.push(currentLine.trim());
+          currentLine = "";
+        }
+        // Split long word into chunks
+        for (let i = 0; i < word.length; i += limit) {
+          lines.push(word.substring(i, i + limit));
+        }
+      } else if ((currentLine + word).length > limit) {
+        lines.push(currentLine.trim());
+        currentLine = word + " ";
+      } else {
+        currentLine += word + " ";
+      }
     }
 
+    if (currentLine) lines.push(currentLine.trim());
     return lines;
   };
 
@@ -568,11 +732,17 @@ const GroupChat = ({
                               />
                             )}
                             {hasContent &&
-                              splitIntoLines(msg.content).map((line, index) => (
-                                <span key={index} style={{ display: "block" }}>
-                                  {line}
-                                </span>
-                              ))}
+                              splitIntoLines(msg.content).map(
+                                (chunk, index) => (
+                                  <div
+                                    key={index}
+                                    className="markdown-content prose prose-invert max-w-none"
+                                    dangerouslySetInnerHTML={renderMarkdown(
+                                      chunk
+                                    )}
+                                  />
+                                )
+                              )}
                           </div>
 
                           {/* Quick Reactions Bar */}
@@ -629,7 +799,11 @@ const GroupChat = ({
                             </button>
                           </div>
 
-                          <div className={`${isOwn ? "text-right justify-end" : "text-left"} mt-1 flex items-center gap-2 text-xs text-gray-500`}>
+                          <div
+                            className={`${
+                              isOwn ? "text-right justify-end" : "text-left"
+                            } mt-1 flex items-center gap-2 text-xs text-gray-500`}
+                          >
                             <span>
                               {new Date(msg.createdAt).toLocaleTimeString([], {
                                 hour: "2-digit",
@@ -786,6 +960,78 @@ const GroupChat = ({
                     theme="dark"
                     searchDisabled={false}
                   />
+                </div>
+              )}
+              {/* Markdown Toolbar Toggle */}
+              <button
+                type="button"
+                className={`p-2 transition-colors cursor-pointer ${
+                  showToolbar
+                    ? "text-blue-400"
+                    : "text-gray-400 hover:text-white"
+                }`}
+                onClick={() => setShowToolbar(!showToolbar)}
+                title="Formatting options"
+              >
+                <span className="font-bold text-sm">Aa</span>
+              </button>
+
+              {/* Markdown Toolbar */}
+              {showToolbar && (
+                <div className="absolute bottom-14 left-0 z-50 flex flex-col gap-2">
+                  {/* Main toolbar */}
+                  <div className="flex items-center gap-1 bg-gray-800/95 backdrop-blur-sm rounded-lg px-2 py-1 border border-gray-700 shadow-lg">
+                    <ToolbarButton
+                      onClick={() => handleFormat(formatBold)}
+                      title="Bold (**text**)"
+                    >
+                      <span className="font-bold text-sm">B</span>
+                    </ToolbarButton>
+                    <ToolbarButton
+                      onClick={() => handleFormat(formatItalic)}
+                      title="Italic (*text*)"
+                    >
+                      <span className="italic text-sm">I</span>
+                    </ToolbarButton>
+                    <ToolbarButton
+                      onClick={() => handleFormat(formatUnderline)}
+                      title="Underline (__text__)"
+                    >
+                      <span className="underline text-sm">U</span>
+                    </ToolbarButton>
+                    <ToolbarButton
+                      onClick={() => handleFormat(formatStrikethrough)}
+                      title="Strikethrough (~~text~~)"
+                    >
+                      <span className="line-through text-sm">S</span>
+                    </ToolbarButton>
+                    <div className="w-px h-5 bg-gray-600 mx-1"></div>
+                    <ToolbarButton
+                      onClick={() => handleFormat(formatInlineCode)}
+                      title="Inline Code (`code`)"
+                    >
+                      <span
+                        className="font-mono text-xs"
+                        style={{ fontSize: "10px" }}
+                      >
+                        &lt;/&gt;
+                      </span>
+                    </ToolbarButton>
+                    <ToolbarButton
+                      onClick={() => handleFormat(formatHighlight)}
+                      title="Highlight (==text==)"
+                    >
+                      <span className="text-xs bg-yellow-500/30 text-yellow-300 px-1 rounded">
+                        H
+                      </span>
+                    </ToolbarButton>
+                  </div>
+
+                  {/* Help text */}
+                  <div className="text-xs text-gray-400 bg-gray-800/90 backdrop-blur-sm rounded px-2 py-1 border border-gray-700">
+                    Tip: Select text and click a button to format, or click to
+                    insert markers
+                  </div>
                 </div>
               )}
 

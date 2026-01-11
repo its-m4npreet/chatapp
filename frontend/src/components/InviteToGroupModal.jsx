@@ -31,7 +31,7 @@ const InviteToGroupModal = ({ isOpen, onClose, group }) => {
 
   useEffect(() => {
     if (isOpen && group) {
-      fetchFriends();
+      setTimeout(fetchFriends, 0);
     }
   }, [isOpen, group, fetchFriends]);
 
