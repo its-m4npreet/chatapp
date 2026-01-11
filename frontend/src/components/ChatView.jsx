@@ -1101,14 +1101,14 @@ const ChatView = ({
                 });
               }
               
-              // Stop typing after 2 seconds of inactivity
+              // Stop typing after 1 seconds of inactivity
               typingTimeoutRef.current = setTimeout(() => {
                 socket.emit("stopTyping", {
                   senderId: currentUser._id,
                   receiverId: user._id,
                 });
                 typingTimeoutRef.current = null;
-              }, 2000);
+              }, 1000);
             }
           }}
           onKeyDown={handleKeyPress}

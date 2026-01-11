@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   IoClose,
   IoSend,
@@ -134,6 +134,69 @@ const GroupChat = ({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Memoize helper functions to prevent recreation on every render
+  const getMarker = useCallback((formatter) => {
+    switch (formatter) {
+      case formatBold:
+        return "**";
+      case formatItalic:
+        return "*";
+      case formatUnderline:
+        return "__";
+      case formatStrikethrough:
+        return "~~";
+      case formatInlineCode:
+        return "`";
+      case formatHighlight:
+        return "==";
+      default:
+        return "";
+    }
+  }, []);
+
+  const getMarkerLength = useCallback((formatter) => {
+    return getMarker(formatter).length * 2;
+  }, [getMarker]);
+
+  // Memoize renderMarkdown to prevent recreation
+  const renderMarkdown = useCallback((content) => {
+    if (!content) return null;
+    try {
+      const html = marked.parse(content);
+      const sanitized = DOMPurify.sanitize(html);
+      return { __html: sanitized };
+    } catch (error) {
+      console.error("Markdown parsing error:", error);
+      return { __html: content };
+    }
+  }, []);
+
+  const splitIntoLines = useCallback((text, limit = 30) => {
+    const words = text.split(" ");
+    const lines = [];
+    let currentLine = "";
+
+    for (const word of words) {
+      if (word.length > limit) {
+        if (currentLine) {
+          lines.push(currentLine.trim());
+          currentLine = "";
+        }
+        for (let i = 0; i < word.length; i += limit) {
+          lines.push(word.substring(i, i + limit));
+        }
+      } else if ((currentLine + word).length > limit) {
+        lines.push(currentLine.trim());
+        currentLine = word + " ";
+      } else {
+        currentLine += word + " ";
+      }
+    }
+
+    if (currentLine) lines.push(currentLine.trim());
+    return lines;
+  }, []);
+
   // Fetch messages
   useEffect(() => {
     if (!group?._id) return;
@@ -237,7 +300,7 @@ const GroupChat = ({
   };
 
   // Handle markdown formatting - FIXED
-  const handleFormat = (formatter) => {
+  const handleFormat = useCallback((formatter) => {
     if (!inputRef.current) return;
 
     const start = inputRef.current.selectionStart;
@@ -245,12 +308,9 @@ const GroupChat = ({
 
     if (start === end) {
       const marker = getMarker(formatter);
-      const newText =
-        newMessage.substring(0, start) +
-        marker +
-        marker +
-        newMessage.substring(end);
-      setNewMessage(newText);
+      setNewMessage((prev) =>
+        prev.substring(0, start) + marker + marker + prev.substring(end)
+      );
       setTimeout(() => {
         inputRef.current.focus();
         inputRef.current.setSelectionRange(
@@ -259,8 +319,10 @@ const GroupChat = ({
         );
       }, 0);
     } else {
-      const { newText } = formatter(newMessage, start, end);
-      setNewMessage(newText);
+      setNewMessage((prev) => {
+        const { newText } = formatter(prev, start, end);
+        return newText;
+      });
       setTimeout(() => {
         inputRef.current.focus();
         inputRef.current.setSelectionRange(
@@ -269,46 +331,7 @@ const GroupChat = ({
         );
       }, 0);
     }
-  };
-
-  const getMarker = (formatter) => {
-    switch (formatter) {
-      case formatBold:
-        return "**";
-      case formatItalic:
-        return "*";
-      case formatUnderline:
-        return "__";
-      case formatStrikethrough:
-        return "~~";
-      case formatInlineCode:
-        return "`";
-      case formatHighlight:
-        return "==";
-      default:
-        return "";
-    }
-  };
-
-  const getMarkerLength = (formatter) => {
-    return getMarker(formatter).length * 2;
-  };
-
-  // Render markdown content
-  const renderMarkdown = (content) => {
-    if (!content) return null;
-
-    try {
-      // Parse markdown to HTML
-      const html = marked.parse(content);
-      // Sanitize HTML to prevent XSS
-      const sanitized = DOMPurify.sanitize(html);
-      return { __html: sanitized };
-    } catch (error) {
-      console.error("Markdown parsing error:", error);
-      return { __html: content };
-    }
-  };
+  }, [getMarker, getMarkerLength]);
 
   // Handle image selection
   const handleImageSelect = async (e) => {
@@ -446,11 +469,10 @@ const GroupChat = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showEmoji]);
 
-  const handleEmojiClick = (emojiData) => {
+  const handleEmojiClick = useCallback((emojiData) => {
     setNewMessage((prev) => prev + emojiData.emoji);
     if (inputRef.current) inputRef.current.focus();
-    // Do not close the picker on emoji select
-  };
+  }, []);
 
   // Close reaction picker when clicking outside
   useEffect(() => {
@@ -548,33 +570,11 @@ const GroupChat = ({
     }
     setShowReactionPicker(null);
   };
-  const splitIntoLines = (text, limit = 30) => {
-    const words = text.split(" ");
-    const lines = [];
-    let currentLine = "";
 
-    for (const word of words) {
-      // Break long words that exceed limit
-      if (word.length > limit) {
-        if (currentLine) {
-          lines.push(currentLine.trim());
-          currentLine = "";
-        }
-        // Split long word into chunks
-        for (let i = 0; i < word.length; i += limit) {
-          lines.push(word.substring(i, i + limit));
-        }
-      } else if ((currentLine + word).length > limit) {
-        lines.push(currentLine.trim());
-        currentLine = word + " ";
-      } else {
-        currentLine += word + " ";
-      }
-    }
-
-    if (currentLine) lines.push(currentLine.trim());
-    return lines;
-  };
+  // Optimize input change handler
+  const handleInputChange = useCallback((e) => {
+    setNewMessage(e.target.value);
+  }, []);
 
   if (!group) {
     return (
@@ -1039,7 +1039,7 @@ const GroupChat = ({
                 ref={inputRef}
                 type="text"
                 value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
+                onChange={handleInputChange}
                 placeholder="Type a message..."
                 className="flex-1 text-white px-4 py-2 rounded-lg outline-none border border-gray-700 focus:border-blue-500 bg-transparent"
               />
