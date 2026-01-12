@@ -63,28 +63,86 @@ const createMessageController = (io) => {
         }
     };
 
+    // Upload audio to cloudinary
+    const uploadAudio = async (req, res) => {
+        try {
+            const { audio } = req.body;
+            
+            if (!audio) {
+                return res.status(400).json({ message: "No audio data provided" });
+            }
+
+            const uploadPromise = new Promise((resolve, reject) => {
+                const uploadStream = cloudinary.uploader.upload_stream(
+                    {
+                        folder: 'chat-audio',
+                        resource_type: 'video', // webm is treated as video
+                        format: 'webm',
+                    },
+                    (error, result) => {
+                        if (error) reject(error);
+                        else resolve(result);
+                    }
+                );
+
+                const base64Data = audio.replace(/^data:audio\/\w+;base64,/, '');
+                const buffer = Buffer.from(base64Data, 'base64');
+                
+                const chunkSize = 64 * 1024;
+                let offset = 0;
+                
+                const writeChunk = () => {
+                    while (offset < buffer.length) {
+                        const chunk = buffer.slice(offset, offset + chunkSize);
+                        offset += chunkSize;
+                        if (!uploadStream.write(chunk)) {
+                            uploadStream.once('drain', writeChunk);
+                            return;
+                        }
+                    }
+                    uploadStream.end();
+                };
+                
+                writeChunk();
+            });
+
+            const result = await uploadPromise;
+
+            res.status(200).json({
+                message: "Audio uploaded successfully",
+                url: result.secure_url,
+                public_id: result.public_id
+            });
+        } catch (error) {
+            console.error('Audio upload error:', error);
+            res.status(500).json({ message: "Failed to upload audio" });
+        }
+    };
+
     // Send message and emit via socket.io
     const sendMessage = async (req, res) => {
-        const { receiverId, content, imageUrl, publicId } = req.body;
+        const { receiverId, content, imageUrl, publicId, audioUrl } = req.body;
         const senderId = req.userId;
 
         if (!receiverId) {
             return res.status(400).json({ message: "receiverId is required" });
         }
-        if (!content?.trim() && !imageUrl) {
-            return res.status(400).json({ message: "Message content or image is required" });
+        if (!content?.trim() && !imageUrl && !audioUrl) {
+            return res.status(400).json({ message: "Message content, image, or audio is required" });
         }
 
         try {
             let messageType = 'text';
-            if (content?.trim() && imageUrl) messageType = 'mixed';
+            if (content?.trim() && (imageUrl || audioUrl)) messageType = 'mixed';
             else if (imageUrl) messageType = 'image';
+            else if (audioUrl) messageType = 'audio';
 
             const newMessage = new Message({
                 sender: senderId,
                 receiver: receiverId,
                 content: content?.trim() || '',
                 image: imageUrl ? { url: imageUrl, public_id: publicId } : null,
+                audio: audioUrl ? { url: audioUrl } : null,
                 messageType
             });
 
@@ -206,7 +264,7 @@ const createMessageController = (io) => {
         }
     };
 
-    return { sendMessage, getMessages, uploadImage, reactToMessage };
+    return { sendMessage, getMessages, uploadImage, uploadAudio, reactToMessage };
 };
 
 module.exports = createMessageController;

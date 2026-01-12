@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { IoEllipsisVertical, IoSearch } from 'react-icons/io5';
 import Sidebar from '../components/Sidebar';
 import ChatView from '../components/ChatView';
 import Profile from '../components/Profile';
@@ -39,6 +40,22 @@ export const Home = () => {
 
   // Sidebar tab state
   const [sidebarActiveTab, setSidebarActiveTab] = useState('chats');
+
+  // New: responsive + mobile sidebar visibility
+  const [isMobile, setIsMobile] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [mobileSearchQuery, setMobileSearchQuery] = useState('');
+
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 767px)');
+    const handler = (e) => setIsMobile(e.matches);
+    mql.addEventListener('change', handler);
+    // Set initial state based on media query
+    handler(mql);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
 
   // Fetch current user info on mount and when localStorage changes
   useEffect(() => {
@@ -163,8 +180,10 @@ export const Home = () => {
   };
 
   useEffect(() => {
-    fetchGroups();
-    fetchUnreadNotifications();
+    (async () => {
+      await fetchGroups();
+      await fetchUnreadNotifications();
+    })();
   }, [refreshGroups]);
 
   // Listen for new notifications
@@ -235,7 +254,7 @@ export const Home = () => {
     return () => {
       socket.off('newMessage', handleNewMessage);
     };
-  }, [socket, currentUser, selectedUser]);
+  }, [currentUser, selectedUser]);
 
   // Clear unread count when selecting a user
   const handleSelectUser = (user) => {
@@ -244,7 +263,7 @@ export const Home = () => {
     setShowProfile(false);
     setShowSettings(false);
     setShowAddUser(false);
-    setSidebarActiveTab('chats'); // Switch to chats tab when selecting a user
+    setSidebarActiveTab('chats'); 
     if (user && user._id) {
       setUnreadCounts((prev) => {
         const updated = { ...prev };
@@ -252,23 +271,34 @@ export const Home = () => {
         return updated;
       });
     }
+    // New: hide sidebar on mobile when opening a chat
+    if (isMobile) setShowSidebar(false);
   };
 
   const handleSelectGroup = async (group) => {
     try {
-      // Fetch full group details
       const res = await axios.get(`/groups/${group._id}`);
       setSelectedGroup(res.data.group);
       setSelectedUser(null);
       setShowProfile(false);
       setShowSettings(false);
       setShowAddUser(false);
-      setSidebarActiveTab('groups'); // Switch to groups tab when selecting a group
+      setSidebarActiveTab('groups');
     } catch (error) {
       console.error('Failed to fetch group details:', error);
       setSelectedGroup(group);
       setSidebarActiveTab('groups');
     }
+    // New: hide sidebar on mobile when opening a group
+    if (isMobile) setShowSidebar(false);
+  };
+
+  // New: back to list (mobile)
+  const handleBackToList = () => {
+    setShowSidebar(true);
+    // keep selection if you prefer; clearing selection provides a clean list view:
+    setSelectedUser(null);
+    setSelectedGroup(null);
   };
 
   const handleProfileClick = () => {
@@ -327,12 +357,16 @@ export const Home = () => {
       setSelectedUser(null);
       setSelectedGroup(null);
       setSidebarActiveTab('adduser');
+      // Hide sidebar on mobile when showing AddUser
+      if (isMobile) setShowSidebar(false);
     } else if (tab === 'chats') {
       setShowAddUser(false);
       setSidebarActiveTab('chats');
+      if (isMobile) setShowSidebar(true);
     } else if (tab === 'groups') {
       setShowAddUser(false);
       setSidebarActiveTab('groups');
+      if (isMobile) setShowSidebar(true);
     } else {
       setShowAddUser(false);
     }
@@ -340,6 +374,8 @@ export const Home = () => {
 
   const handleCloseAddUser = () => {
     setShowAddUser(false);
+    // Show sidebar again on mobile when closing AddUser
+    if (isMobile) setShowSidebar(true);
   };
 
   const handleFriendAdded = () => {
@@ -379,29 +415,148 @@ export const Home = () => {
   };
 
   return (
-    <div className="w-screen h-screen overflow-hidden flex bg-black/80">
-      <Sidebar 
-        onSelectUser={handleSelectUser} 
-        selectedUser={selectedUser} 
-        unreadCounts={unreadCounts} 
-        onProfileClick={handleProfileClick}
-        showProfile={showProfile}
-        onSettingsClick={handleSettingsClick}
-        showSettings={showSettings}
-        onTabChange={handleTabChange}
-        viewingUserProfile={viewingUserProfile}
-        onlineUsers={onlineUsers}
-        refreshFriends={refreshFriends}
-        onNotificationClick={handleNotificationClick}
-        unreadNotifications={unreadNotifications}
-        groups={groups}
-        selectedGroup={selectedGroup}
-        onSelectGroup={handleSelectGroup}
-        onCreateGroup={handleCreateGroup}
-        refreshGroups={refreshGroups}
-        externalActiveTab={sidebarActiveTab}
-      />
-      <div className='w-full h-full'>
+    <div className="w-screen h-screen overflow-hidden flex flex-col bg-black/80 relative">
+      {/* Mobile Header */}
+      {isMobile && (
+        <div className="bg-zinc-900 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 flex-1">
+            {showMobileSearch ? (
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={mobileSearchQuery}
+                  onChange={(e) => setMobileSearchQuery(e.target.value)}
+                  className="flex-1 bg-zinc-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-blue-500 outline-none"
+                  autoFocus
+                />
+                <button
+                  onClick={() => {
+                    setShowMobileSearch(false);
+                    setMobileSearchQuery('');
+                  }}
+                  className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <h1 className="text-white font-bold text-lg">ChatApp</h1>
+            )}
+          </div>
+          {!showMobileSearch && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowMobileSearch(true)}
+                className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
+              >
+                <IoSearch size={20} />
+              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowMobileMenu(!showMobileMenu)}
+                  className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
+                >
+                  <IoEllipsisVertical size={20} />
+                </button>
+                {showMobileMenu && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-30" 
+                      onClick={() => setShowMobileMenu(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-800 border border-gray-700 rounded-lg shadow-lg z-40 py-1">
+                      <button
+                        onClick={() => {
+                          handleProfileClick();
+                          setShowMobileMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 transition"
+                      >
+                        Profile
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleSettingsClick();
+                          setShowMobileMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 transition"
+                      >
+                        Settings
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab Navigation for Mobile */}
+      {isMobile && showSidebar && (
+        <div className="bg-zinc-800 border-b border-gray-700 flex overflow-x-auto">
+          <button
+            onClick={() => handleTabChange('chats')}
+            className={`px-4 py-2 font-medium whitespace-nowrap transition ${
+              sidebarActiveTab === 'chats'
+                ? 'text-blue-500 border-b-2 border-blue-500'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Chats
+          </button>
+          <button
+            onClick={() => handleTabChange('groups')}
+            className={`px-4 py-2 font-medium whitespace-nowrap transition ${
+              sidebarActiveTab === 'groups'
+                ? 'text-blue-500 border-b-2 border-blue-500'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Groups
+          </button>
+          <button
+            onClick={() => handleTabChange('adduser')}
+            className={`px-4 py-2 font-medium whitespace-nowrap transition ${
+              sidebarActiveTab === 'adduser'
+                ? 'text-blue-500 border-b-2 border-blue-500'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Add Friend
+          </button>
+        </div>
+      )}
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar hidden on mobile when a chat/group is open */}
+        {(!isMobile || showSidebar) && (
+          <Sidebar 
+            onSelectUser={handleSelectUser} 
+            selectedUser={selectedUser} 
+            unreadCounts={unreadCounts} 
+            onProfileClick={handleProfileClick}
+            showProfile={showProfile}
+            onSettingsClick={handleSettingsClick}
+            showSettings={showSettings}
+            onTabChange={handleTabChange}
+            viewingUserProfile={viewingUserProfile}
+            onlineUsers={onlineUsers}
+            refreshFriends={refreshFriends}
+            onNotificationClick={handleNotificationClick}
+            unreadNotifications={unreadNotifications}
+            groups={groups}
+            selectedGroup={selectedGroup}
+            onSelectGroup={handleSelectGroup}
+            onCreateGroup={handleCreateGroup}
+            refreshGroups={refreshGroups}
+            externalActiveTab={sidebarActiveTab}
+            isMobile={isMobile}
+            mobileSearchQuery={mobileSearchQuery}
+          />
+        )}
+        <div className="flex-1 h-full overflow-hidden">
         {showEditProfile ? (
           <EditProfile 
             currentUser={currentUser} 
@@ -432,17 +587,27 @@ export const Home = () => {
             onClose={() => setSelectedGroup(null)}
             onOpenInvite={handleOpenInvite}
             onGroupUpdated={handleGroupUpdated}
+            // New: mobile back
+            isMobile={isMobile}
+            onBack={handleBackToList}
           />
         ) : (
-          <ChatView 
-            user={selectedUser} 
-            socket={socket} 
-            currentUser={currentUser} 
-            onViewProfile={handleViewUserProfile}
-            isUserOnline={selectedUser && onlineUsers.includes(selectedUser._id)}
-            isUserTyping={selectedUser && typingUsers[selectedUser._id]}
-          />
+          // Mobile: do not show chat by default until a user is selected
+          isMobile && !selectedUser ? null : (
+            <ChatView 
+              user={selectedUser} 
+              socket={socket} 
+              currentUser={currentUser} 
+              onViewProfile={handleViewUserProfile}
+              isUserOnline={selectedUser && onlineUsers.includes(selectedUser._id)}
+              isUserTyping={selectedUser && typingUsers[selectedUser._id]}
+              // New: mobile back
+              isMobile={isMobile}
+              onBack={handleBackToList}
+            />
+          )
         )}
+        </div>
       </div>
 
       {/* Notification Popup */}

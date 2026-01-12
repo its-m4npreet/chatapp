@@ -8,6 +8,8 @@ import {
   IoAddCircleOutline,
   IoCheckmark,
   IoCheckmarkDone,
+  IoMicOutline,
+  IoStopCircleOutline,
 } from "react-icons/io5";
 import { MdEdit } from "react-icons/md";
 import { TiGroup } from "react-icons/ti";
@@ -98,6 +100,16 @@ const ToolbarButton = ({ onClick, title, children, active }) => (
 
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
+// Add global styles for reaction animations
+const reactionStyles = `
+  @keyframes popIn {
+    0% { transform: scale(0) translateX(10px); opacity: 0; }
+    50% { transform: scale(1.2) translateX(0); }
+    100% { transform: scale(1) translateX(0); opacity: 1; }
+  }
+  .group:hover .reaction-emoji { animation: popIn 0.3s ease-out forwards; }
+`;
+
 const GroupChat = ({
   group,
   socket,
@@ -105,6 +117,8 @@ const GroupChat = ({
   onClose,
   onOpenInvite,
   onGroupUpdated,
+  isMobile,
+  onBack,
 }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
@@ -117,7 +131,15 @@ const GroupChat = ({
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [showToolbar, setShowToolbar] = useState(false); // ADD THIS
+  const [showToolbar, setShowToolbar] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [audioPreview, setAudioPreview] = useState(null);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingIntervalRef = useRef(null);
+  const timestampRef = useRef(null);
 
   const messagesEndRef = useRef(null);
   const emojiPickerRef = useRef(null);
@@ -129,6 +151,25 @@ const GroupChat = ({
 
   const isCreator = group?.creator?._id === currentUser?._id;
   const isAdmin = group?.admins?.some((a) => a._id === currentUser?._id);
+
+  // Initialize timestamp on component mount
+  useEffect(() => {
+    if (!timestampRef.current) {
+      timestampRef.current = Date.now();
+    }
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -364,13 +405,14 @@ const GroupChat = ({
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if ((!newMessage.trim() && !selectedImage) || sending) return;
+    if ((!newMessage.trim() && !selectedImage && !audioBlob) || sending) return;
 
     setSending(true);
-    setIsUploading(!!imagePreview);
+    setIsUploading(!!(imagePreview || audioBlob));
 
     try {
       let imageUrl = null;
+      let audioUrl = null;
 
       // Upload image if selected
       if (imagePreview) {
@@ -388,7 +430,28 @@ const GroupChat = ({
         }
       }
 
-      const tempId = `temp_${Date.now()}_${Math.random()}`;
+      // Upload audio if recorded
+      if (audioBlob) {
+        try {
+          const reader = new FileReader();
+          const audioBase64 = await new Promise((resolve) => {
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(audioBlob);
+          });
+          const response = await axios.post("/messages/upload-audio", {
+            audio: audioBase64,
+          });
+          audioUrl = response.data.url;
+        } catch (error) {
+          console.error("Failed to upload audio:", error);
+          alert("Failed to upload audio. Please try again.");
+          setIsUploading(false);
+          setSending(false);
+          return;
+        }
+      }
+      const randomStr = crypto.getRandomValues(new Uint8Array(6)).reduce((acc, byte) => acc + byte.toString(16).padStart(2, '0'), '');
+      const tempId = `temp_${timestampRef.current}_${randomStr}`;
 
       // Optimistically add message to UI
       const optimisticMessage = {
@@ -397,6 +460,7 @@ const GroupChat = ({
         sender: currentUser,
         content: newMessage.trim(),
         image: imageUrl ? { url: imageUrl } : null,
+        audio: audioUrl ? { url: audioUrl } : null,
         createdAt: new Date().toISOString(),
         status: "sending",
         reactions: [],
@@ -408,11 +472,13 @@ const GroupChat = ({
       
       setNewMessage("");
       handleRemoveImage();
+      cancelRecording();
 
       await axios.post("/groups/message", {
         groupId: group._id,
         content: newMessage.trim(),
         image: imageUrl,
+        audio: audioUrl,
         tempId,
       });
 
@@ -576,6 +642,67 @@ const GroupChat = ({
     setNewMessage(e.target.value);
   }, []);
 
+  // Voice recording functions
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setAudioBlob(audioBlob);
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setAudioPreview(audioUrl);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      alert('Microphone access denied. Please enable microphone permissions.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+    }
+  };
+
+  const cancelRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    }
+    setAudioBlob(null);
+    setAudioPreview(null);
+    setRecordingTime(0);
+    audioChunksRef.current = [];
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   if (!group) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400">
@@ -588,8 +715,29 @@ const GroupChat = ({
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full ">
-      {/* Header */}
+    <>
+      <style>{reactionStyles}</style>
+      <div className="flex-1 flex flex-col h-full ">
+      {/* Mobile header with back */}
+      {isMobile && (
+        <div className="flex items-center gap-3 px-3 py-2 border-b border-gray-700">
+          <button
+            onClick={onBack}
+            aria-label="Back to chat list"
+            className="text-gray-300 hover:text-white"
+            title="Back"
+          >
+            {/* Simple back chevron */}
+            <span className="inline-block">&larr;</span>
+          </button>
+          <div className="flex items-center gap-2">
+            {/* Show group name if available */}
+            <span className="text-white font-medium">{group?.name || 'Group'}</span>
+          </div>
+        </div>
+      )}
+      {/* Desktop header */}
+      {!isMobile && (
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 ">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
@@ -644,12 +792,13 @@ const GroupChat = ({
           )}
         </div>
       </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Messages */}
         <div className="flex-1 flex flex-col overflow-hidden">
           <div
-            className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide"
+            className={(isMobile ? "p-3" : "p-4") + " flex-1 overflow-y-auto space-y-3 scrollbar-hide"}
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             {loading ? (
@@ -662,15 +811,16 @@ const GroupChat = ({
               messages.map((msg) => {
                 const isOwn = msg.sender?._id === currentUser?._id;
                 const hasImage = !!msg.image?.url;
+                const hasAudio = !!msg.audio?.url;
                 const hasContent = !!msg.content;
-                let messageClass = `rounded-2xl ${
+                let messageClass = `rounded-2xl max-w-[88vw] sm:max-w-md md:max-w-xl ${
                   isOwn ? "rounded-br-md" : "rounded-bl-md"
                 }`;
-                if (hasContent || (hasContent && hasImage)) {
+                if (hasContent || (hasContent && (hasImage || hasAudio))) {
                   messageClass += ` px-4 py-2 ${
                     isOwn ? "bg-blue-600 text-white" : "bg-zinc-700 text-white"
                   }`;
-                } else if (hasImage) {
+                } else if (hasImage || hasAudio) {
                   messageClass += " p-0 bg-transparent";
                 }
 
@@ -694,7 +844,7 @@ const GroupChat = ({
                   >
                     <div className="relative">
                       <div
-                        className={`flex gap-2 max-w-[70vw] ${
+                        className={`flex gap-2 max-w-[90vw] sm:max-w-[72vw] ${
                           isOwn ? "flex-row-reverse" : ""
                         }`}
                       >
@@ -731,11 +881,25 @@ const GroupChat = ({
                                 }`}
                               />
                             )}
+                            {hasAudio && (
+                              <div className={`flex items-center gap-2 ${hasContent ? "mb-2" : "p-3"} ${!hasContent && (isOwn ? "bg-blue-600" : "bg-zinc-700")} rounded-2xl`}>
+                                <IoMicOutline size={20} className="text-white" />
+                                <audio 
+                                  src={msg.audio.url} 
+                                  controls 
+                                  className="max-w-xs"
+                                  style={{ 
+                                    height: '32px',
+                                    filter: 'invert(1) grayscale(1) contrast(0.9)'
+                                  }}
+                                />
+                              </div>
+                            )}
                             {hasContent &&
                               splitIntoLines(msg.content).map(
                                 (chunk, index) => (
                                   <div
-                                    key={index}
+                                    key={`${msg._id || msg.tempId}-chunk-${index}`}
                                     className="markdown-content prose prose-invert max-w-none"
                                     dangerouslySetInnerHTML={renderMarkdown(
                                       chunk
@@ -752,18 +916,8 @@ const GroupChat = ({
                             } -bottom-10 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center gap-1 bg-gray-800/95 backdrop-blur-sm rounded-full px-2 py-1 shadow-lg border border-gray-700 z-999`}
                             style={{
                               transform: "translateX(0)",
-                              // animation: "slideInFromRight 0.3s ease-out",
                             }}
                           >
-                            <style>{`
-                             
-                              @keyframes popIn {
-                                0% { transform: scale(0) translateX(10px); opacity: 0; }
-                                50% { transform: scale(1.2) translateX(0); }
-                                100% { transform: scale(1) translateX(0); opacity: 1; }
-                              }
-                              .group:hover .reaction-emoji { animation: popIn 0.3s ease-out forwards; }
-                            `}</style>
                             {REACTIONS.map((symbol, index) => {
                               const mine = msg.reactions?.some(
                                 (r) =>
@@ -847,7 +1001,7 @@ const GroupChat = ({
                                 {Object.entries(reactionCounts).map(
                                   ([emoji, count]) => (
                                     <span
-                                      key={emoji}
+                                      key={`${msg._id || msg.tempId}-reaction-${emoji}`}
                                       className="flex items-center gap-1"
                                     >
                                       <span>{emoji}</span>
@@ -882,8 +1036,8 @@ const GroupChat = ({
                             }
                             theme="dark"
                             searchDisabled={false}
-                            height={400}
-                            width={320}
+                            height={isMobile ? 360 : 400}
+                            width={isMobile ? 300 : 320}
                           />
                         </div>
                       </>
@@ -896,7 +1050,11 @@ const GroupChat = ({
           </div>
 
           {/* Message Input */}
-          <form onSubmit={handleSendMessage} className="p-4 ">
+          <form
+            onSubmit={handleSendMessage}
+            className={(isMobile ? "p-2" : "p-4") + " border-t border-gray-700"}
+            style={{ paddingBottom: isMobile ? "env(safe-area-inset-bottom)" : undefined }}
+          >
             {/* Image Preview */}
             {imagePreview && (
               <div className="mb-3 relative inline-block">
@@ -920,7 +1078,22 @@ const GroupChat = ({
               </div>
             )}
 
-            <div className="flex items-center gap-3 relative">
+            {/* Audio Preview */}
+            {audioPreview && !isRecording && (
+              <div className="mb-3 flex items-center gap-2 p-3 bg-zinc-700 rounded-lg border border-gray-600">
+                <IoMicOutline size={20} className="text-blue-500" />
+                <audio src={audioPreview} controls className="flex-1" />
+                <button
+                  type="button"
+                  onClick={cancelRecording}
+                  className="p-1 bg-red-500 hover:bg-red-600 rounded-full text-white transition"
+                >
+                  <IoClose size={16} />
+                </button>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-end gap-2 sm:gap-3 relative">
               {/* Hidden file input */}
               <input
                 type="file"
@@ -949,11 +1122,37 @@ const GroupChat = ({
                 <FaRegSmile size={22} className="cursor-pointer" />
               </button>
 
+              <button
+                type="button"
+                className={`p-2 transition ${
+                  isRecording
+                    ? "text-red-500 animate-pulse"
+                    : "text-gray-400 hover:text-white"
+                }`}
+                onClick={isRecording ? stopRecording : startRecording}
+                title={isRecording ? "Stop recording" : "Record voice message"}
+              >
+                {isRecording ? (
+                  <IoStopCircleOutline size={22} />
+                ) : (
+                  <IoMicOutline size={22} />
+                )}
+              </button>
+
+              {isRecording && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 rounded-lg">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                  <span className="text-red-500 text-sm font-mono">
+                    {formatTime(recordingTime)}
+                  </span>
+                </div>
+              )}
+
               {showEmoji && (
                 <div
                   ref={emojiPickerRef}
                   className="absolute bottom-14 left-0 z-50"
-                  style={{ minWidth: 320 }}
+                  style={{ minWidth: isMobile ? 280 : 320 }}
                 >
                   <EmojiPicker
                     onEmojiClick={handleEmojiClick}
@@ -1041,7 +1240,7 @@ const GroupChat = ({
                 value={newMessage}
                 onChange={handleInputChange}
                 placeholder="Type a message..."
-                className="flex-1 text-white px-4 py-2 rounded-lg outline-none border border-gray-700 focus:border-blue-500 bg-transparent"
+                className="flex-1 min-w-0 text-white px-4 py-2 rounded-lg outline-none border border-gray-700 focus:border-blue-500 bg-transparent"
               />
 
               <button
@@ -1134,8 +1333,9 @@ const GroupChat = ({
           if (onGroupUpdated) onGroupUpdated();
           setShowEditGroup(false);
         }}
-      />
+      />  
     </div>
+    </>
   );
 };
 

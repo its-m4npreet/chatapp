@@ -1,7 +1,8 @@
-/* #root {
-  margin: 0 auto;
-  padding: 2rem;
-} */
+#root {
+  width: 100%;
+  min-height: 100vh;
+  
+}
 
 
 .card {
@@ -185,4 +186,16 @@
 
 .markdown-content > *:last-child {
   margin-bottom: 0;
+}
+/* Mobile Responsive Layout */
+@media (max-width: 767px) {
+  .chat-view {
+    width: 100%;
+    height: 100%;
+  }
+  
+  #root {
+    width: 100%;
+    height: 100%;
+  }
 }

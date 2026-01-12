@@ -118,18 +118,20 @@ io.on('connection', (socket) => {
   // Real-time message sending
   socket.on('sendMessage', async (msg) => {
     try {
-      const { sender, receiver, content, image, tempId } = msg;
-      if (!receiver || (!content?.trim() && !image)) return;
+      const { sender, receiver, content, image, audio, tempId } = msg;
+      if (!receiver || (!content?.trim() && !image && !audio)) return;
 
       let messageType = 'text';
-      if (content?.trim() && image) messageType = 'mixed';
+      if (content?.trim() && (image || audio)) messageType = 'mixed';
       else if (image) messageType = 'image';
+      else if (audio) messageType = 'audio';
 
       const newMessage = new Message({
         sender,
         receiver,
         content: content?.trim() || '',
         image: image ? { url: image, public_id: '' } : null,
+        audio: audio ? { url: audio, public_id: '' } : null,
         messageType,
         status: 'sent'
       });
@@ -194,6 +196,36 @@ io.on('connection', (socket) => {
       }
     } catch (error) {
       console.error('markAllMessagesRead error:', error);
+    }
+  });
+
+  // Handle reaction updates and broadcast to both users
+  socket.on('reactionUpdated', ({ messageId, userId, reaction, reactions }) => {
+    try {
+      // Get the message to find both sender and receiver
+      Message.findById(messageId).then((message) => {
+        if (!message) return;
+
+        // Broadcast reaction update to both users in the conversation
+        const receiverId = message.receiver.toString();
+        const senderId = message.sender.toString();
+
+        // Send to both the person who reacted and the other user
+        io.to(senderId).emit('messageReactionUpdated', {
+          messageId,
+          reactions,
+          userId
+        });
+        io.to(receiverId).emit('messageReactionUpdated', {
+          messageId,
+          reactions,
+          userId
+        });
+      }).catch((error) => {
+        console.error('Error finding message for reaction:', error);
+      });
+    } catch (error) {
+      console.error('reactionUpdated socket error:', error);
     }
   });
 });

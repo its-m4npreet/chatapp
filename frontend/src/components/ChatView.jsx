@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { IoMdSend } from "react-icons/io";
 import { FaRegSmile } from "react-icons/fa";
-import { IoImageOutline, IoClose, IoAddCircleOutline } from "react-icons/io5";
+import { IoImageOutline, IoClose, IoAddCircleOutline, IoMicOutline, IoStopCircleOutline } from "react-icons/io5";
 import { IoCheckmark, IoCheckmarkDone } from "react-icons/io5";
 import EmojiPicker from "emoji-picker-react";
 import { ButtonLoading } from "./Loading";
@@ -98,14 +98,7 @@ const ToolbarButton = ({ onClick, title, children, active }) => (
   </button>
 );
 
-const ChatView = ({
-  user,
-  socket,
-  currentUser,
-  onViewProfile,
-  isUserOnline,
-  isUserTyping,
-}) => {
+const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUserTyping, isMobile, onBack }) => {
   // Join current user's room for real-time updates
   useEffect(() => {
     if (socket && currentUser && currentUser._id) {
@@ -124,18 +117,38 @@ const ChatView = ({
 
   const [showEmoji, setShowEmoji] = useState(false);
   const [showToolbar, setShowToolbar] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [audioPreview, setAudioPreview] = useState(null);
+  const [recordingTime, setRecordingTime] = useState(0);
   const [showReactionPicker, setShowReactionPicker] = useState(null); // Track which message's reaction picker is open
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const reactionPickerRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingIntervalRef = useRef(null);
+  const messagesEndRef = useRef(null);
   const [inputValue, setInputValue] = useState("");
   const [messages, setMessages] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
 
   // Listen for incoming messages
   useEffect(() => {
@@ -200,88 +213,153 @@ const ChatView = ({
         socket.emit("markMessageRead", { messageId: msg._id, userId: cu._id });
       }
     };
-    socket.on("newMessage", handleNewMessage);
-    return () => socket.off("newMessage", handleNewMessage);
-  }, [socket]);
 
-  // Listen for reaction updates
-  useEffect(() => {
-    if (!socket) return;
-    const handleReactionUpdate = (payload) => {
+    const handleMessagesMarkedRead = ({ messageIds }) => {
       setMessages((prev) =>
         prev.map((m) =>
-          m._id === payload.messageId
-            ? { ...m, reactions: payload.reactions }
-            : m
+          messageIds.includes(m._id) ? { ...m, status: "read" } : m
         )
       );
     };
-    socket.on("messageReactionUpdated", handleReactionUpdate);
-    return () => socket.off("messageReactionUpdated", handleReactionUpdate);
-  }, [socket]);
 
-  // Listen for message status updates
-  useEffect(() => {
-    if (!socket) return;
-    const handleStatusUpdate = ({ messageId, status }) => {
+    // Listen for reaction updates
+    const handleReactionUpdated = ({ messageId, reactions }) => {
       setMessages((prev) =>
-        prev.map((m) => (m._id === messageId ? { ...m, status } : m))
+        prev.map((m) =>
+          m._id === messageId ? { ...m, reactions } : m
+        )
       );
     };
-    const handleMessagesMarkedRead = ({ receiverId }) => {
-      setMessages((prev) =>
-        prev.map((m) => {
-          if (
-            m.receiver === receiverId ||
-            (typeof m.receiver === "object" && m.receiver._id === receiverId)
-          ) {
-            return { ...m, status: "read" };
-          }
-          return m;
-        })
-      );
-    };
-    socket.on("messageStatusUpdate", handleStatusUpdate);
+
+    socket.on("newMessage", handleNewMessage);
     socket.on("messagesMarkedRead", handleMessagesMarkedRead);
+    socket.on("messageReactionUpdated", handleReactionUpdated);
+
     return () => {
-      socket.off("messageStatusUpdate", handleStatusUpdate);
+      socket.off("newMessage", handleNewMessage);
       socket.off("messagesMarkedRead", handleMessagesMarkedRead);
+      socket.off("messageReactionUpdated", handleReactionUpdated);
     };
   }, [socket]);
 
-  // Fetch previous messages when user changes
+  // Voice recording functions
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setAudioBlob(audioBlob);
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setAudioPreview(audioUrl);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      alert('Microphone access denied. Please enable microphone permissions.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+    }
+  };
+
+  const cancelRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    }
+    setAudioBlob(null);
+    setAudioPreview(null);
+    setRecordingTime(0);
+    audioChunksRef.current = [];
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Scroll to bottom of messages
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Fetch messages when user changes
   useEffect(() => {
-    if (!user || !currentUser) {
+    if (!user || !user._id) {
       setMessages([]);
       return;
     }
-    setMessages([]);
-    setIsLoadingMessages(true);
-    import("../lib/axios").then(({ default: axios }) => {
-      axios
-        .get(`/messages/${user._id}`)
-        .then((res) => {
-          if (res.data && res.data.data) {
-            setMessages(res.data.data);
-            setIsLoadingMessages(false);
-          }
-        })
-        .catch((err) => {
-          console.error("Failed to fetch messages:", err);
-          setIsLoadingMessages(false);
-        });
-    });
-  }, [user, currentUser]);
+
+    const fetchMessages = async () => {
+      setIsLoadingMessages(true);
+      try {
+        const { default: axios } = await import("../lib/axios");
+        const res = await axios.get(`/messages/${user._id}`);
+        console.log("Fetched messages response:", res.data);
+        
+        // Handle different response structures
+        const fetchedMessages = res.data.messages || res.data.data || res.data || [];
+        console.log("Setting messages:", fetchedMessages);
+        setMessages(fetchedMessages);
+        
+        // Scroll to bottom after messages load
+        setTimeout(scrollToBottom, 100);
+      } catch (error) {
+        console.error("Failed to fetch messages:", error);
+        console.error("Error details:", error.response?.data);
+      } finally {
+        setIsLoadingMessages(false);
+      }
+    };
+
+    fetchMessages();
+  }, [user]);
+
+  // Auto-scroll when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(scrollToBottom, 100);
+    }
+  }, [messages.length]);
+
+  // Handle emoji click
+  const handleEmojiClick = (emojiData) => {
+    setInputValue((prev) => prev + emojiData.emoji);
+    if (inputRef.current) inputRef.current.focus();
+  };
 
   // Close emoji picker when clicking outside
   useEffect(() => {
     if (!showEmoji) return;
     const handleClickOutside = (event) => {
-      if (
-        emojiPickerRef.current &&
-        !emojiPickerRef.current.contains(event.target) &&
-        event.target.getAttribute("data-emoji-button") !== "true"
-      ) {
+      const isEmojiButton = event.target.closest('[data-emoji-button="true"]');
+      if (isEmojiButton) return;
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
         setShowEmoji(false);
       }
     };
@@ -289,26 +367,6 @@ const ChatView = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showEmoji]);
 
-  // Close reaction picker when clicking outside
-  useEffect(() => {
-    if (!showReactionPicker) return;
-    const handleClickOutside = (event) => {
-      if (
-        reactionPickerRef.current &&
-        !reactionPickerRef.current.contains(event.target) &&
-        !event.target.closest("[data-reaction-button]")
-      ) {
-        setShowReactionPicker(null);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showReactionPicker]);
-
-  const handleEmojiClick = (emojiData) => {
-    setInputValue((prev) => prev + emojiData.emoji);
-    if (inputRef.current) inputRef.current.focus();
-  };
 
   // Handle markdown formatting
   const handleFormat = (formatter) => {
@@ -399,18 +457,57 @@ const ChatView = ({
     );
     const next = existing?.reaction === emoji ? null : emoji;
 
+    // 1. Optimistically update UI
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m._id !== messageId) return m;
+        let reactions = m.reactions || [];
+        if (next === null) {
+          reactions = reactions.filter((r) => getId(r.user) !== currentUser?._id);
+        } else if (existing) {
+          reactions = reactions.map((r) =>
+            getId(r.user) === currentUser?._id ? { ...r, reaction: next } : r
+          );
+        } else {
+          reactions = [...reactions, { user: currentUser._id, reaction: next }];
+        }
+        return { ...m, reactions };
+      })
+    );
+
+    // 2. Sync with backend
     const { default: axios } = await import("../lib/axios");
     try {
       const res = await axios.post(`/messages/${messageId}/react`, {
         reaction: next,
       });
+      console.log("Reaction response:", res.data);
+
       if (res.data?.data) {
         setMessages((prev) =>
-          prev.map((m) => (m._id === messageId ? res.data.data : m))
+          prev.map((m) => {
+            if (m._id === messageId) {
+              return { ...m, reactions: res.data.data.reactions || m.reactions };
+            }
+            return m;
+          })
         );
+
+        // 3. Broadcast to other user via socket
+        if (socket && user) {
+          socket.emit("reactionUpdated", {
+            messageId,
+            userId: currentUser._id,
+            reaction: next,
+            reactions: res.data.data.reactions || [],
+          });
+        }
       }
     } catch (e) {
       console.error("React failed", e);
+      console.error("Error response:", e.response?.data);
+      // Rollback on error
+      setMessages((prev) => prev.map((m) => (m._id === messageId ? msg : m)));
     }
 
     setShowReactionPicker(null);
@@ -477,8 +574,8 @@ const ChatView = ({
 
   const handleSend = async (e) => {
     e?.preventDefault();
-    if (!inputValue.trim() && !selectedImage) {
-      console.log("No message content or image");
+    if (!inputValue.trim() && !selectedImage && !audioBlob) {
+      console.log("No message content, image, or audio");
       return;
     }
     if (!user) {
@@ -491,6 +588,7 @@ const ChatView = ({
     }
 
     let imageUrl = null;
+    let audioUrl = null;
 
     // Upload image if selected
     if (imagePreview) {
@@ -510,10 +608,34 @@ const ChatView = ({
       setIsUploading(false);
     }
 
+    // Upload audio if recorded
+    if (audioBlob) {
+      setIsUploading(true);
+      try {
+        const reader = new FileReader();
+        const audioBase64 = await new Promise((resolve) => {
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(audioBlob);
+        });
+        const { default: axios } = await import("../lib/axios");
+        const response = await axios.post("/messages/upload-audio", {
+          audio: audioBase64,
+        });
+        audioUrl = response.data.url;
+      } catch (error) {
+        console.error("Failed to upload audio:", error);
+        alert("Failed to upload audio. Please try again.");
+        setIsUploading(false);
+        return;
+      }
+      setIsUploading(false);
+    }
+
     const tempId = `temp_${Date.now()}_${Math.random()}`;
     const msg = {
       content: inputValue,
       image: imageUrl,
+      audio: audioUrl,
       receiver: user._id,
       sender: currentUser._id,
       createdAt: new Date().toISOString(),
@@ -527,6 +649,7 @@ const ChatView = ({
       sender: currentUser,
       receiver: user,
       image: imageUrl ? { url: imageUrl } : null,
+      audio: audioUrl ? { url: audioUrl } : null,
     };
     setMessages((prev) => [...prev, optimisticMessage]);
 
@@ -544,6 +667,10 @@ const ChatView = ({
 
     setInputValue("");
     handleRemoveImage();
+    cancelRecording();
+    
+    // Scroll to bottom after sending message
+    setTimeout(scrollToBottom, 100);
   };
 
   const handleKeyPress = (e) => {
@@ -560,7 +687,7 @@ const ChatView = ({
 
     const next = existing?.reaction === symbol ? null : symbol;
 
-    // 🔥 1. Optimistically update UI
+    // 1. Optimistically update UI
     setMessages((prev) =>
       prev.map((m) => {
         if (m._id !== msg._id) return m;
@@ -568,17 +695,14 @@ const ChatView = ({
         let reactions = m.reactions || [];
 
         if (next === null) {
-          // remove reaction
           reactions = reactions.filter(
             (r) => getId(r.user) !== currentUser?._id
           );
         } else if (existing) {
-          // update existing reaction
           reactions = reactions.map((r) =>
             getId(r.user) === currentUser?._id ? { ...r, reaction: next } : r
           );
         } else {
-          // add new reaction
           reactions = [...reactions, { user: currentUser._id, reaction: next }];
         }
 
@@ -586,23 +710,41 @@ const ChatView = ({
       })
     );
 
-    // 🔁 2. Sync with backend
+    // 2. Sync with backend
     try {
       const { default: axios } = await import("../lib/axios");
       const res = await axios.post(`/messages/${msg._id}/react`, {
         reaction: next,
       });
 
-      // 🔄 3. Replace with server truth (optional but recommended)
+      console.log("Reaction response:", res.data);
+
+      // 3. Replace with server truth
       if (res.data?.data) {
         setMessages((prev) =>
-          prev.map((m) => (m._id === msg._id ? res.data.data : m))
+          prev.map((m) => {
+            if (m._id === msg._id) {
+              return { ...m, reactions: res.data.data.reactions || m.reactions };
+            }
+            return m;
+          })
         );
+
+        // 4. Broadcast to other user via socket
+        if (socket && user) {
+          socket.emit("reactionUpdated", {
+            messageId: msg._id,
+            userId: currentUser._id,
+            reaction: next,
+            reactions: res.data.data.reactions || [],
+          });
+        }
       }
     } catch (e) {
       console.error("React failed", e);
+      console.error("Error response:", e.response?.data);
 
-      //  Optional: rollback if API fails
+      // Rollback on error
       setMessages((prev) => prev.map((m) => (m._id === msg._id ? msg : m)));
     }
   };
@@ -675,57 +817,80 @@ const ChatView = ({
 
   return (
     <div className="chat-view h-full w-full flex flex-col relative">
-      <div className="chat-header p-4 border-b border-gray-700 flex items-center gap-4 ">
-        <div
-          className="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity"
-          onClick={() => onViewProfile && onViewProfile(user)}
-        >
-          <div className="relative w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-lg">
-            <img
-              src={user.profilePicture}
-              alt={user.name}
-              className="w-full h-full rounded-full object-cover"
-            />
-            {isUserOnline && (
-              <span
-                className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"
-                title="Online"
-              />
-            )}
+      {/* Mobile header with back */}
+      {isMobile && (
+        <div className="flex items-center gap-3 px-3 py-2 border-b border-gray-700">
+          <button
+            onClick={onBack}
+            aria-label="Back to chat list"
+            className="text-gray-300 hover:text-white"
+            title="Back"
+          >
+            {/* Simple back chevron */}
+            <span className="inline-block">&larr;</span>
+          </button>
+          <div className="flex items-center gap-2">
+            {/* Show avatar/name if available */}
+            <span className="text-white font-medium">{user?.name || 'Chat'}</span>
+            {isUserOnline && <span className="text-xs text-green-500">● Online</span>}
+            {isUserTyping && <span className="text-xs text-blue-400">typing...</span>}
           </div>
-          <div>
-            <div className="font-semibold text-white">{user.name}</div>
-            <div className="text-xs text-gray-400">
-              {isUserTyping ? (
-                <span className="text-green-400 flex items-end gap-1">
-                  typing
-                  <span className="flex gap-0.5">
-                    <span
-                      className="w-1 h-1 bg-green-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "0ms" }}
-                    ></span>
-                    <span
-                      className="w-1 h-1 bg-green-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "150ms" }}
-                    ></span>
-                    <span
-                      className="w-1 h-1 bg-green-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "300ms" }}
-                    ></span>
-                  </span>
-                </span>
-              ) : isUserOnline ? (
-                <span className="text-green-400">Online</span>
-              ) : (
-                user.bio || "Offline"
+        </div>
+      )}
+
+      {!isMobile && (
+        <div className="chat-header p-4 border-b border-gray-700 flex items-center gap-4">
+          <div
+            className="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={() => onViewProfile && onViewProfile(user)}
+          >
+            <div className="relative w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-lg">
+              <img
+                src={user.profilePicture}
+                alt={user.name}
+                className="w-full h-full rounded-full object-cover"
+              />
+              {isUserOnline && (
+                <span
+                  className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"
+                  title="Online"
+                />
               )}
+            </div>
+            <div>
+              <div className="font-semibold text-white">{user.name}</div>
+              <div className="text-xs text-gray-400">
+                {isUserTyping ? (
+                  <span className="text-green-400 flex items-end gap-1">
+                    typing
+                    <span className="flex gap-0.5">
+                      <span
+                        className="w-1 h-1 bg-green-400 rounded-full animate-bounce"
+                        style={{ animationDelay: "0ms" }}
+                      ></span>
+                      <span
+                        className="w-1 h-1 bg-green-400 rounded-full animate-bounce"
+                        style={{ animationDelay: "150ms" }}
+                      ></span>
+                      <span
+                        className="w-1 h-1 bg-green-400 rounded-full animate-bounce"
+                        style={{ animationDelay: "300ms" }}
+                      ></span>
+                    </span>
+                  </span>
+                ) : isUserOnline ? (
+                  <span className="text-green-400">Online</span>
+                ) : (
+                  user.bio || "Offline"
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div
-        className="flex-1 p-6 overflow-y-auto text-white scrollbar-hide"
+        className={"flex-1 " + (isMobile ? "p-3" : "p-6") + " overflow-y-auto text-white scrollbar-hide"}
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         {isLoadingMessages ? (
@@ -738,9 +903,12 @@ const ChatView = ({
               typeof msg.sender === "object" ? msg.sender._id : msg.sender;
             const isCurrentUser = currentUser && senderId === currentUser._id;
             const imageUrl = msg.image?.url || msg.image;
-            const isImageOnly = imageUrl && !msg.content;
-            const bubbleClass = `max-w-xs shadow-md ${
-              isImageOnly
+            const audioUrl = msg.audio?.url || msg.audio;
+            const isImageOnly = imageUrl && !msg.content && !audioUrl;
+            const isAudioOnly = audioUrl && !msg.content && !imageUrl;
+            const bubbleBase = "max-w-[88vw] sm:max-w-md md:max-w-lg shadow-md";
+            const bubbleClass = `${bubbleBase} ${
+              isImageOnly || isAudioOnly
                 ? "p-0 bg-transparent rounded-2xl " +
                   (isCurrentUser ? "rounded-br-md" : "rounded-bl-md")
                 : "p-3 rounded-2xl " +
@@ -778,6 +946,20 @@ const ChatView = ({
                         } max-w-full cursor-pointer hover:opacity-90`}
                         onClick={() => window.open(imageUrl, "_blank")}
                       />
+                    )}
+                    {audioUrl && (
+                      <div className={`flex items-center gap-2 ${!isAudioOnly ? "mb-2" : "p-3"} ${isAudioOnly && (isCurrentUser ? "bg-blue-600" : "bg-gray-800")} rounded-2xl`}>
+                        <IoMicOutline size={20} className="text-white" />
+                        <audio 
+                          src={audioUrl} 
+                          controls 
+                          className="max-w-xs"
+                          style={{ 
+                            height: '32px',
+                            filter: 'invert(1) grayscale(1) contrast(0.9)'
+                          }}
+                        />
+                      </div>
                     )}
                     {msg.content &&
                       splitIntoLines(msg.content).map((chunk, index) => (
@@ -946,6 +1128,8 @@ const ChatView = ({
             );
           })
         )}
+        {/* Scroll anchor */}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Image Preview Section */}
@@ -968,7 +1152,27 @@ const ChatView = ({
         </div>
       )}
 
-      <div className="p-4 border-t border-gray-700 flex items-center gap-2 relative">
+      {/* Audio Preview Section */}
+      {audioPreview && !isRecording && (
+        <div className="px-4 py-2">
+          <div className="flex items-center gap-2 p-3 bg-zinc-700 rounded-lg border border-gray-600">
+            <IoMicOutline size={20} className="text-blue-500" />
+            <audio src={audioPreview} controls className="flex-1" />
+            <button
+              type="button"
+              onClick={cancelRecording}
+              className="p-1 bg-red-500 hover:bg-red-600 rounded-full text-white transition"
+            >
+              <IoClose size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div
+        className={(isMobile ? "p-2" : "p-4") + " border-t border-gray-700 flex flex-wrap items-end gap-2 sm:gap-3 relative"}
+        style={{ paddingBottom: isMobile ? "env(safe-area-inset-bottom)" : undefined }}
+      >
         {/* Hidden file input */}
         <input
           type="file"
@@ -994,11 +1198,35 @@ const ChatView = ({
         >
           <FaRegSmile size={22} className="cursor-pointer" />
         </button>
+        <button
+          type="button"
+          className={`p-2 transition ${
+            isRecording
+              ? "text-red-500 animate-pulse"
+              : "text-gray-400 hover:text-white"
+          }`}
+          onClick={isRecording ? stopRecording : startRecording}
+          title={isRecording ? "Stop recording" : "Record voice message"}
+        >
+          {isRecording ? (
+            <IoStopCircleOutline size={22} />
+          ) : (
+            <IoMicOutline size={22} />
+          )}
+        </button>
+        {isRecording && (
+          <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 rounded-lg">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+            <span className="text-red-500 text-sm font-mono">
+              {formatTime(recordingTime)}
+            </span>
+          </div>
+        )}
         {showEmoji && (
           <div
             ref={emojiPickerRef}
             className="absolute bottom-12 left-0 z-50 "
-            style={{ minWidth: 320 }}
+            style={{ minWidth: isMobile ? 280 : 320 }}
           >
             <EmojiPicker
               onEmojiClick={handleEmojiClick}
@@ -1081,7 +1309,7 @@ const ChatView = ({
 
        <input
           ref={inputRef}
-          className="flex-1 p-2 rounded border border-gray-700 text-white outline-none bg-transparent"
+          className="flex-1 min-w-0 p-2 rounded border border-gray-700 text-white outline-none bg-transparent"
           placeholder="Type a message..."
           value={inputValue}
           onChange={(e) => {

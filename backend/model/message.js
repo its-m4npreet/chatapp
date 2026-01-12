@@ -16,9 +16,13 @@ const messageSchema = new mongoose.Schema(
       url: { type: String, default: "" },
       public_id: { type: String, default: "" },
     },
+    audio: {
+      url: { type: String, default: "" },
+      public_id: { type: String, default: "" },
+    },
     messageType: {
       type: String,
-      enum: ["text", "image", "mixed"],
+      enum: ["text", "image", "audio", "mixed"],
       default: "text",
     },
     reactions: [

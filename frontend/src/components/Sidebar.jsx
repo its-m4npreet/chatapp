@@ -7,13 +7,16 @@ import { TiGroup } from "react-icons/ti";
 import axios from '../lib/axios';
 import { ContentLoading } from './Loading';
 
-const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick, showProfile, onSettingsClick, showSettings, onTabChange, viewingUserProfile, onlineUsers = [], refreshFriends, onNotificationClick, unreadNotifications = 0, groups = [], selectedGroup, onSelectGroup, onCreateGroup, externalActiveTab }) => {
+const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick, showProfile, onSettingsClick, showSettings, onTabChange, viewingUserProfile, onlineUsers = [], refreshFriends, onNotificationClick, unreadNotifications = 0, groups = [], selectedGroup, onSelectGroup, onCreateGroup, externalActiveTab, isMobile, mobileSearchQuery = '' }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [internalActiveTab, setInternalActiveTab] = useState('chats'); // 'chats' or 'groups'
   const [searchQuery, setSearchQuery] = useState('');
   const prevRefreshFriends = useRef(refreshFriends);
+
+  // Use mobile search query if on mobile, otherwise use internal search
+  const effectiveSearchQuery = isMobile ? mobileSearchQuery : searchQuery;
 
   // Use externalActiveTab if provided, otherwise use internal state
   const activeTab = externalActiveTab || internalActiveTab;
@@ -75,8 +78,8 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
 
   // Filter users based on search query
   const filteredUsers = users.filter((user) =>
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+    user.name.toLowerCase().includes(effectiveSearchQuery.toLowerCase()) ||
+    user.email.toLowerCase().includes(effectiveSearchQuery.toLowerCase())
   );
 
   const handleChatClick = (user) => {
@@ -162,115 +165,172 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
 
   return (
     <>
-      <div className="border-r w-16 border-gray-700 flex flex-col items-center py-6 h-full relative">
-  {/* Top icons */}
-  <div className="flex flex-col gap-6 relative">
-        <div className="relative group" data-section="chats">
-          <IoChatboxEllipses 
-            size={22} 
-            className={`${activeSection === 'chats' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
-            title='chat'
-            onClick={() => {
-              setActiveTab('chats');
-              if (onTabChange) onTabChange('chats');
-            }}
-          />
-          <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'chats' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
-        </div>
-        <div className="relative group" data-section="groups">
-          <TiGroup 
-            size={22} 
-            className={`${activeSection === 'groups' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
-            title='group'
-            onClick={() => {
-              setActiveTab('groups');
-              if (onTabChange) onTabChange('groups');
-            }}
-          />
-          <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'groups' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
-        </div>
-         <div className="relative group" data-section="adduser">
-          <MdPersonAddAlt1  
-            size={22} 
-            className={`${activeSection === 'adduser' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
-            title='add user'
-            onClick={() => {
-              setActiveTab('adduser');
-              if (onTabChange) onTabChange('adduser');
-            }}
-          />
-          <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'adduser' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
-        </div>
-        <div className="relative group" data-section="notifications">
-          <div className="relative">
-            <IoNotifications 
+      {/* Left icon rail: hidden on mobile, shown from md+ */}
+      <div className="border-r w-16 border-gray-700 md:flex flex-col items-center py-6 h-full relative hidden">
+        {/* Top icons */}
+        <div className="flex flex-col gap-6 relative">
+          <div className="relative group" data-section="chats">
+            <IoChatboxEllipses 
               size={22} 
-              className="text-gray-400 hover:text-white cursor-pointer transition-colors duration-200" 
-              title='notifications'
-              onClick={onNotificationClick}
+              className={`${activeSection === 'chats' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
+              title='chat'
+              onClick={() => {
+                setActiveTab('chats');
+                if (onTabChange) onTabChange('chats');
+              }}
             />
-            {unreadNotifications > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                {unreadNotifications > 9 ? '9+' : unreadNotifications}
-              </span>
-            )}
+            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'chats' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
+          </div>
+          <div className="relative group" data-section="groups">
+            <TiGroup 
+              size={22} 
+              className={`${activeSection === 'groups' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
+              title='group'
+              onClick={() => {
+                setActiveTab('groups');
+                if (onTabChange) onTabChange('groups');
+              }}
+            />
+            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'groups' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
+          </div>
+           <div className="relative group" data-section="adduser">
+            <MdPersonAddAlt1  
+              size={22} 
+              className={`${activeSection === 'adduser' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
+              title='add user'
+              onClick={() => {
+                setActiveTab('adduser');
+                if (onTabChange) onTabChange('adduser');
+              }}
+            />
+            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'adduser' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
+          </div>
+          <div className="relative group" data-section="notifications">
+            <div className="relative">
+              <IoNotifications 
+                size={22} 
+                className="text-gray-400 hover:text-white cursor-pointer transition-colors duration-200" 
+                title='notifications'
+                onClick={onNotificationClick}
+              />
+              {unreadNotifications > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                </span>
+              )}
+            </div>
           </div>
         </div>
-  </div>
-
-  {/* Spacer to push bottom icons down */}
-  <div className="flex-1" />
-
-  {/* Bottom icons */}
-  <div className="flex flex-col gap-6">
-    <div className="relative group" data-section="settings">
-      <MdOutlineSettings 
-        size={22} 
-        className={`${activeSection === 'settings' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
-        title='settings' 
-        onClick={onSettingsClick}
-      />
-      <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'settings' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
-    </div>
-    <div className="relative group" data-section="profile">
-      <FaCircleUser 
-        size={22} 
-        className={`${activeSection === 'profile' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
-        title='user' 
-        onClick={onProfileClick}
-      />
-      <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'profile' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
-    </div>
-  </div>
-
-  {/* Current section indicator */}
-  {/* <div className="text-[10px] text-gray-500 font-medium tracking-wider uppercase mt-2">
-    {getActiveSectionName()}
-  </div> */}
-</div>
-      <div className="sidebar">
-        <div className="sidebar-header">
-          <input 
-            type="text" 
-            placeholder="Search users..." 
-            className="sidebar-search" 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+        <div className="flex-1" />
+        {/* Bottom icons */}
+        <div className="flex flex-col gap-6">
+          <div className="relative group" data-section="settings">
+            <MdOutlineSettings 
+              size={22} 
+              className={`${activeSection === 'settings' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
+              title='settings' 
+              onClick={onSettingsClick}
+            />
+            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'settings' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
+          </div>
+          <div className="relative group" data-section="profile">
+            <FaCircleUser 
+              size={22} 
+              className={`${activeSection === 'profile' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
+              title='user' 
+              onClick={onProfileClick}
+            />
+            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'profile' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
+          </div>
         </div>
-        {/* <div className="sidebar-stories">
-          <div className="stories-list">
-            {["Mike", "Brand", "Jim Katt", "Steven", "Helia","jbsjq","add"].map((user, idx) => (
-              <div className="story-avatar" key={idx}>
-                <div className="avatar-circle" />
-                <span className="story-name">{user}</span>
+      </div>
+
+      {/* Main sidebar */}
+      <div className="sidebar w-full md:w-auto">
+        {/* Hide header on mobile since we have top header in home.jsx */}
+        {!isMobile && (
+          <div className="sidebar-header">
+            <input 
+              type="text" 
+              placeholder="Search users..." 
+              className="sidebar-search" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search users"
+            />
+            {/* Desktop top icons row (hidden on mobile) */}
+            <div className="hidden md:flex items-center gap-5 py-2 border-b border-gray-700">
+              <button
+                aria-label="Chats"
+                className={`${activeSection === 'chats' ? 'text-white' : 'text-gray-400'} hover:text-white transition-colors`}
+                onClick={() => {
+                  setActiveTab('chats');
+                  if (onTabChange) onTabChange('chats');
+                }}
+                title="Chats"
+              >
+                <IoChatboxEllipses size={22} />
+              </button>
+              <button
+                aria-label="Groups"
+                className={`${activeSection === 'groups' ? 'text-white' : 'text-gray-400'} hover:text-white transition-colors`}
+                onClick={() => {
+                  setActiveTab('groups');
+                  if (onTabChange) onTabChange('groups');
+                }}
+                title="Groups"
+              >
+                <TiGroup size={22} />
+              </button>
+              <button
+                aria-label="Add user"
+                className={`${activeSection === 'adduser' ? 'text-white' : 'text-gray-400'} hover:text-white transition-colors`}
+                onClick={() => {
+                  setActiveTab('adduser');
+                  if (onTabChange) onTabChange('adduser');
+                }}
+                title="Add user"
+              >
+                <MdPersonAddAlt1 size={22} />
+              </button>
+              <button
+                aria-label="Notifications"
+                className="relative text-gray-400 hover:text-white transition-colors"
+                onClick={onNotificationClick}
+                title="Notifications"
+              >
+                <IoNotifications size={22} />
+                {unreadNotifications > 0 && (
+                  <span className="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                  </span>
+                )}
+              </button>
+              <div className="ml-auto flex items-center gap-4">
+                <button
+                  aria-label="Settings"
+                  className={`${activeSection === 'settings' ? 'text-white' : 'text-gray-400'} hover:text-white transition-colors`}
+                  onClick={onSettingsClick}
+                  title="Settings"
+                >
+                  <MdOutlineSettings size={22} />
+                </button>
+                <button
+                  aria-label="Profile"
+                  className={`${activeSection === 'profile' ? 'text-white' : 'text-gray-400'} hover:text-white transition-colors`}
+                  onClick={onProfileClick}
+                  title="Profile"
+                >
+                  <FaCircleUser size={22} />
+                </button>
               </div>
-            ))}
+            </div>
           </div>
-        </div> */}
-        
+        )}
+
+        {/* List area */}
         {activeTab === 'chats' ? (
-          <div className="sidebar-section">
+          <div className="sidebar-section md:mt-0">
             <div className="section-title">Chats</div>
             {loading ? (
               <ContentLoading text="Loading friends..." />
@@ -285,7 +345,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
             )}
           </div>
         ) : (
-          <div className="sidebar-section">
+          <div className="sidebar-section md:mt-0">
             <div className="section-title">Groups</div>
             {groups.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-gray-500">

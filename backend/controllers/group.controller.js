@@ -473,7 +473,7 @@ const createGroupController = (io) => {
     // Send group message
     const sendGroupMessage = async (req, res) => {
         try {
-            const { groupId, content, image, tempId } = req.body;
+            const { groupId, content, image, audio, tempId } = req.body;
             const userId = req.userId;
 
             const group = await Group.findById(groupId);
@@ -486,14 +486,16 @@ const createGroupController = (io) => {
             }
 
             let messageType = 'text';
-            if (content?.trim() && image) messageType = 'mixed';
+            if (content?.trim() && (image || audio)) messageType = 'mixed';
             else if (image) messageType = 'image';
+            else if (audio) messageType = 'audio';
 
             const message = new GroupMessage({
                 group: groupId,
                 sender: userId,
                 content: content?.trim() || '',
                 image: image ? { url: image, public_id: '' } : { url: '', public_id: '' },
+                audio: audio ? { url: audio, public_id: '' } : { url: '', public_id: '' },
                 messageType,
                 status: 'sent',
             });

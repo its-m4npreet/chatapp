@@ -40,9 +40,10 @@ export default function SignIn() {
   };
 
   return (
-    <div className="w-screen grid grid-cols-1 lg:grid-cols-2 overflow-hidden gap-10  items-center justify-center min-h-screen px-6 lg:px-20 ">
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 overflow-hidden gap-10 items-center justify-center px-4 sm:px-6 lg:px-20">
       {/* left side  */}
-      <div className=" min-w-1/2 w-[70%]  flex flex-col justify-center ml-30">
+      <div className="flex items-center justify-center px-4 sm:px-6 py-8 sm:py-12">
+        <div className="w-full">
         <div className="mb-8">
           {/* Updated h2 with bolder font and refined style */}
           <h2 className="text-5xl font-bold text-white mb-2 tracking-tight">
@@ -125,10 +126,11 @@ export default function SignIn() {
             Sign up
           </Link>
         </div>
+        </div>
       </div>
 
       {/* Right Side - Rubik's Cube Grid */}
-      <div className="relative overflow-hidden min-h-96 lg:min-h-0 flex items-center justify-center  lg:h-full">
+      <div className="hidden lg:flex items-center justify-center relative overflow-hidden h-full min-h-96 lg:min-h-0">
         <div className="grid grid-cols-3 gap-3 rotate-45 animate-spin-slow delay-1500">
           {[...Array(9)].map((_, i) => (
             <div
