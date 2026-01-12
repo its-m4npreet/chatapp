@@ -13,6 +13,10 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile }) => {
   
   const navigate = useNavigate();
 
+  const handleBack = () => {
+    navigate(-1);
+  };
+
   const handleLogout = async () => {
     try {
       await axios.post('/logout');
@@ -34,7 +38,7 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile }) => {
   }
 
   return (
-    <div className="h-full w-full flex flex-col  overflow-y-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+    <div className="h-full w-full min-h-screen flex flex-col overflow-y-auto scrollbar-hide bg-[#0f1419]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
       {/* Banner Section */}
       <div className="relative">
         {/* Banner Image */}
@@ -53,7 +57,7 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile }) => {
 
         {/* Back Button */}
         <button
-          onClick={onClose}
+          onClick={handleBack}
           className="absolute top-4 left-4 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white backdrop-blur-sm transition-all"
         >
           <IoArrowBack size={20} />

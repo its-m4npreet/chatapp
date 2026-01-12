@@ -179,7 +179,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
                 if (onTabChange) onTabChange('chats');
               }}
             />
-            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'chats' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
+            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out pointer-events-none ${activeSection === 'chats' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
           </div>
           <div className="relative group" data-section="groups">
             <TiGroup 
@@ -191,7 +191,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
                 if (onTabChange) onTabChange('groups');
               }}
             />
-            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'groups' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
+            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out pointer-events-none ${activeSection === 'groups' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
           </div>
            <div className="relative group" data-section="adduser">
             <MdPersonAddAlt1  
@@ -203,7 +203,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
                 if (onTabChange) onTabChange('adduser');
               }}
             />
-            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'adduser' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
+            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out pointer-events-none ${activeSection === 'adduser' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
           </div>
           <div className="relative group" data-section="notifications">
             <div className="relative">
@@ -224,23 +224,21 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
         <div className="flex-1" />
         {/* Bottom icons */}
         <div className="flex flex-col gap-6">
-          <div className="relative group" data-section="settings">
+          <div className="relative group cursor-pointer" data-section="settings" onClick={onSettingsClick}>
             <MdOutlineSettings 
               size={22} 
-              className={`${activeSection === 'settings' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
-              title='settings' 
-              onClick={onSettingsClick}
+              className={`${activeSection === 'settings' ? 'text-white' : 'text-gray-400'} hover:text-white transition-colors duration-200`} 
+              title='settings'
             />
-            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'settings' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
+            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out pointer-events-none ${activeSection === 'settings' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
           </div>
-          <div className="relative group" data-section="profile">
+          <div className="relative group cursor-pointer" data-section="profile" onClick={onProfileClick}>
             <FaCircleUser 
               size={22} 
-              className={`${activeSection === 'profile' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
-              title='user' 
-              onClick={onProfileClick}
+              className={`${activeSection === 'profile' ? 'text-white' : 'text-gray-400'} hover:text-white transition-colors duration-200`} 
+              title='user'
             />
-            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out ${activeSection === 'profile' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
+            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out pointer-events-none ${activeSection === 'profile' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
           </div>
         </div>
       </div>
@@ -259,7 +257,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
               aria-label="Search users"
             />
             {/* Desktop top icons row (hidden on mobile) */}
-            <div className="hidden md:flex items-center gap-5 py-2 border-b border-gray-700">
+            <div className="hidden items-center gap-5 py-2 border-b border-gray-700">
               <button
                 aria-label="Chats"
                 className={`${activeSection === 'chats' ? 'text-white' : 'text-gray-400'} hover:text-white transition-colors`}
@@ -331,13 +329,15 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
         {/* List area */}
         {activeTab === 'chats' ? (
           <div className="sidebar-section md:mt-0">
-            <div className="section-title">Chats</div>
+            {!isMobile && (
+              <div className="section-title">Chats</div>
+            )}
             {loading ? (
               <ContentLoading text="Loading friends..." />
             ) : error ? (
               <div className="sidebar-error">{error}</div>
             ) : filteredUsers.length === 0 ? (
-              <div className="text-gray-500 text-sm text-center py-4">
+              <div className="text-gray-500 text-sm text-center py-4 scroll-hide">
                 {searchQuery ? 'No friends found' : 'No friends yet. Add users to start chatting!'}
               </div>
             ) : (
@@ -346,7 +346,10 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
           </div>
         ) : (
           <div className="sidebar-section md:mt-0">
-            <div className="section-title">Groups</div>
+            {!isMobile && (
+              <div className="section-title">Groups</div>
+              )}
+            
             {groups.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-gray-500">
                 <TiGroup size={48} className="mb-3 text-gray-600" />
@@ -370,7 +373,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
                 {groups.map((group) => (
                   <div
                     key={group._id}
-                    className={`sidebar-chat${selectedGroup && selectedGroup._id === group._id ? ' sidebar-chat-active' : ''}`}
+                    className={`sidebar-chat scroll-hide ${selectedGroup && selectedGroup._id === group._id ? ' sidebar-chat-active' : ''}`}
                     onClick={() => onSelectGroup && onSelectGroup(group)}
                     style={{ cursor: 'pointer' }}
                   >

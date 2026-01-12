@@ -98,7 +98,7 @@ const ToolbarButton = ({ onClick, title, children, active }) => (
   </button>
 );
 
-const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUserTyping, isMobile, onBack }) => {
+const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUserTyping, isMobile , onBack }) => {
   // Join current user's room for real-time updates
   useEffect(() => {
     if (socket && currentUser && currentUser._id) {
@@ -818,7 +818,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   return (
     <div className="chat-view h-full w-full flex flex-col relative">
       {/* Mobile header with back */}
-      {isMobile && (
+      {/* {isMobile && (
         <div className="flex items-center gap-3 px-3 py-2 border-b border-gray-700">
           <button
             onClick={onBack}
@@ -826,20 +826,29 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
             className="text-gray-300 hover:text-white"
             title="Back"
           >
-            {/* Simple back chevron */}
             <span className="inline-block">&larr;</span>
           </button>
           <div className="flex items-center gap-2">
-            {/* Show avatar/name if available */}
             <span className="text-white font-medium">{user?.name || 'Chat'}</span>
             {isUserOnline && <span className="text-xs text-green-500">● Online</span>}
             {isUserTyping && <span className="text-xs text-blue-400">typing...</span>}
           </div>
         </div>
-      )}
+      )} */}
 
-      {!isMobile && (
+      {/* {!isMobile && ( */}
         <div className="chat-header p-4 border-b border-gray-700 flex items-center gap-4">
+          {isMobile && (
+            <button
+            onClick={onBack}
+            aria-label="Back to chat list"
+            className="text-gray-300 hover:text-white"
+            title="Back"
+          >
+            <span className="inline-block">&larr;</span>
+          </button>
+              )
+              }
           <div
             className="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity"
             onClick={() => onViewProfile && onViewProfile(user)}
@@ -887,7 +896,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
             </div>
           </div>
         </div>
-      )}
+      {/* )} */}
 
       <div
         className={"flex-1 " + (isMobile ? "p-3" : "p-6") + " overflow-y-auto text-white scrollbar-hide"}
@@ -1170,8 +1179,8 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       )}
 
       <div
-        className={(isMobile ? "p-2" : "p-4") + " border-t border-gray-700 flex flex-wrap items-end gap-2 sm:gap-3 relative"}
-        style={{ paddingBottom: isMobile ? "env(safe-area-inset-bottom)" : undefined }}
+        className={(isMobile ? "p-2 gap-1" : "p-4 gap-2") + " border-t border-gray-700 flex flex-wrap items-end  sm:gap-3 relative"}
+        // style={{ paddingBottom: isMobile ? "env(safe-area-inset-bottom)" : undefined }}
       >
         {/* Hidden file input */}
         <input
@@ -1237,7 +1246,8 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
         )}
 
         {/* Markdown Toolbar Toggle */}
-        <button
+        {!isMobile && (
+          <button
           type="button"
           className={`p-2 transition-colors cursor-pointer ${
             showToolbar ? "text-blue-400" : "text-gray-400 hover:text-white"
@@ -1247,6 +1257,8 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
         >
           <span className="font-bold text-sm">Aa</span>
         </button>
+        )}
+        
 
         {/* Markdown Toolbar */}
         {showToolbar && (

@@ -114,7 +114,7 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
       </div>
 
       {/* Users List */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4">
+      <div className="flex-1 overflow-y-auto px-4 pb-4 scrollbar-hide ">
         {loading ? (
           <ContentLoading text="Loading users..." />
         ) : error ? (

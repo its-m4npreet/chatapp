@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   MdOutlineSettings,
   MdDarkMode,
@@ -113,8 +114,13 @@ const SectionHeader = ({ title, icon: Icon }) => (
   </div>
 );
 
-const Settings = ({ onClose }) => {
+const Settings = () => {
+  const navigate = useNavigate();
   const [settings, setSettings] = useState(getInitialSettings);
+
+  const handleBack = () => {
+    navigate(-1);
+  };
 
   // Save settings to localStorage whenever they change
   const updateSetting = (key, value) => {
@@ -124,13 +130,13 @@ const Settings = ({ onClose }) => {
   };
 
   return (
-    <div className="h-full w-full flex flex-col ">
+    <div className="h-full w-full min-h-screen flex flex-col bg-[#0f1419]">
       {/* Header */}
-      <div className="sticky top-0 z-10  backdrop-blur-sm border-b border-zinc-800">
+      <div className="sticky top-0 z-10 bg-[#0f1419]/95 backdrop-blur-sm border-b border-zinc-800">
         <div className="p-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={onClose}
+              onClick={handleBack}
               className="p-2 hover:bg-zinc-800 rounded-xl text-gray-400 hover:text-white transition-all"
             >
               <IoArrowBack size={20} />

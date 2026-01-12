@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { IoEllipsisVertical, IoSearch } from 'react-icons/io5';
+import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import ChatView from '../components/ChatView';
 import Profile from '../components/Profile';
@@ -14,6 +15,7 @@ import socket from '../lib/socket';
 import axios from '../lib/axios';
 
 export const Home = () => {
+  const navigate = useNavigate();
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [unreadCounts, setUnreadCounts] = useState({});
@@ -302,21 +304,11 @@ export const Home = () => {
   };
 
   const handleProfileClick = () => {
-    setViewingUserProfile(null); // Reset viewing user to show current user's profile
-    setShowProfile(true);
-    setShowSettings(false);
-    setSelectedUser(null);
+    navigate('/profile');
   };
 
   const handleCloseProfile = () => {
-    // If viewing another user's profile, go back to chat with that user
-    if (viewingUserProfile) {
-      setSelectedUser(viewingUserProfile);
-      setShowProfile(false);
-      setViewingUserProfile(null);
-    } else {
-      setShowProfile(false);
-    }
+    navigate(-1);
   };
 
   const handleEditProfile = () => {
@@ -340,13 +332,11 @@ export const Home = () => {
   };
 
   const handleSettingsClick = () => {
-    setShowSettings(true);
-    setShowProfile(false);
-    setSelectedUser(null);
+    navigate('/settings');
   };
 
   const handleCloseSettings = () => {
-    setShowSettings(false);
+    navigate(-1);
   };
 
   const handleTabChange = (tab) => {
@@ -417,8 +407,8 @@ export const Home = () => {
   return (
     <div className="w-screen h-screen overflow-hidden flex flex-col bg-black/80 relative">
       {/* Mobile Header */}
-      {isMobile && (
-        <div className="bg-zinc-900 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
+      {isMobile && showSidebar && ( 
+        <div className=" border-b border-gray-700 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 flex-1">
             {showMobileSearch ? (
               <div className="flex items-center gap-2 flex-1">
@@ -427,7 +417,7 @@ export const Home = () => {
                   placeholder="Search..."
                   value={mobileSearchQuery}
                   onChange={(e) => setMobileSearchQuery(e.target.value)}
-                  className="flex-1 bg-zinc-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-blue-500 outline-none"
+                  className="flex-1 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-blue-500 outline-none"
                   autoFocus
                 />
                 <button
@@ -435,20 +425,20 @@ export const Home = () => {
                     setShowMobileSearch(false);
                     setMobileSearchQuery('');
                   }}
-                  className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
+                  className="p-2 rounded-lg text-gray-400 hover:text-white transition"
                 >
                   ✕
                 </button>
               </div>
             ) : (
-              <h1 className="text-white font-bold text-lg">ChatApp</h1>
+              <h2 className="text-white font-semibold text-lg">ChatApp</h2>
             )}
           </div>
           {!showMobileSearch && (
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowMobileSearch(true)}
-                className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
+                className="p-2  rounded-lg text-gray-400 hover:text-white transition"
               >
                 <IoSearch size={20} />
               </button>
@@ -465,13 +455,13 @@ export const Home = () => {
                       className="fixed inset-0 z-30" 
                       onClick={() => setShowMobileMenu(false)}
                     />
-                    <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-800 border border-gray-700 rounded-lg shadow-lg z-40 py-1">
+                    <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-800 border border-gray-700 rounded-lg shadow-lg z-999 py-1">
                       <button
                         onClick={() => {
                           handleProfileClick();
                           setShowMobileMenu(false);
                         }}
-                        className="w-full text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 transition"
+                        className="w-full bg-zinc-800 text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 transition"
                       >
                         Profile
                       </button>
@@ -480,7 +470,7 @@ export const Home = () => {
                           handleSettingsClick();
                           setShowMobileMenu(false);
                         }}
-                        className="w-full text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 transition"
+                        className="w-full bg-zinc-800 text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 transition"
                       >
                         Settings
                       </button>
@@ -491,11 +481,12 @@ export const Home = () => {
             </div>
           )}
         </div>
-      )}
+        )
+       }
 
       {/* Tab Navigation for Mobile */}
       {isMobile && showSidebar && (
-        <div className="bg-zinc-800 border-b border-gray-700 flex overflow-x-auto">
+        <div className=" flex overflow-x-auto mb-3">
           <button
             onClick={() => handleTabChange('chats')}
             className={`px-4 py-2 font-medium whitespace-nowrap transition ${
