@@ -27,9 +27,20 @@ export default function SignIn() {
     setError("");
     try {
       const res = await axios.post("/signin", { email, password });
+      console.log('[SignIn] Response:', res.data);
+      
       // Save user info to localStorage for socket
       if (res.data && res.data.user) {
         localStorage.setItem('user', JSON.stringify(res.data.user));
+        console.log('[SignIn] User saved to localStorage');
+        
+        // Also save token if provided in response
+        if (res.data.token) {
+          localStorage.setItem('jwt_token', res.data.token);
+          console.log('[SignIn] Token saved to localStorage:', res.data.token.substring(0, 20) + '...');
+        } else {
+          console.warn('[SignIn] No token in response');
+        }
       }
       setLoading(false);
       navigate("/");

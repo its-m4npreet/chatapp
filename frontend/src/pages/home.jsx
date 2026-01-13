@@ -63,15 +63,21 @@ export const Home = () => {
   useEffect(() => {
     const updateUser = () => {
       const user = JSON.parse(localStorage.getItem('user'));
-      if (user) {
-        // Normalize id to _id for compatibility
-        const normalizedUser = {
-          ...user,
-          _id: user._id || user.id,
-        };
-        if (normalizedUser._id && (!currentUser || currentUser._id !== normalizedUser._id)) {
-          setCurrentUser(normalizedUser);
-        }
+      const token = localStorage.getItem('jwt_token');
+      
+      // Redirect to signin if no user or token
+      if (!user || !token) {
+        navigate('/signin');
+        return;
+      }
+      
+      // Normalize id to _id for compatibility
+      const normalizedUser = {
+        ...user,
+        _id: user._id || user.id,
+      };
+      if (normalizedUser._id && (!currentUser || currentUser._id !== normalizedUser._id)) {
+        setCurrentUser(normalizedUser);
       }
     };
     updateUser();
@@ -81,7 +87,7 @@ export const Home = () => {
       window.removeEventListener('focus', updateUser);
       window.removeEventListener('storage', updateUser);
     };
-  }, [currentUser]);
+  }, [currentUser, navigate]);
 
   // Connect socket once on mount
   useEffect(() => {
@@ -183,6 +189,16 @@ export const Home = () => {
 
   useEffect(() => {
     (async () => {
+      // Only fetch if user and token are available
+      const user = localStorage.getItem('user');
+      const token = localStorage.getItem('jwt_token');
+      
+      if (!user || !token) {
+        console.log('No user or token, skipping fetch');
+        return;
+      }
+      
+      console.log('Fetching groups and notifications with token:', token ? 'present' : 'missing');
       await fetchGroups();
       await fetchUnreadNotifications();
     })();

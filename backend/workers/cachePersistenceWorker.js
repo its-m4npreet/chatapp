@@ -8,9 +8,11 @@ const Message = require('../model/message');
  */
 
 class CachePersistenceWorker {
-  constructor(checkInterval = 1000) {
-    this.checkInterval = checkInterval; // Check every 1 second by default
+  constructor(checkInterval = 3000) {
+    this.checkInterval = checkInterval; // Check every 3 seconds by default (reduced frequency)
     this.isRunning = false;
+    this.failureCount = 0;
+    this.maxFailures = 5;
   }
 
   /**
@@ -47,6 +49,21 @@ class CachePersistenceWorker {
    */
   async persistCachedData() {
     try {
+      // Skip if Redis is not ready
+      if (!cacheService.isRedisReady()) {
+        this.failureCount++;
+        if (this.failureCount === 1) {
+          console.log('Skipping cache persistence - Redis not ready');
+        }
+        return;
+      }
+
+      // Reset failure count when Redis is back
+      if (this.failureCount > 0) {
+        console.log('Redis reconnected, resuming cache persistence');
+        this.failureCount = 0;
+      }
+
       // Get all message cache keys
       const messageKeys = await cacheService.getKeysByPattern('message:*');
 
@@ -68,7 +85,7 @@ class CachePersistenceWorker {
               await cacheService.deleteCache(key);
             }
           } catch (error) {
-            console.error(`Error persisting message ${key}:`, error);
+            console.error(`Error persisting message ${key}:`, error.message);
           }
         }
       }
@@ -80,7 +97,11 @@ class CachePersistenceWorker {
         console.log(`Conversation cache will expire: ${key}`);
       }
     } catch (error) {
-      console.error('Cache persistence error:', error);
+      this.failureCount++;
+      if (this.failureCount <= 2) {
+        console.error('Cache persistence error:', error.message);
+      }
+      // Don't rethrow - let the worker continue running even if Redis is temporarily unavailable
     }
   }
 
@@ -90,6 +111,11 @@ class CachePersistenceWorker {
    */
   async forceCleanExpiredCache() {
     try {
+      if (!cacheService.isRedisReady()) {
+        console.warn('Redis not ready for cache cleanup');
+        return;
+      }
+
       console.log('Force cleaning expired cache entries...');
       const allKeys = await cacheService.getKeysByPattern('*');
 
@@ -100,9 +126,9 @@ class CachePersistenceWorker {
         }
       }
     } catch (error) {
-      console.error('Force clean error:', error);
+      console.error('Force clean error:', error.message);
     }
   }
 }
 
-module.exports = CachePersistenceWorker;
+module.exports = new CachePersistenceWorker();

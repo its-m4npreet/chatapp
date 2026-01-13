@@ -44,6 +44,13 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
 
     const loadFriends = async () => {
       try {
+        // Check if token exists before making request
+        const token = localStorage.getItem('jwt_token');
+        if (!token) {
+          console.log('No token available, skipping friend load');
+          return;
+        }
+        
         setLoading(true);
         const res = await axios.get('/friends');
         if (isMounted) {

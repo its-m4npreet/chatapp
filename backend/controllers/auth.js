@@ -52,29 +52,31 @@ const signIn = async (req, res) => {
         if (!user) {
             return res.status(400).json({ message: "Invalid credentials" });
         }
-        bcrypt.compare(password, user.password, (err, isMatch) => {
-            if (err) {
-                return res.status(500).json({ message: "Server error" });
-            }
-            if (!isMatch) {
-                return res.status(400).json({ message: "Invalid credentials" });
-            }
-            const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-           // Set HTTP-only cookie (secure in production)
+        
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: "Invalid credentials" });
+        }
+        
+        const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        
+        // Set HTTP-only cookie (secure in production)
         res.cookie('jwt', token, {
             httpOnly: true,        // Prevents XSS attacks (JS can't access cookie)
             secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in prod
-            sameSite: 'strict',    // Helps prevent CSRF
+            sameSite: 'lax',       // Allow cookies in cross-site requests (needed for Railway)
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
         });
 
-        // Send success response (you can also send user info if needed)
+        // Send success response with token for frontend to store in localStorage
         return res.status(200).json({
             message: "Login successful",
-            user: { id: user._id, name: user.name, email: user.email ,profilePicture: user.profilePicture}
+            token: token,
+            user: { id: user._id, name: user.name, email: user.email, profilePicture: user.profilePicture }
         });
-        });
+        
     } catch (error) {
+        console.error('SignIn error:', error);
         res.status(500).json({ message: "Server error" });
     }
 };

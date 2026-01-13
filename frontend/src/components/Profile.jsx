@@ -25,10 +25,12 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile = 
     try {
       await axios.post('/logout');
       localStorage.removeItem('user');
+      localStorage.removeItem('jwt_token');
       navigate('/signin');
     } catch (error) {
       console.error('Logout failed:', error);
       localStorage.removeItem('user');
+      localStorage.removeItem('jwt_token');
       navigate('/signin');
     }
   };
