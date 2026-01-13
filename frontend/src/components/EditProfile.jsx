@@ -5,7 +5,7 @@ import { MdSave } from 'react-icons/md';
 import axios from '../lib/axios';
 import { ButtonLoading } from './Loading';
 
-const EditProfile = ({ currentUser, onClose, onSave }) => {
+const EditProfile = ({ currentUser, onClose, onSave, isMobile = true }) => {
   const [name, setName] = useState(currentUser?.name || '');
   const [bio, setBio] = useState(currentUser?.bio || '');
   const [about, setAbout] = useState(currentUser?.aboutMe || '');

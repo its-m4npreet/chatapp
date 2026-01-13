@@ -265,6 +265,7 @@ export const Home = () => {
     setShowProfile(false);
     setShowSettings(false);
     setShowAddUser(false);
+    setViewingUserProfile(null);
     setSidebarActiveTab('chats'); 
     if (user && user._id) {
       setUnreadCounts((prev) => {
@@ -304,11 +305,25 @@ export const Home = () => {
   };
 
   const handleProfileClick = () => {
-    navigate('/profile');
+    if (isMobile) {
+      navigate('/profile');
+    } else {
+      // Desktop: show in chat area
+      setShowProfile(true);
+      setShowSettings(false);
+      setShowAddUser(false);
+      setSelectedUser(null);
+      setSelectedGroup(null);
+      setViewingUserProfile(null);
+    }
   };
 
   const handleCloseProfile = () => {
-    navigate(-1);
+    if (isMobile) {
+      navigate(-1);
+    } else {
+      setShowProfile(false);
+    }
   };
 
   const handleEditProfile = () => {
@@ -332,11 +347,24 @@ export const Home = () => {
   };
 
   const handleSettingsClick = () => {
-    navigate('/settings');
+    if (isMobile) {
+      navigate('/settings');
+    } else {
+      // Desktop: show in chat area
+      setShowSettings(true);
+      setShowProfile(false);
+      setShowAddUser(false);
+      setSelectedUser(null);
+      setSelectedGroup(null);
+    }
   };
 
   const handleCloseSettings = () => {
-    navigate(-1);
+    if (isMobile) {
+      navigate(-1);
+    } else {
+      setShowSettings(false);
+    }
   };
 
   const handleTabChange = (tab) => {
@@ -455,22 +483,23 @@ export const Home = () => {
                       className="fixed inset-0 z-30" 
                       onClick={() => setShowMobileMenu(false)}
                     />
-                    <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-800 border border-gray-700 rounded-lg shadow-lg z-999 py-1">
+                    <div className="absolute right-0 top-full mt-1 w-48 bg-[#141417] border border-gray-700 rounded-lg shadow-lg z-999 py-1">
                       <button
                         onClick={() => {
                           handleProfileClick();
                           setShowMobileMenu(false);
                         }}
-                        className="w-full bg-zinc-800 text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 transition"
+                        className="w-full bg-[#141417] text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 transition"
                       >
                         Profile
                       </button>
+                      <div className='h-px w-full bg-gray-700'></div>
                       <button
                         onClick={() => {
                           handleSettingsClick();
                           setShowMobileMenu(false);
                         }}
-                        className="w-full bg-zinc-800 text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 transition"
+                        className="w-full bg-[#141417] text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 transition"
                       >
                         Settings
                       </button>
@@ -486,38 +515,34 @@ export const Home = () => {
 
       {/* Tab Navigation for Mobile */}
       {isMobile && showSidebar && (
-        <div className=" flex overflow-x-auto mb-3">
-          <button
-            onClick={() => handleTabChange('chats')}
-            className={`px-4 py-2 font-medium whitespace-nowrap transition ${
-              sidebarActiveTab === 'chats'
-                ? 'text-blue-500 border-b-2 border-blue-500'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Chats
-          </button>
-          <button
-            onClick={() => handleTabChange('groups')}
-            className={`px-4 py-2 font-medium whitespace-nowrap transition ${
-              sidebarActiveTab === 'groups'
-                ? 'text-blue-500 border-b-2 border-blue-500'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Groups
-          </button>
-          <button
-            onClick={() => handleTabChange('adduser')}
-            className={`px-4 py-2 font-medium whitespace-nowrap transition ${
-              sidebarActiveTab === 'adduser'
-                ? 'text-blue-500 border-b-2 border-blue-500'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Add Friend
-          </button>
-        </div>
+<div className="flex gap-2 overflow-x-auto my-3 scroll-hide px-4">
+  {[
+    { key: "chats", label: "Chats" },
+    { key: "groups", label: "Groups" },
+    { key: "adduser", label: "Add Friend" },
+  ].map((tab) => {
+    const isActive = sidebarActiveTab === tab.key;
+
+    return (
+      <button
+        key={tab.key}
+        onClick={() => handleTabChange(tab.key)}
+        className={`
+          px-4 py-2 rounded-full font-medium whitespace-nowrap
+          transition-colors duration-200
+          ${
+            isActive
+              ? "bg-blue-500 text-white"
+              : "bg-neutral-800 text-gray-400 hover:text-white hover:bg-neutral-700"
+          }
+        `}
+      >
+        {tab.label}
+      </button>
+    );
+  })}
+</div>
+
       )}
 
       <div className="flex flex-1 overflow-hidden">
@@ -553,6 +578,7 @@ export const Home = () => {
             currentUser={currentUser} 
             onClose={handleCloseEditProfile}
             onSave={handleProfileSaved}
+            isMobile={isMobile}
           />
         ) : showProfile ? (
           <Profile 
@@ -560,9 +586,13 @@ export const Home = () => {
             viewingUser={viewingUserProfile} 
             onClose={handleCloseProfile}
             onEditProfile={handleEditProfile}
+            isMobile={isMobile}
           />
         ) : showSettings ? (
-          <Settings onClose={handleCloseSettings} />
+          <Settings 
+            onClose={handleCloseSettings}
+            isMobile={isMobile}
+          />
         ) : showAddUser ? (
           <AddUser 
             onClose={handleCloseAddUser}

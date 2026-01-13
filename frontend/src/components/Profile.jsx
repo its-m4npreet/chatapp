@@ -6,7 +6,7 @@ import axios from '../lib/axios';
 import { useNavigate } from 'react-router-dom';
 import { ContentLoading } from './Loading';
 
-const Profile = ({ currentUser, viewingUser, onClose, onEditProfile }) => {
+const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile = true }) => {
   // If viewingUser is provided, show their profile (read-only), otherwise show currentUser's profile (editable)
   const isViewingOther = viewingUser && viewingUser._id !== currentUser?._id;
   const user = isViewingOther ? viewingUser : currentUser;
@@ -14,7 +14,11 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile }) => {
   const navigate = useNavigate();
 
   const handleBack = () => {
-    navigate(-1);
+    if (isMobile) {
+      navigate(-1);
+    } else {
+      onClose && onClose();
+    }
   };
 
   const handleLogout = async () => {
@@ -38,7 +42,7 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile }) => {
   }
 
   return (
-    <div className="h-full w-full min-h-screen flex flex-col overflow-y-auto scrollbar-hide bg-[#0f1419]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+    <div className="h-full w-full min-h-screen flex flex-col overflow-y-auto scrollbar-hide " style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
       {/* Banner Section */}
       <div className="relative">
         {/* Banner Image */}

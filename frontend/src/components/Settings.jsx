@@ -114,12 +114,16 @@ const SectionHeader = ({ title, icon: Icon }) => (
   </div>
 );
 
-const Settings = () => {
+const Settings = ({ onClose, isMobile = true }) => {
   const navigate = useNavigate();
   const [settings, setSettings] = useState(getInitialSettings);
 
   const handleBack = () => {
-    navigate(-1);
+    if (isMobile) {
+      navigate(-1);
+    } else {
+      onClose && onClose();
+    }
   };
 
   // Save settings to localStorage whenever they change
@@ -130,9 +134,9 @@ const Settings = () => {
   };
 
   return (
-    <div className="h-full w-full min-h-screen flex flex-col bg-[#0f1419]">
+    <div className="h-full w-full min-h-screen flex flex-col">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-[#0f1419]/95 backdrop-blur-sm border-b border-zinc-800">
+      <div className="sticky top-0 z-10  backdrop-blur-sm border-b border-zinc-800">
         <div className="p-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
