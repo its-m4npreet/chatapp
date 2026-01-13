@@ -1,7 +1,9 @@
 const redis = require('redis');
 
 const redisConfig = {
-  url: process.env.REDIS_URL || `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`,
+  url: process.env.REDIS_URL || 'redis://localhost:6379',
+  // host: process.env.REDIS_HOST || 'localhost',
+  // port: process.env.REDIS_PORT || 6379,
 };
 
 // Only add password if it's configured
