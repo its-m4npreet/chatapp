@@ -320,11 +320,11 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       try {
         const { default: axios } = await import("../lib/axios");
         const res = await axios.get(`/messages/${user._id}`);
-        console.log("Fetched messages response:", res.data);
+        // console.log("Fetched messages response:", res.data);
         
         // Handle different response structures
         const fetchedMessages = res.data.messages || res.data.data || res.data || [];
-        console.log("Setting messages:", fetchedMessages);
+        // console.log("Setting messages:", fetchedMessages);
         setMessages(fetchedMessages);
         
         // Scroll to bottom after messages load
