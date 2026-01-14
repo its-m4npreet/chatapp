@@ -110,11 +110,14 @@ const cacheService = require('./services/cacheService');
 const onlineUsers = new Map();
 
 io.on('connection', (socket) => {
+  console.log('Backend: New socket connection:', socket.id);
+  
   // Join room by userId for bi-directional messaging
   socket.on('join', (userId) => {
     socket.join(userId);
     socket.userId = userId;
     onlineUsers.set(userId, socket.id);
+    console.log('Backend: User joined room:', { userId, socketId: socket.id });
     // Broadcast updated online users list to all connected clients
     io.emit('onlineUsers', Array.from(onlineUsers.keys()));
   });
@@ -131,6 +134,7 @@ io.on('connection', (socket) => {
   // Handle disconnection
   socket.on('disconnect', () => {
     if (socket.userId) {
+      console.log('Backend: User disconnected:', { userId: socket.userId, socketId: socket.id });
       onlineUsers.delete(socket.userId);
       io.emit('onlineUsers', Array.from(onlineUsers.keys()));
     }
@@ -140,7 +144,12 @@ io.on('connection', (socket) => {
   socket.on('sendMessage', async (msg) => {
     try {
       const { sender, receiver, content, image, audio, tempId } = msg;
-      if (!receiver || (!content?.trim() && !image && !audio)) return;
+      console.log('Backend: Received sendMessage:', { tempId, sender, receiver, hasContent: !!content });
+      
+      if (!receiver || (!content?.trim() && !image && !audio)) {
+        console.warn('Backend: Invalid message - missing receiver or content');
+        return;
+      }
 
       let messageType = 'text';
       if (content?.trim() && (image || audio)) messageType = 'mixed';
@@ -166,6 +175,14 @@ io.on('connection', (socket) => {
       const cacheKey = `message:${newMessage._id}`;
       await cacheService.setCache(cacheKey, newMessage, 5);
 
+      console.log('Backend: Emitting newMessage to rooms:', { 
+        messageId: newMessage._id,
+        tempId: newMessage.tempId,
+        sender,
+        receiver,
+        status: newMessage.status
+      });
+
       // Emit to both sender and receiver rooms
       io.to(receiver).emit('newMessage', newMessage);
       io.to(sender).emit('newMessage', newMessage);
@@ -174,6 +191,7 @@ io.on('connection', (socket) => {
       if (onlineUsers.has(receiver)) {
         newMessage.status = 'delivered';
         await newMessage.save();
+        console.log('Backend: Receiver online, updating status to delivered for message:', newMessage._id);
         io.to(sender).emit('messageStatusUpdate', {
           messageId: newMessage._id,
           status: 'delivered'
@@ -187,12 +205,14 @@ io.on('connection', (socket) => {
   // Mark message as read
   socket.on('markMessageRead', async ({ messageId, userId }) => {
     try {
+      console.log('Backend: Marking message as read:', { messageId, userId });
       const message = await Message.findById(messageId);
       if (message && message.receiver.toString() === userId) {
         message.status = 'read';
         message.readAt = new Date();
         await message.save();
         
+        console.log('Backend: Emitting messageStatusUpdate (read) to sender:', message.sender.toString());
         // Notify sender about read status
         io.to(message.sender.toString()).emit('messageStatusUpdate', {
           messageId: message._id,
