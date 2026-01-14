@@ -153,6 +153,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   // Listen for incoming messages
   useEffect(() => {
     if (!socket) return;
+    
     const handleNewMessage = (msg) => {
       const u = userRef.current;
       const cu = currentUserRef.current;
@@ -160,6 +161,9 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
         typeof msg.sender === "object" ? msg.sender._id : msg.sender;
       const receiverId =
         typeof msg.receiver === "object" ? msg.receiver._id : msg.receiver;
+      
+      console.log('Received newMessage:', msg);
+      
       setMessages((prev) => {
         if (
           u &&
@@ -167,7 +171,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
           ((senderId === u._id && receiverId === cu._id) ||
             (senderId === cu._id && receiverId === u._id))
         ) {
-          // Try to reconcile optimistic message
+          // Try to reconcile optimistic message using tempId
           const optimisticIdx = prev.findIndex(
             (m) =>
               m.tempId &&
@@ -176,8 +180,14 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
               getId(m.receiver) === receiverId
           );
           if (optimisticIdx !== -1) {
+            console.log('Reconciling message with tempId:', msg.tempId);
             const updated = [...prev];
-            updated[optimisticIdx] = { ...msg, tempId: undefined };
+            // Replace the optimistic message with the server message
+            updated[optimisticIdx] = { 
+              ...msg, 
+              tempId: undefined,
+              status: msg.status || 'sent' // Ensure status is set
+            };
             return updated;
           }
 
@@ -187,6 +197,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
             const incomingImage = msg.image ? msg.image.url || msg.image : "";
             return (
               m.tempId &&
+              m.status === 'sending' &&
               getId(m.sender) === senderId &&
               getId(m.receiver) === receiverId &&
               (m.content || "") === (msg.content || "") &&
@@ -194,15 +205,26 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
             );
           });
           if (fuzzyIdx !== -1) {
+            console.log('Fuzzy reconciling message without tempId match');
             const updated = [...prev];
-            updated[fuzzyIdx] = { ...msg, tempId: undefined };
+            updated[fuzzyIdx] = { 
+              ...msg, 
+              tempId: undefined,
+              status: msg.status || 'sent'
+            };
             return updated;
           }
 
+          // Check if message already exists to prevent duplicates
           const exists = prev.some(
             (m) => m._id && msg._id && m._id === msg._id
           );
-          if (exists) return prev;
+          if (exists) {
+            console.log('Message already exists, skipping:', msg._id);
+            return prev;
+          }
+          
+          console.log('Adding new message to chat:', msg._id);
           return [...prev, msg];
         }
         return prev;
@@ -231,14 +253,25 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       );
     };
 
+    // Listen for message status updates (sent -> delivered -> read)
+    const handleMessageStatusUpdate = ({ messageId, status }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === messageId ? { ...m, status } : m
+        )
+      );
+    };
+
     socket.on("newMessage", handleNewMessage);
     socket.on("messagesMarkedRead", handleMessagesMarkedRead);
     socket.on("messageReactionUpdated", handleReactionUpdated);
+    socket.on("messageStatusUpdate", handleMessageStatusUpdate);
 
     return () => {
       socket.off("newMessage", handleNewMessage);
       socket.off("messagesMarkedRead", handleMessagesMarkedRead);
       socket.off("messageReactionUpdated", handleReactionUpdated);
+      socket.off("messageStatusUpdate", handleMessageStatusUpdate);
     };
   }, [socket]);
 
