@@ -16,7 +16,6 @@ const server = http.createServer(app);
 
 // CORS origins for both Express and Socket.IO
 const allowedOrigins = [
-  'https://vibemessage.vercel.app',
   process.env.FRONTEND_URL,
   'http://localhost:5173'
 ].filter(Boolean);
