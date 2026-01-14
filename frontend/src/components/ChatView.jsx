@@ -152,7 +152,12 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
 
   // Listen for incoming messages
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) {
+      console.warn('ChatView: Socket not available');
+      return;
+    }
+    
+    console.log('ChatView: Setting up socket listeners for user:', user?._id);
     
     const handleNewMessage = (msg) => {
       const u = userRef.current;
@@ -162,7 +167,15 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       const receiverId =
         typeof msg.receiver === "object" ? msg.receiver._id : msg.receiver;
       
-      console.log('Received newMessage:', msg);
+      console.log('ChatView: Received newMessage event:', {
+        messageId: msg._id,
+        tempId: msg.tempId,
+        senderId,
+        receiverId,
+        status: msg.status,
+        currentChat: u?._id,
+        currentUser: cu?._id
+      });
       
       setMessages((prev) => {
         if (
@@ -255,6 +268,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
 
     // Listen for message status updates (sent -> delivered -> read)
     const handleMessageStatusUpdate = ({ messageId, status }) => {
+      console.log('ChatView: Received messageStatusUpdate:', { messageId, status });
       setMessages((prev) =>
         prev.map((m) =>
           m._id === messageId ? { ...m, status } : m
@@ -262,18 +276,20 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       );
     };
 
+    console.log('ChatView: Registering socket event listeners');
     socket.on("newMessage", handleNewMessage);
     socket.on("messagesMarkedRead", handleMessagesMarkedRead);
     socket.on("messageReactionUpdated", handleReactionUpdated);
     socket.on("messageStatusUpdate", handleMessageStatusUpdate);
 
     return () => {
+      console.log('ChatView: Cleaning up socket listeners');
       socket.off("newMessage", handleNewMessage);
       socket.off("messagesMarkedRead", handleMessagesMarkedRead);
       socket.off("messageReactionUpdated", handleReactionUpdated);
       socket.off("messageStatusUpdate", handleMessageStatusUpdate);
     };
-  }, [socket]);
+  }, [socket, user, currentUser]);
 
   // Voice recording functions
   const startRecording = async () => {
@@ -686,7 +702,14 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     };
     setMessages((prev) => [...prev, optimisticMessage]);
 
-    console.log("Sending message:", msg);
+    console.log("ChatView: Emitting sendMessage:", { 
+      tempId, 
+      receiver: user._id, 
+      sender: currentUser._id,
+      hasContent: !!inputValue,
+      hasImage: !!imageUrl,
+      hasAudio: !!audioUrl
+    });
     socket.emit("sendMessage", msg);
 
     // Stop typing indicator when message is sent

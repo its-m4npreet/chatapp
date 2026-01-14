@@ -92,9 +92,31 @@ export const Home = () => {
   // Connect socket once on mount
   useEffect(() => {
     if (!socket.connected) {
+      console.log('Home: Connecting socket...');
       socket.connect();
     }
+    
+    // Listen for connection events
+    const handleConnect = () => {
+      console.log('Home: Socket connected successfully', socket.id);
+    };
+    
+    const handleDisconnect = () => {
+      console.log('Home: Socket disconnected');
+    };
+    
+    const handleConnectError = (error) => {
+      console.error('Home: Socket connection error:', error);
+    };
+    
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('connect_error', handleConnectError);
+    
     return () => {
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+      socket.off('connect_error', handleConnectError);
       socket.disconnect();
     };
   }, []);
