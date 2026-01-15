@@ -83,11 +83,24 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
     prevRefreshFriends.current = refreshFriends;
   }, [refreshFriends]);
 
-  // Filter users based on search query
-  const filteredUsers = users.filter((user) =>
-    user.name.toLowerCase().includes(effectiveSearchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(effectiveSearchQuery.toLowerCase())
-  );
+  // Filter users based on search query and sort by unread messages first
+  const filteredUsers = users
+    .filter((user) =>
+      user.name.toLowerCase().includes(effectiveSearchQuery.toLowerCase()) ||
+      user.email.toLowerCase().includes(effectiveSearchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      const unreadA = unreadCounts[a._id] || 0;
+      const unreadB = unreadCounts[b._id] || 0;
+      
+      // Sort by unread count (descending) - users with unread messages first
+      if (unreadA !== unreadB) {
+        return unreadB - unreadA;
+      }
+      
+      // If same unread count, sort alphabetically by name
+      return a.name.localeCompare(b.name);
+    });
 
   const handleChatClick = (user) => {
     if (onSelectUser) onSelectUser(user);

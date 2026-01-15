@@ -5,7 +5,7 @@ import { MdSave } from 'react-icons/md';
 import axios from '../lib/axios';
 import { ButtonLoading } from './Loading';
 
-const EditProfile = ({ currentUser, onClose, onSave, isMobile = true }) => {
+const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
   const [name, setName] = useState(currentUser?.name || '');
   const [bio, setBio] = useState(currentUser?.bio || '');
   const [about, setAbout] = useState(currentUser?.aboutMe || '');
@@ -162,9 +162,9 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = true }) => {
   };
 
   return (
-    <div className="h-full w-full flex flex-col overflow-y-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+    <div className={`flex flex-col overflow-y-auto scrollbar-hide bg-[#0f1419] ${isMobile ? 'min-h-screen w-full' : 'h-full w-full relative'}`} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-[#0f1419]/90 backdrop-blur-sm border-b border-gray-800">
+      <div className="sticky top-0 z-40 bg-[#0f1419] backdrop-blur-sm border-b border-gray-800">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4">
             <button

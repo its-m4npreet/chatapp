@@ -365,8 +365,12 @@ export const Home = () => {
   };
 
   const handleEditProfile = () => {
-    setShowEditProfile(true);
-    setShowProfile(false);
+    if (isMobile) {
+      navigate('/edit-profile');
+    } else {
+      setShowEditProfile(true);
+      setShowProfile(false);
+    }
   };
 
   const handleCloseEditProfile = () => {
@@ -375,7 +379,19 @@ export const Home = () => {
   };
 
   const handleProfileSaved = (updatedUser) => {
+    // Update current user state
     setCurrentUser(updatedUser);
+    
+    // Also update localStorage to ensure persistence
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+    
+    // Close edit profile view
+    setShowEditProfile(false);
+    
+    // If we were viewing the profile, refresh it
+    if (showProfile && viewingUserProfile?._id === updatedUser._id) {
+      setViewingUserProfile(updatedUser);
+    }
   };
 
   const handleViewUserProfile = (user) => {
@@ -473,7 +489,7 @@ export const Home = () => {
   return (
     <div className="w-screen h-screen overflow-hidden flex flex-col bg-black/80 relative">
       {/* Mobile Header */}
-      {isMobile && showSidebar && ( 
+      {isMobile && showSidebar && !showEditProfile && !showProfile && !showSettings && ( 
         <div className=" border-b border-gray-700 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 flex-1">
             {showMobileSearch ? (
@@ -601,8 +617,8 @@ export const Home = () => {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar hidden on mobile when a chat/group is open */}
-        {(!isMobile || showSidebar) && (
+        {/* Sidebar hidden on mobile when a chat/group is open OR when viewing profile/settings/edit */}
+        {(!isMobile || (showSidebar && !showEditProfile && !showProfile && !showSettings)) && (
           <Sidebar 
             onSelectUser={handleSelectUser} 
             selectedUser={selectedUser} 
