@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { IoClose, IoAdd, IoSearch } from 'react-icons/io5';
+import React, { useState, useEffect, useRef } from 'react';
+import { IoClose, IoAdd, IoSearch, IoCamera } from 'react-icons/io5';
 import { TiGroup } from 'react-icons/ti';
 import { FaCircleUser } from 'react-icons/fa6';
 import axios from '../lib/axios';
@@ -9,11 +9,15 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
   const [step, setStep] = useState(1); // 1: Group info, 2: Add members
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
+  const [groupAvatar, setGroupAvatar] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
   const [friends, setFriends] = useState([]);
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef(null);
 
   const fetchFriends = async () => {
     try {
@@ -25,6 +29,58 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
       console.error('Failed to fetch friends:', error);
       setLoading(false);
     }
+  };
+
+  // Compress and preview avatar
+  const compressImage = (file, maxWidth = 400, quality = 0.8) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let { width, height } = img;
+
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedBase64);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleAvatarSelect = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Image size should be less than 10MB');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        return;
+      }
+      
+      const compressed = await compressImage(file);
+      setAvatarPreview(compressed);
+      setGroupAvatar(compressed);
+    }
+  };
+
+  const handleAvatarClick = () => {
+    avatarInputRef.current?.click();
   };
 
   useEffect(() => {
@@ -61,10 +117,27 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
 
     setCreating(true);
     try {
+      let avatarUrl = null;
+
+      // Upload avatar if selected
+      if (groupAvatar) {
+        setUploadingAvatar(true);
+        try {
+          const uploadRes = await axios.post('/messages/upload', {
+            image: groupAvatar,
+          });
+          avatarUrl = uploadRes.data.url;
+        } catch (error) {
+          console.error('Failed to upload avatar:', error);
+        }
+        setUploadingAvatar(false);
+      }
+
       // Create the group
       const createRes = await axios.post('/groups/create', {
         name: groupName.trim(),
         description: groupDescription.trim(),
+        avatar: avatarUrl,
       });
 
       const newGroup = createRes.data.group;
@@ -89,6 +162,8 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
     setStep(1);
     setGroupName('');
     setGroupDescription('');
+    setGroupAvatar(null);
+    setAvatarPreview(null);
     setSelectedMembers([]);
     setSearchQuery('');
     onClose();
@@ -103,7 +178,7 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-md bg-zinc-800 rounded-xl shadow-2xl border border-gray-700 overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
@@ -122,16 +197,41 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
         <div className="p-4 overflow-y-auto flex-1">
           {step === 1 ? (
             <div className="space-y-4">
-              {/* Group Avatar Placeholder */}
+              {/* Group Avatar Selector */}
               <div className="flex justify-center">
-                <div className="w-20 h-20 rounded-full bg-blue-600 flex items-center justify-center">
-                  <TiGroup size={40} className="text-white" />
+                <div className="relative group flex justify-center items-center flex-col">
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarSelect}
+                    className="hidden"
+                  />
+                  <div
+                    onClick={handleAvatarClick}
+                    className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center cursor-pointer overflow-hidden hover:opacity-80 transition relative"
+                  >
+                    {avatarPreview ? (
+                      <img
+                        src={avatarPreview}
+                        alt="Group avatar"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <TiGroup size={48} className="text-white" />
+                    )}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                      <IoCamera size={24} className="text-white" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400 text-center mt-2">Click to {avatarPreview ? 'change' : 'add'} avatar</p>
                 </div>
               </div>
 
               {/* Group Name */}
               <div>
                 <label className="block text-gray-400 text-sm mb-1">Group Name *</label>
+
                 <input
                   type="text"
                   value={groupName}
@@ -162,6 +262,10 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
               >
                 Next: Add Members
               </button>
+              
+              {uploadingAvatar && (
+                <p className="text-sm text-blue-400 text-center">Uploading avatar...</p>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
