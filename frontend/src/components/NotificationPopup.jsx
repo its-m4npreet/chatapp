@@ -24,7 +24,9 @@ const NotificationPopup = ({ isOpen, onClose, socket, onNotificationAction }) =>
 
   useEffect(() => {
     if (isOpen) {
-      fetchNotifications();
+      (async () => {
+        await fetchNotifications();
+      })();
     }
   }, [isOpen]);
 
@@ -126,7 +128,7 @@ const NotificationPopup = ({ isOpen, onClose, socket, onNotificationAction }) =>
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-end pt-16 pr-4">
+    <div className="fixed inset-0 z-999 flex items-start justify-end pt-16 sm:pr-4 p-2">
       {/* Backdrop */}
       <div className="absolute inset-0" onClick={onClose} />
       
@@ -244,7 +246,7 @@ const NotificationPopup = ({ isOpen, onClose, socket, onNotificationAction }) =>
                     {/* Delete button */}
                     <button
                       onClick={() => handleDeleteNotification(notification._id)}
-                      className="flex-shrink-0 p-1 hover:bg-zinc-600 rounded text-gray-500 hover:text-red-400 transition"
+                      className="shrink-0 p-1 hover:bg-zinc-600 rounded text-gray-500 hover:text-red-400 transition"
                     >
                       <IoTrash size={16} />
                     </button>

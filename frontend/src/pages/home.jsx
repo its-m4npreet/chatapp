@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { IoEllipsisVertical, IoSearch } from 'react-icons/io5';
+import { IoEllipsisVertical, IoSearch, IoNotifications } from 'react-icons/io5';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import ChatView from '../components/ChatView';
@@ -502,12 +502,29 @@ export const Home = () => {
           </div>
           {!showMobileSearch && (
             <div className="flex items-center gap-3">
+             
+
+              {/* Search Button */}
               <button
                 onClick={() => setShowMobileSearch(true)}
                 className="p-2  rounded-lg text-gray-400 hover:text-white transition"
               >
                 <IoSearch size={20} />
               </button>
+             {/* Notification Button */}
+            <button
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="p-2 rounded-lg text-gray-400 hover:text-white transition relative"
+                  aria-label="Notifications"
+                >
+                  <IoNotifications size={20} />
+                  {unreadNotifications > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-semibold">
+                      {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                    </span>
+                  )}
+                </button>
+
               <div className="relative">
                 <button
                   onClick={() => setShowMobileMenu(!showMobileMenu)}
