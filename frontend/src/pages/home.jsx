@@ -117,7 +117,7 @@ export const Home = () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
       socket.off('connect_error', handleConnectError);
-      socket.disconnect();
+      // Don't disconnect socket - it's a singleton used across pages
     };
   }, []);
 

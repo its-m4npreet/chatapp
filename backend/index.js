@@ -114,10 +114,12 @@ io.on('connection', (socket) => {
   
   // Join room by userId for bi-directional messaging
   socket.on('join', (userId) => {
+    console.log('Backend: Join event received:', { userId, socketId: socket.id });
     socket.join(userId);
     socket.userId = userId;
     onlineUsers.set(userId, socket.id);
     console.log('Backend: User joined room:', { userId, socketId: socket.id });
+    console.log('Backend: Online users now:', Array.from(onlineUsers.keys()));
     // Broadcast updated online users list to all connected clients
     io.emit('onlineUsers', Array.from(onlineUsers.keys()));
   });
@@ -144,7 +146,9 @@ io.on('connection', (socket) => {
   socket.on('sendMessage', async (msg) => {
     try {
       const { sender, receiver, content, image, audio, tempId } = msg;
-      console.log('Backend: Received sendMessage:', { tempId, sender, receiver, hasContent: !!content });
+      console.log('Backend: Received sendMessage:', { tempId, sender, receiver, hasContent: !!content, senderSocketId: socket.id });
+      console.log('Backend: Online users:', Array.from(onlineUsers.keys()));
+      console.log('Backend: Is receiver online?', onlineUsers.has(receiver));
       
       if (!receiver || (!content?.trim() && !image && !audio)) {
         console.warn('Backend: Invalid message - missing receiver or content');
@@ -180,11 +184,15 @@ io.on('connection', (socket) => {
         tempId: newMessage.tempId,
         sender,
         receiver,
-        status: newMessage.status
+        status: newMessage.status,
+        receiverSocketId: onlineUsers.get(receiver)
       });
 
       // Emit to both sender and receiver rooms
+      console.log(`Backend: io.to('${receiver}').emit('newMessage', ...)`);
       io.to(receiver).emit('newMessage', newMessage);
+      
+      console.log(`Backend: io.to('${sender}').emit('newMessage', ...)`);
       io.to(sender).emit('newMessage', newMessage);
 
       // Update status to delivered if receiver is online

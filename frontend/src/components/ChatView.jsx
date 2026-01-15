@@ -99,11 +99,33 @@ const ToolbarButton = ({ onClick, title, children, active }) => (
 );
 
 const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUserTyping, isMobile , onBack }) => {
-  // Join current user's room for real-time updates
+  // Join current user's room for real-time updates and handle reconnection
   useEffect(() => {
-    if (socket && currentUser && currentUser._id) {
-      socket.emit("join", currentUser._id);
+    if (!socket || !currentUser || !currentUser._id) {
+      console.log('ChatView: Cannot join - missing socket or currentUser', { hasSocket: !!socket, hasUser: !!currentUser });
+      return;
     }
+
+    const handleConnect = () => {
+      console.log('ChatView: Socket connected, joining room:', currentUser._id);
+      console.log('ChatView: Socket connected status:', socket.connected);
+      socket.emit("join", currentUser._id);
+    };
+
+    console.log('ChatView: Setting up join effect', { currentUserId: currentUser._id, socketConnected: socket.connected, socketId: socket.id });
+
+    // Join immediately if already connected
+    if (socket.connected) {
+      console.log('ChatView: Socket already connected, joining room immediately');
+      handleConnect();
+    }
+
+    // Re-join on reconnect
+    socket.on("connect", handleConnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+    };
   }, [socket, currentUser]);
 
   // Refs to always have latest user/currentUser in socket listener
@@ -150,22 +172,36 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     };
   }, []);
 
-  // Listen for incoming messages
+
+  // Listen for incoming messages - FIXED to use refs
   useEffect(() => {
     if (!socket) {
       console.warn('ChatView: Socket not available');
       return;
     }
     
-    console.log('ChatView: Setting up socket listeners for user:', user?._id);
+    console.log('ChatView: Setting up socket listeners', { socketId: socket.id, connected: socket.connected });
     
     const handleNewMessage = (msg) => {
+      // Use refs to get current values
       const u = userRef.current;
       const cu = currentUserRef.current;
-      const senderId =
-        typeof msg.sender === "object" ? msg.sender._id : msg.sender;
-      const receiverId =
-        typeof msg.receiver === "object" ? msg.receiver._id : msg.receiver;
+      
+      console.log('ChatView: handleNewMessage called', { 
+        msgId: msg._id, 
+        msgSender: typeof msg.sender === 'object' ? msg.sender._id : msg.sender,
+        msgReceiver: typeof msg.receiver === 'object' ? msg.receiver._id : msg.receiver,
+        currentChatUser: u?._id,
+        currentUser: cu?._id
+      });
+
+      if (!u || !cu) {
+        console.log('ChatView: User or currentUser not available yet');
+        return;
+      }
+
+      const senderId = typeof msg.sender === "object" ? msg.sender._id : msg.sender;
+      const receiverId = typeof msg.receiver === "object" ? msg.receiver._id : msg.receiver;
       
       console.log('ChatView: Received newMessage event:', {
         messageId: msg._id,
@@ -173,74 +209,74 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
         senderId,
         receiverId,
         status: msg.status,
-        currentChat: u?._id,
-        currentUser: cu?._id
+        currentChat: u._id,
+        currentUser: cu._id,
+        isRelevant: (senderId === u._id && receiverId === cu._id) || (senderId === cu._id && receiverId === u._id)
       });
       
+      // Check if this message is relevant to the current chat
+      const isRelevant = (senderId === u._id && receiverId === cu._id) || (senderId === cu._id && receiverId === u._id);
+      
+      if (!isRelevant) {
+        console.log('ChatView: Message not relevant to current chat, ignoring');
+        return;
+      }
+
       setMessages((prev) => {
-        if (
-          u &&
-          cu &&
-          ((senderId === u._id && receiverId === cu._id) ||
-            (senderId === cu._id && receiverId === u._id))
-        ) {
-          // Try to reconcile optimistic message using tempId
-          const optimisticIdx = prev.findIndex(
-            (m) =>
-              m.tempId &&
-              m.tempId === msg.tempId &&
-              getId(m.sender) === senderId &&
-              getId(m.receiver) === receiverId
-          );
-          if (optimisticIdx !== -1) {
-            console.log('Reconciling message with tempId:', msg.tempId);
-            const updated = [...prev];
-            // Replace the optimistic message with the server message
-            updated[optimisticIdx] = { 
-              ...msg, 
-              tempId: undefined,
-              status: msg.status || 'sent' // Ensure status is set
-            };
-            return updated;
-          }
-
-          // Fallback: reconcile by matching sender/receiver/content when tempId missing
-          const fuzzyIdx = prev.findIndex((m) => {
-            const prevImage = m.image ? m.image.url || m.image : "";
-            const incomingImage = msg.image ? msg.image.url || msg.image : "";
-            return (
-              m.tempId &&
-              m.status === 'sending' &&
-              getId(m.sender) === senderId &&
-              getId(m.receiver) === receiverId &&
-              (m.content || "") === (msg.content || "") &&
-              prevImage === incomingImage
-            );
-          });
-          if (fuzzyIdx !== -1) {
-            console.log('Fuzzy reconciling message without tempId match');
-            const updated = [...prev];
-            updated[fuzzyIdx] = { 
-              ...msg, 
-              tempId: undefined,
-              status: msg.status || 'sent'
-            };
-            return updated;
-          }
-
-          // Check if message already exists to prevent duplicates
-          const exists = prev.some(
-            (m) => m._id && msg._id && m._id === msg._id
-          );
-          if (exists) {
-            console.log('Message already exists, skipping:', msg._id);
-            return prev;
-          }
-          
-          console.log('Adding new message to chat:', msg._id);
-          return [...prev, msg];
+        // Try to reconcile optimistic message using tempId
+        const optimisticIdx = prev.findIndex(
+          (m) =>
+            m.tempId &&
+            m.tempId === msg.tempId &&
+            getId(m.sender) === senderId &&
+            getId(m.receiver) === receiverId
+        );
+        
+        if (optimisticIdx !== -1) {
+          console.log('ChatView: Reconciling message with tempId:', msg.tempId);
+          const updated = [...prev];
+          updated[optimisticIdx] = { 
+            ...msg, 
+            tempId: undefined,
+            status: msg.status || 'sent'
+          };
+          return updated;
         }
-        return prev;
+
+        // Fallback: reconcile by matching sender/receiver/content when tempId missing
+        const fuzzyIdx = prev.findIndex((m) => {
+          const prevImage = m.image ? m.image.url || m.image : "";
+          const incomingImage = msg.image ? msg.image.url || msg.image : "";
+          return (
+            m.tempId &&
+            m.status === 'sending' &&
+            getId(m.sender) === senderId &&
+            getId(m.receiver) === receiverId &&
+            (m.content || "") === (msg.content || "") &&
+            prevImage === incomingImage
+          );
+        });
+        
+        if (fuzzyIdx !== -1) {
+          console.log('ChatView: Fuzzy reconciling message without tempId match');
+          const updated = [...prev];
+          updated[fuzzyIdx] = { 
+            ...msg, 
+            tempId: undefined,
+            status: msg.status || 'sent'
+          };
+          return updated;
+        }
+
+        // Check if message already exists to prevent duplicates
+        const exists = prev.some((m) => m._id && msg._id && m._id === msg._id);
+        if (exists) {
+          console.log('ChatView: Message already exists, skipping:', msg._id);
+          return prev;
+        }
+        
+        console.log('ChatView: Adding new message to chat:', msg._id);
+        return [...prev, msg];
       });
 
       // Mark message as read if it's from the other user
@@ -250,6 +286,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     };
 
     const handleMessagesMarkedRead = ({ messageIds }) => {
+      console.log('ChatView: Received messagesMarkedRead', { messageIds });
       setMessages((prev) =>
         prev.map((m) =>
           messageIds.includes(m._id) ? { ...m, status: "read" } : m
@@ -257,8 +294,8 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       );
     };
 
-    // Listen for reaction updates
     const handleReactionUpdated = ({ messageId, reactions }) => {
+      console.log('ChatView: Received messageReactionUpdated', { messageId });
       setMessages((prev) =>
         prev.map((m) =>
           m._id === messageId ? { ...m, reactions } : m
@@ -266,7 +303,6 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       );
     };
 
-    // Listen for message status updates (sent -> delivered -> read)
     const handleMessageStatusUpdate = ({ messageId, status }) => {
       console.log('ChatView: Received messageStatusUpdate:', { messageId, status });
       setMessages((prev) =>
@@ -276,11 +312,19 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       );
     };
 
+    const handleConnect = () => {
+      console.log('ChatView: Socket reconnected, listeners re-registered');
+      if (currentUserRef.current && currentUserRef.current._id) {
+        socket.emit("join", currentUserRef.current._id);
+      }
+    };
+
     console.log('ChatView: Registering socket event listeners');
     socket.on("newMessage", handleNewMessage);
     socket.on("messagesMarkedRead", handleMessagesMarkedRead);
     socket.on("messageReactionUpdated", handleReactionUpdated);
     socket.on("messageStatusUpdate", handleMessageStatusUpdate);
+    socket.on("connect", handleConnect);
 
     return () => {
       console.log('ChatView: Cleaning up socket listeners');
@@ -288,10 +332,11 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       socket.off("messagesMarkedRead", handleMessagesMarkedRead);
       socket.off("messageReactionUpdated", handleReactionUpdated);
       socket.off("messageStatusUpdate", handleMessageStatusUpdate);
+      socket.off("connect", handleConnect);
     };
-  }, [socket, user, currentUser]);
+  }, [socket]); // Only depend on socket, not user/currentUser
 
-  // Voice recording functions
+  // Cleanup on unmount
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -387,7 +432,23 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     };
 
     fetchMessages();
-  }, [user]);
+
+    // Listen for socket reconnection to refresh messages
+    const handleReconnect = () => {
+      console.log('ChatView: Socket reconnected, refreshing messages');
+      fetchMessages();
+    };
+
+    if (socket) {
+      socket.on('connect', handleReconnect);
+    }
+
+    return () => {
+      if (socket) {
+        socket.off('connect', handleReconnect);
+      }
+    };
+  }, [user, socket]);
 
   // Auto-scroll when messages change
   useEffect(() => {

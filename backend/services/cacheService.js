@@ -11,7 +11,7 @@ class CacheService {
    * Check if Redis connection is ready
    */
   isRedisReady() {
-    return redisClient.isReady && redisClient.isReady();
+    return typeof redisClient.isReady === 'function' && redisClient.isReady();
   }
 
   /**

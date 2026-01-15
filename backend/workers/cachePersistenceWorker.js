@@ -131,4 +131,4 @@ class CachePersistenceWorker {
   }
 }
 
-module.exports = new CachePersistenceWorker();
+module.exports = CachePersistenceWorker;
