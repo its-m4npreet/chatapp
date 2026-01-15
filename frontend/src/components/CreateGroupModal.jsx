@@ -29,7 +29,9 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
 
   useEffect(() => {
     if (isOpen && step === 2) {
-      fetchFriends();
+      (async () => {
+        await fetchFriends();
+      })();
     }
   }, [isOpen, step]);
 
@@ -101,8 +103,8 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="w-full max-w-md bg-zinc-800 rounded-xl shadow-2xl border border-gray-700 overflow-hidden">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-md bg-zinc-800 rounded-xl shadow-2xl border border-gray-700 overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
           <h3 className="text-white font-semibold text-lg">
@@ -117,7 +119,7 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
         </div>
 
         {/* Content */}
-        <div className="p-4">
+        <div className="p-4 overflow-y-auto flex-1">
           {step === 1 ? (
             <div className="space-y-4">
               {/* Group Avatar Placeholder */}
@@ -192,7 +194,7 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
               )}
 
               {/* Friends List */}
-              <div className="max-h-60 overflow-y-auto space-y-2">
+              <div className="max-h-48 sm:max-h-60 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
                 {loading ? (
                   <ContentLoading text="Loading friends..." />
                 ) : filteredFriends.length === 0 ? (
