@@ -1,5 +1,5 @@
 const express = require('express');
-const { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend } = require('../controllers/auth');
+const { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend, googleAuth } = require('../controllers/auth');
 const authMiddleware = require('../middleware/authMiddleware');
 
 const userRouter = express.Router();
@@ -7,6 +7,7 @@ const userRouter = express.Router();
 
 userRouter.post('/signup', signUp);
 userRouter.post('/signin', signIn);
+userRouter.post('/google-auth', googleAuth);
 userRouter.post('/logout', logout);
 userRouter.put('/updateProfile',authMiddleware, updateProfile);
 

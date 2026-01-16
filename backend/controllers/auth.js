@@ -1,9 +1,12 @@
 const User= require('../model/user');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
 require('dotenv').config();
 const cookieParser = require('cookie-parser');
 const cloudinary = require('../config/cloudinary');
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const signUp = async (req, res) => {
     const { name, email, password } = req.body;
@@ -259,4 +262,70 @@ const removeFriend = async (req, res) => {
     }
 };
 
-module.exports = { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend };
+const googleAuth = async (req, res) => {
+    const { credential } = req.body;
+    
+    if (!credential) {
+        return res.status(400).json({ message: "Google credential is required" });
+    }
+
+    try {
+        // Verify the Google token
+        const ticket = await client.verifyIdToken({
+            idToken: credential,
+            audience: process.env.GOOGLE_CLIENT_ID
+        });
+        
+        const payload = ticket.getPayload();
+        const { sub: googleId, email, name, picture } = payload;
+
+        // Check if user already exists with this email
+        let user = await User.findOne({ email });
+
+        if (user) {
+            // User exists, update googleId if not already set
+            if (!user.googleId) {
+                user.googleId = googleId;
+                await user.save();
+            }
+        } else {
+            // Create new user
+            user = new User({
+                name,
+                email,
+                googleId,
+                profilePicture: picture || undefined,
+                // Password is not set for Google OAuth users
+            });
+            await user.save();
+        }
+
+        // Generate JWT token
+        const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+        // Set HTTP-only cookie
+        res.cookie('jwt', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        // Send response
+        return res.status(200).json({
+            message: "Google authentication successful",
+            token: token,
+            user: { 
+                id: user._id, 
+                name: user.name, 
+                email: user.email, 
+                profilePicture: user.profilePicture 
+            }
+        });
+    } catch (error) {
+        console.error("Google Auth error:", error);
+        return res.status(401).json({ message: "Invalid Google token or authentication failed" });
+    }
+};
+
+module.exports = { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend, googleAuth };

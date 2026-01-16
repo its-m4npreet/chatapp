@@ -3,28 +3,42 @@ import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "../lib/axios";
 import { ButtonLoading } from './Loading';
+import { MessageCircleCode } from "lucide-react";
+import GoogleAuthButton from "./GoogleAuthButton";
 
 export default function SignUp() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [activeBox, setActiveBox] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const [isMobile , setIsMobile] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setActiveBox((prev) => (prev + 1) % 9);
     }, 300);
     return () => clearInterval(interval);
   }, []);
 
+   useEffect(() => {
+      const handleResize = () => {
+        setIsMobile(window.innerWidth <= 768);
+      };
+  
+      window.addEventListener('resize', handleResize);
+      handleResize(); // Initial check
+  
+      return () => {
+        window.removeEventListener('resize', handleResize);
+      };
+    }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (!name || !email || !password || password.length < 8) return;
+    if (!name || !email || !password || password.length < 8) { setError("Please fill all fields correctly."); return; };
     setLoading(true);
     try {
       await axios.post("/signup", {
@@ -39,172 +53,160 @@ export default function SignUp() {
       setError(err.response?.data?.message || "Sign up failed. Please try again.");
     }
   };
+  
+   const bgStyles = isMobile ? {
+          backgroundImage: `
+        linear-gradient(to right, #d1d5db 1px, transparent 1px),
+        linear-gradient(to bottom, #d1d5db 1px, transparent 1px)
+      `,
+          backgroundSize: "40px 40px",
+          WebkitMaskImage:
+            "radial-gradient(ellipse 100% 50% at 50% 10%, #000 30%, transparent 70%)",
+          maskImage:
+            "radial-gradient(ellipse 100% 50% at 50% 10%, #000 30%, transparent 70%)",
+        } : {backgroundImage: `
+        linear-gradient(to right, #d1d5db 1px, transparent 1px),
+        linear-gradient(to bottom, #d1d5db 1px, transparent 1px)
+      `,
+          backgroundSize: "40px 40px",
+          WebkitMaskImage:
+            "radial-gradient(ellipse 50% 50% at 50% 10%, #000 30%, transparent 70%)",
+          maskImage:
+            "radial-gradient(ellipse 50% 50% at 50% 10%, #000 30%, transparent 70%)",};
 
   return (
-    <div className="min-h-screen grid grid-cols-1 place-items-center lg:grid-cols-2 lg:place-items-stretch overflow-hidden">
-      {/* Left Side - Form */}
-      <div className="flex items-center justify-center px-4 sm:px-6 lg:px-16 lg:ml-35 py-8 sm:py-12">
-        <div className="w-full">
-          <div className="mb-6">
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-3 tracking-tight">
-              Create Account
-            </h2>
+    <>
+    <div className="min-h-screen bg-[#0b0e12] flex items-center justify-center p-6 relative scrollbar-hide overflow-hidden">
+      <div
+        className="absolute top-0 inset-0 z-0 opacity-10"
+        style={{
+          ...bgStyles
+        }}
+      />
+      <div className="w-full max-w-md z-10">
+        {/* Logo */}
+        <div className="flex justify-center mb-8">
+          <div className="flex justify-center items-center w-10 h-10 bg-white rounded-lg">
+            <MessageCircleCode color="#4f38f7" strokeWidth={2} />
+          </div>
+        </div>
+
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h2 className="text-3xl text-white font-semibold  mb-3">
+            Join the conversation
+          </h2>
+          <p className="text-gray-400">
+            Welcome! Create an account to start chatting.
+          </p>
+        </div>
+
+        {/* Form */}
+        <div className="space-y-5">
+          <div>
+            <label
+              htmlFor="name"
+              className="block text-sm font-medium  mb-1.5 text-start"
+            >
+              Full Name
+            </label>
+            <input
+              id="name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter your full name"
+              required
+              className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium  mb-1.5 text-start"
+            >
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+              required
+              className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent"
+            />
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
-            {/* Name Field */}
-            <div>
-              <label className="block text-sm font-medium text-slate-200 mb-2">
-                Name
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="John Doe"
-                required
-                className="w-full px-3 py-3 sm:px-4 sm:py-3.5 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-white transition-all duration-300"
-              />
-              <p className="mt-2 text-xs text-slate-400">
-                Your display name
-              </p>
-            </div>
-
-            {/* Email Field */}
-            <div>
-              <label className="block text-sm font-medium text-slate-200 mb-2">
-                Email Address
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="john@example.com"
-                required
-                className="w-full px-3 py-3 sm:px-4 sm:py-3.5 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-white transition-all duration-300"
-              />
-            </div>
-
-            {/* Password Field */}
-            <div>
-              <label className="block text-sm font-medium text-slate-200 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••"
-                  required
-                  minLength={8}
-                  className="w-full px-3 py-3 sm:px-4 sm:py-3.5 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-white transition-all duration-300 pr-12"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? (
-                    <FaRegEyeSlash size={20} />
-                  ) : (
-                    <FaRegEye size={20} />
-                  )}
-                </button>
-              </div>
-              <p className="mt-2 text-xs text-slate-400">
-                At least 8 characters long
-              </p>
-            </div>
-
+          <div className="relative">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium  mb-1.5 text-start"
+            >
+              Password
+            </label>
+            <input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              minLength={8}
+              className=" w-full px-3.5 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent"
+            />
             <button
-              type="submit"
-              className={`w-full border border-white text-white font-semibold py-3 sm:py-4 rounded-xl cursor-pointer transition-all duration-300 flex items-center justify-center gap-2 ${
-                loading ? "animate-pulse" : "focus:border-white"
-              }`}
-              disabled={loading}
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 bottom-0.5 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+              aria-label={showPassword ? "Hide password" : "Show password"}
             >
-              {loading && <ButtonLoading color="#ffffff" />}
-              {loading ? "Creating..." : "Sign Up"}
+              {showPassword ? (
+                <FaRegEyeSlash size={22} />
+              ) : (
+                <FaRegEye size={22} />
+              )}
             </button>
-            {error && (
-              <div className="text-red-400 text-sm mt-2 wrap-break-words">{error}</div>
-            )}
-          </form>
-
-          <div className="mt-6 sm:mt-8 text-center">
-            <span className="text-slate-400 text-sm">
-              Already have an account?{" "}
-            </span>
-            <Link
-              to="/signin"
-              className=" font-medium underline-offset-4 hover:underline transition-all"
-            >
-              Sign in
-            </Link>
           </div>
-        </div>
-      </div>
 
-      {/* Right Side - Animated 3D Cube Grid (hidden on mobile) */}
-      <div className="hidden lg:flex items-center justify-center relative overflow-hidden h-full min-h-100">
-        <div className="relative flex">
-          <div className="grid grid-cols-3 gap-6 items-center">
-            <div className="rotate-45 animate-spin-slow">
-              {[...Array(9)].map((_, i) => (
-                <div
-                  key={i}
-                  className={`w-12 h-12 sm:w-16 sm:h-16 rounded-xl border-2 transition-all duration-700 transform-gpu ${
-                    i === activeBox
-                      ? "border-purple-400 shadow-2xl shadow-purple-500/50 scale-110 translate-z-10 bg-purple-500/10"
-                      : "border-slate-600 bg-slate-800/20"
-                  }`}
-                  style={{
-                    transform:
-                      i === activeBox
-                        ? "translateZ(40px) scale(1.15)"
-                        : "translateZ(0)",
-                  }}
-                />
-              ))}
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex justify-center items-center w-full bg-indigo-600 text-white py-2.5 px-4 rounded-lg font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2  transition-colors"
+          >
+            {" "}
+            {loading && <ButtonLoading color="#ffffff" />}
+            {loading ? "Creating..." : "Sign Up"}
+          </button>
+          {error && <div className="text-red-400 text-sm mt-2">{error}</div>}
+
+          {/* Divider */}
+          <div>
+            <div className="flex items-center my-6">
+              <div className="grow border-t border-gray-600"></div>
+              <span className="mx-4 text-gray-400">or</span>
+              <div className="grow border-t border-gray-600"></div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Global Styles */}
-      <style>{`
-        @keyframes spin {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
-        }
-        .animate-spin-slow {
-          animation: spin 30s linear infinite;
-        }
-        @keyframes float {
-          0%,
-          100% {
-            transform: translateY(0) translateX(0);
-          }
-          50% {
-            transform: translateY(-30px) translateX(20px);
-          }
-        }
-        .animate-float {
-          animation: float 12s ease-in-out infinite;
-        }
-        .animate-float-delayed {
-          animation: float 16s ease-in-out infinite reverse;
-        }
-        .perspective-1000 {
-          perspective: 1000px;
-        }
-      `}</style>
+          <GoogleAuthButton 
+            onSuccess={() => navigate("/")}
+            onError={(err) => setError(err)}
+          />
+        </div>
+
+        {/* Footer */}
+        <p className="text-center text-sm text-gray-300 mt-8">
+          Already have an account?{" "}
+          <Link
+            to="/signin"
+            className="font-medium text-indigo-600 hover:text-indigo-500"
+          >
+            Sign in
+          </Link>
+        </p>
+      </div>
     </div>
+    </>
   );
 }
