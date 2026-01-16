@@ -719,7 +719,7 @@ const GroupChat = ({
       <style>{reactionStyles}</style>
       <div className="flex-1 flex flex-col h-full ">
       {/* Mobile header with back */}
-      {isMobile && (
+      {/* {isMobile && (
         <div className="flex items-center gap-3 px-3 py-2 border-b border-gray-700">
           <button
             onClick={onBack}
@@ -727,19 +727,37 @@ const GroupChat = ({
             className="text-gray-300 hover:text-white"
             title="Back"
           >
-            {/* Simple back chevron */}
+             Simple back chevron 
             <span className="inline-block">&larr;</span>
           </button>
           <div className="flex items-center gap-2">
-            {/* Show group name if available */}
+             Show group name if available 
+             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
+            {group.avatar ? (
+              <img
+                src={group.avatar}
+                alt={group.name}
+                className="w-full h-full rounded-full object-cover"
+              />
+            ) : (
+              <TiGroup size={24} className="text-white" />
+            )}
+          </div>
             <span className="text-white font-medium">{group?.name || 'Group'}</span>
           </div>
         </div>
-      )}
+      )} */}
       {/* Desktop header */}
-      {!isMobile && (
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 ">
         <div className="flex items-center gap-3">
+        <button
+            onClick={onBack}
+            aria-label="Back to chat list"
+            className="text-gray-300 hover:text-white"
+            title="Back"
+          >
+            <span className="inline-block">&larr;</span>
+          </button>
           <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
             {group.avatar ? (
               <img
@@ -792,7 +810,6 @@ const GroupChat = ({
           )}
         </div>
       </div>
-      )}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Messages */}
@@ -850,7 +867,7 @@ const GroupChat = ({
                       >
                         {!isOwn && (
                           <div className="flex flex-col items-center shrink-0">
-                            <div className="w-8 h-8 rounded-full overflow-hidden mt-1">
+                            <div className="w-9 h-9 rounded-full overflow-hidden mt-1">
                               {msg.sender?.profilePicture ? (
                                 <img
                                   src={msg.sender.profilePicture}
@@ -858,14 +875,14 @@ const GroupChat = ({
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
-                                <div className="w-full h-full bg-gray-600 flex items-center justify-center">
+                                <div className="w-full h-full bg-gray-600 flex items-center justify-center m-1">
                                   <FaCircleUser size={16} />
                                 </div>
                               )}
                             </div>
-                            <p className="text-xs text-gray-400 mt-1 text-center">
+                            {/* <p className="text-xs text-gray-400 mt-1 text-center">
                               {msg.sender?.name}
-                            </p>
+                            </p> */}
                           </div>
                         )}
                         <div
@@ -1162,7 +1179,8 @@ const GroupChat = ({
                 </div>
               )}
               {/* Markdown Toolbar Toggle */}
-              <button
+              {!isMobile && (
+                <button
                 type="button"
                 className={`p-2 transition-colors cursor-pointer ${
                   showToolbar
@@ -1174,6 +1192,8 @@ const GroupChat = ({
               >
                 <span className="font-bold text-sm">Aa</span>
               </button>
+              )
+              }
 
               {/* Markdown Toolbar */}
               {showToolbar && (
