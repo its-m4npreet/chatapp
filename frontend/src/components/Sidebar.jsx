@@ -186,7 +186,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
   return (
     <>
       {/* Left icon rail: hidden on mobile, shown from md+ */}
-      <div className="border-r w-16 border-gray-700 md:flex flex-col items-center py-6 h-full relative hidden">
+      <div className={` ${!isMobile ? 'border-r border-gray-700' : ''} w-16 md:flex flex-col items-center py-6 h-full relative hidden`}>
         {/* Top icons */}
         <div className="flex flex-col gap-6 relative">
           <div className="relative group" data-section="chats">
