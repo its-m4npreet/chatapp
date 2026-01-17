@@ -45,7 +45,6 @@ export default function GoogleAuthButton({ onSuccess, onError }) {
     <GoogleLogin
       onSuccess={handleGoogleSuccess}
       onError={handleGoogleError}
-      width="100%"
       theme="dark"
       text="signin_with"
     />

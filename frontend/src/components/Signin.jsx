@@ -134,7 +134,7 @@ export default function SignIn() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter your email"
               required
-              className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent"
+              className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#4f38f7] focus:border-transparent"
             />
           </div>
 
@@ -153,7 +153,7 @@ export default function SignIn() {
               placeholder="••••••••"
               required
               minLength={8}
-              className=" w-full px-3.5 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent"
+              className=" w-full px-3.5 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#4f38f7] focus:border-transparent"
             />
             <button
               type="button"
@@ -176,7 +176,7 @@ export default function SignIn() {
                 type="checkbox"
                 checked={remember}
                 onChange={(e) => setRemember(e.target.checked)}
-                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-600"
+                className="w-4 h-4 text-[#4f38f7] border-gray-300 rounded focus:ring-[#4f38f7] transition-colors"
               />
               <label htmlFor="remember" className="ml-2 text-sm text-gray-300">
                 Remember for 30 days
@@ -184,7 +184,7 @@ export default function SignIn() {
             </div>
             <Link
               href="#"
-              className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+              className="text-sm font-medium text-[#4f38f7] hover:text-[#6c50f9] transition-colors  "
             >
               Forgot password
             </Link>
@@ -192,7 +192,7 @@ export default function SignIn() {
 
           <button
             onClick={handleSubmit}
-            className="flex justify-center items-center w-full bg-indigo-600 text-white py-2.5 px-4 rounded-lg font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2  transition-colors"
+            className="flex justify-center items-center w-full bg-[#4f38f7] text-white py-2.5 px-4 rounded-lg font-medium hover:bg-[#6c50f9] focus:outline-none focus:ring-2 focus:ring-offset-2  transition-colors"
           >
             {" "}
             {loading && <ButtonLoading color="#ffffff" />}
@@ -220,7 +220,7 @@ export default function SignIn() {
           Don't have an account?{" "}
           <Link
             to="/signup"
-            className="font-medium text-indigo-600 hover:text-indigo-500"
+            className="font-medium text-[#4f38f7] hover:text-[#6c50f9] transition-colors"
           >
             Sign up
           </Link>
