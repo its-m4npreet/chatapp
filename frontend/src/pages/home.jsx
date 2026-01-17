@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { IoEllipsisVertical, IoSearch, IoNotifications } from 'react-icons/io5';
+import { IoEllipsisVertical, IoSearch, IoNotifications, IoChatbubbles, IoPeople, IoPersonAdd, IoSettings } from 'react-icons/io5';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import ChatView from '../components/ChatView';
@@ -8,7 +8,7 @@ import EditProfile from '../components/EditProfile';
 import Settings from '../components/Settings';
 import AddUser from '../components/addUser';
 import GroupChat from '../components/GroupChat';
-import NotificationPopup from '../components/NotificationPopup';
+import NotificationPage from '../components/notification';
 import CreateGroupModal from '../components/CreateGroupModal';
 import InviteToGroupModal from '../components/InviteToGroupModal';
 import socket from '../lib/socket';
@@ -37,11 +37,12 @@ export const Home = () => {
   const [refreshGroups, setRefreshGroups] = useState(0);
   
   // Notification states
-  const [showNotifications, setShowNotifications] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [showNotificationsPage, setShowNotificationsPage] = useState(false);
 
   // Sidebar tab state
   const [sidebarActiveTab, setSidebarActiveTab] = useState('chats');
+  const [prevActiveTab, setPrevActiveTab] = useState('chats');
 
   // New: responsive + mobile sidebar visibility
   const [isMobile, setIsMobile] = useState(false);
@@ -402,7 +403,15 @@ export const Home = () => {
 
   const handleSettingsClick = () => {
     if (isMobile) {
-      navigate('/settings');
+      // On mobile, show settings in the main area instead of navigating
+      setShowSettings(true);
+      setShowProfile(false);
+      setShowAddUser(false);
+      setSelectedUser(null);
+      setSelectedGroup(null);
+      setShowNotificationsPage(false);
+      setSidebarActiveTab('settings');
+      setShowSidebar(false);
     } else {
       // Desktop: show in chat area
       setShowSettings(true);
@@ -414,16 +423,18 @@ export const Home = () => {
   };
 
   const handleCloseSettings = () => {
+    setShowSettings(false);
+    setSidebarActiveTab('chats');
     if (isMobile) {
-      navigate(-1);
-    } else {
-      setShowSettings(false);
+      setShowSidebar(true);
     }
   };
 
   const handleTabChange = (tab) => {
+    setPrevActiveTab(sidebarActiveTab);
     setShowProfile(false);
     setShowSettings(false);
+    setShowNotificationsPage(false);
     if (tab === 'adduser') {
       setShowAddUser(true);
       setSelectedUser(null);
@@ -439,6 +450,11 @@ export const Home = () => {
       setShowAddUser(false);
       setSidebarActiveTab('groups');
       if (isMobile) setShowSidebar(true);
+    } else if (tab === 'notifications') {
+      setShowAddUser(false);
+      setShowNotificationsPage(true);
+      setSidebarActiveTab('notifications');
+      if (isMobile) setShowSidebar(false);
     } else {
       setShowAddUser(false);
     }
@@ -456,7 +472,9 @@ export const Home = () => {
   };
 
   const handleNotificationClick = () => {
-    setShowNotifications(true);
+    setShowNotificationsPage(true);
+    setSidebarActiveTab('notifications');
+    setShowSidebar(false);
   };
 
   const handleNotificationAction = (action) => {
@@ -486,10 +504,123 @@ export const Home = () => {
     fetchGroups();
   };
 
+  // Navigation items for mobile bottom nav
+  const navItems = [
+    { id: "chats", icon: IoChatbubbles, label: "Chats" },
+    { id: "groups", icon: IoPeople, label: "Groups" },
+    { id: "adduser", icon: IoPersonAdd, label: "Add Friend" },
+    {id: "notifications", icon: IoNotifications, label: "Notifications" },
+    { id: "settings", icon: IoSettings, label: "Settings" },
+  ];
+
+  // Helper function to determine animation class based on page transition
+  const getAnimationClass = () => {
+    const tabOrder = ['chats', 'groups', 'adduser', 'notifications', 'settings'];
+    const prevIndex = tabOrder.indexOf(prevActiveTab);
+    const currIndex = tabOrder.indexOf(sidebarActiveTab);
+    
+    if (currIndex > prevIndex) {
+      return 'content-transition'; // Moving right/forward
+    } else if (currIndex < prevIndex) {
+      return 'content-transition-left'; // Moving left/backward
+    }
+    return 'content-transition';
+  };
+
   return (
-    <div className="w-screen h-screen overflow-hidden flex flex-col bg-black/80 relative">
+    <>
+      <style>{`
+        @keyframes slideInRight {
+          from {
+            opacity: 0;
+            transform: translateX(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        
+        @keyframes slideInLeft {
+          from {
+            opacity: 0;
+            transform: translateX(-30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        
+        @keyframes slideInUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes slideInDown {
+          from {
+            opacity: 0;
+            transform: translateY(-30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+        
+        @keyframes scaleIn {
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        
+        .content-transition {
+          animation: slideInRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        .content-transition-left {
+          animation: slideInLeft 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        .content-transition-up {
+          animation: slideInUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        .content-transition-scale {
+          animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        .nav-btn-active {
+          animation: slideInUp 0.3s ease-out;
+        }
+        
+        .page-exit {
+          animation: slideInLeft 0.3s ease-out reverse;
+        }
+      `}</style>
+      <div className="relative w-screen h-screen overflow-hidden flex flex-col bg-black/80">
       {/* Mobile Header */}
-      {isMobile && showSidebar && !showEditProfile && !showProfile && !showSettings && ( 
+      {isMobile && showSidebar && !showEditProfile && !showProfile && !showSettings && !showNotificationsPage && ( 
         <div className=" border-b border-gray-700 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 flex-1">
             {showMobileSearch ? (
@@ -526,20 +657,7 @@ export const Home = () => {
                 className="p-2  rounded-lg text-gray-400 hover:text-white transition"
               >
                 <IoSearch size={20} />
-              </button>
-             {/* Notification Button */}
-            <button
-                  onClick={() => setShowNotifications(!showNotifications)}
-                  className="p-2 rounded-lg text-gray-400 hover:text-white transition relative"
-                  aria-label="Notifications"
-                >
-                  <IoNotifications size={20} />
-                  {unreadNotifications > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-semibold">
-                      {unreadNotifications > 9 ? '9+' : unreadNotifications}
-                    </span>
-                  )}
-                </button>
+              </button>            
 
               <div className="relative">
                 <button
@@ -584,39 +702,7 @@ export const Home = () => {
         )
        }
 
-      {/* Tab Navigation for Mobile */}
-      {isMobile && showSidebar && (
-<div className="flex gap-2 overflow-x-auto my-3 scroll-hide px-4">
-  {[
-    { key: "chats", label: "Chats" },
-    { key: "groups", label: "Groups" },
-    { key: "adduser", label: "Add Friend" },
-  ].map((tab) => {
-    const isActive = sidebarActiveTab === tab.key;
-
-    return (
-      <button
-        key={tab.key}
-        onClick={() => handleTabChange(tab.key)}
-        className={`
-          px-4 py-2 rounded-full font-medium whitespace-nowrap
-          transition-colors duration-200
-          ${
-            isActive
-              ? "bg-blue-500 text-white"
-              : "bg-neutral-800 text-gray-400 hover:text-white hover:bg-neutral-700"
-          }
-        `}
-      >
-        {tab.label}
-      </button>
-    );
-  })}
-</div>
-
-      )}
-
-      <div className="flex flex-1 overflow-hidden">
+       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar hidden on mobile when a chat/group is open OR when viewing profile/settings/edit */}
         {(!isMobile || (showSidebar && !showEditProfile && !showProfile && !showSettings)) && (
           <Sidebar 
@@ -643,72 +729,154 @@ export const Home = () => {
             mobileSearchQuery={mobileSearchQuery}
           />
         )}
-        <div className="flex-1 h-full overflow-hidden">
+        <div className="flex-1 h-full overflow-hidden relative">
         {showEditProfile ? (
-          <EditProfile 
-            currentUser={currentUser} 
-            onClose={handleCloseEditProfile}
-            onSave={handleProfileSaved}
-            isMobile={isMobile}
-          />
-        ) : showProfile ? (
-          <Profile 
-            currentUser={currentUser} 
-            viewingUser={viewingUserProfile} 
-            onClose={handleCloseProfile}
-            onEditProfile={handleEditProfile}
-            isMobile={isMobile}
-          />
-        ) : showSettings ? (
-          <Settings 
-            onClose={handleCloseSettings}
-            isMobile={isMobile}
-          />
-        ) : showAddUser ? (
-          <AddUser 
-            onClose={handleCloseAddUser}
-            onSelectUser={handleSelectUser}
-            currentUser={currentUser}
-            onFriendAdded={handleFriendAdded}
-          />
-        ) : selectedGroup ? (
-          <GroupChat
-            group={selectedGroup}
-            socket={socket}
-            currentUser={currentUser}
-            onClose={() => setSelectedGroup(null)}
-            onOpenInvite={handleOpenInvite}
-            onGroupUpdated={handleGroupUpdated}
-            // New: mobile back
-            isMobile={isMobile}
-            onBack={handleBackToList}
-          />
-        ) : (
-          // Mobile: do not show chat by default until a user is selected
-          isMobile && !selectedUser ? null : (
-            <ChatView 
-              user={selectedUser} 
-              socket={socket} 
+          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}>
+            <EditProfile 
               currentUser={currentUser} 
-              onViewProfile={handleViewUserProfile}
-              isUserOnline={selectedUser && onlineUsers.includes(selectedUser._id)}
-              isUserTyping={selectedUser && typingUsers[selectedUser._id]}
-              // New: mobile back
+              onClose={handleCloseEditProfile}
+              onSave={handleProfileSaved}
+              isMobile={isMobile}
+            />
+          </div>
+        ) : showProfile ? (
+          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}>
+            <Profile 
+              currentUser={currentUser} 
+              viewingUser={viewingUserProfile} 
+              onClose={handleCloseProfile}
+              onEditProfile={handleEditProfile}
+              isMobile={isMobile}
+            />
+          </div>
+        ) : showSettings ? (
+          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}>
+            <Settings 
+              onClose={handleCloseSettings}
+              isMobile={isMobile}
+            />
+          </div>
+        ) : showAddUser ? (
+          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}>
+            <AddUser 
+              onClose={handleCloseAddUser}
+              onSelectUser={handleSelectUser}
+              currentUser={currentUser}
+              onFriendAdded={handleFriendAdded}
+            />
+          </div>
+        ) : showNotificationsPage ? (
+          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}>
+            <NotificationPage
+              onClose={() => {
+                setShowNotificationsPage(false);
+                setSidebarActiveTab('chats');
+                setShowSidebar(true);
+              }}
+              socket={socket}
+              onNotificationAction={handleNotificationAction}
+              isMobile={isMobile}
+            />
+          </div>
+        ) : selectedGroup ? (
+          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}>
+            <GroupChat
+              group={selectedGroup}
+              socket={socket}
+              currentUser={currentUser}
+              onClose={() => setSelectedGroup(null)}
+              onOpenInvite={handleOpenInvite}
+              onGroupUpdated={handleGroupUpdated}
               isMobile={isMobile}
               onBack={handleBackToList}
             />
+          </div>
+        ) : (
+          isMobile && !selectedUser ? null : (
+            <div className={`absolute inset-0 ${getAnimationClass()} overflow-hidden`}>
+              <ChatView 
+                user={selectedUser} 
+                socket={socket} 
+                currentUser={currentUser} 
+                onViewProfile={handleViewUserProfile}
+                isUserOnline={selectedUser && onlineUsers.includes(selectedUser._id)}
+                isUserTyping={selectedUser && typingUsers[selectedUser._id]}
+                isMobile={isMobile}
+                onBack={handleBackToList}
+              />
+            </div>
           )
         )}
         </div>
       </div>
 
-      {/* Notification Popup */}
-      <NotificationPopup
-        isOpen={showNotifications}
-        onClose={() => setShowNotifications(false)}
-        socket={socket}
-        onNotificationAction={handleNotificationAction}
-      />
+
+      {/* Tab Navigation for Mobile - Bottom Icon Navigation */}
+      {isMobile && (showSidebar || showSettings || showNotificationsPage || showAddUser) && (
+        <nav className="fixed bottom-0 left-0 right-0 bg-black rounded-t-xl shadow-2xl px-3 py-3 safe-area-bottom z-100">
+          <div className="flex justify-around items-center max-w-md mx-auto">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = sidebarActiveTab === item.id;
+              const hasUnread = item.id === "notifications" && unreadNotifications > 0;
+
+              const handleItemClick = () => {
+                if (item.id === "settings") {
+                  handleSettingsClick();
+                } else {
+                  handleTabChange(item.id);
+                }
+              };
+
+              return (
+                <button
+                  key={item.id}
+                  onClick={handleItemClick}
+                  className={`flex flex-col items-center gap-1 min-w-15 py-2 transition-all duration-300 active:scale-95 ${
+                    isActive ? 'nav-btn-active' : ''
+                  }`}
+                >
+                  <div
+                    className={`
+                      w-12 h-12 rounded-full flex items-center justify-center
+                      transition-all duration-300 relative
+                      ${isActive ? "bg-[#4f38f7] shadow-lg shadow-purple-600/40 scale-110" : "bg-transparent hover:bg-gray-800/50 hover:scale-105"}
+                    `}
+                  >
+                    {isActive && (
+                      <div className="absolute inset-0 bg-[#4f38f7] rounded-full blur-md opacity-30 animate-pulse" />
+                    )}
+                    <Icon
+                      size={22}
+                      className={`
+                        transition-all duration-300 relative z-10
+                        ${isActive ? "text-white scale-110" : "text-gray-400 hover:text-gray-200"}
+                      `}
+                      strokeWidth={2}
+                    />
+                    {hasUnread && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-semibold animate-bounce">
+                        {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className={`
+                      text-[10px] font-medium transition-all duration-300
+                      ${isActive ? "text-[#4f38f7]" : "text-gray-400"}
+                    `}
+                  >
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
+
+      
+      {/* Notification Popup - Removed, using full page instead */}
 
       {/* Create Group Modal */}
       <CreateGroupModal
@@ -728,6 +896,7 @@ export const Home = () => {
         group={inviteGroup}
         currentUser={currentUser}
       />
-    </div>
+      </div>
+    </>
   );
 };

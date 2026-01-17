@@ -11,6 +11,9 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
   const [error, setError] = useState('');
   const [addedUsers, setAddedUsers] = useState([]);
   const [addingUser, setAddingUser] = useState(null);
+  
+
+  const isMobile = window.innerWidth <= 768;
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -86,14 +89,13 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
   return (
     <div className="h-full w-full flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-gray-700 flex items-center gap-4">
-        <button
-          onClick={onClose}
-          className="p-2 hover:bg-gray-800 rounded-full text-white transition-all"
-        >
-          <IoArrowBack size={20} />
-        </button>
-        <h2 className="text-xl font-semibold text-white">Add New Chat</h2>
+      <div className="p-3 border-b border-gray-700 flex items-center gap-4">
+        {!isMobile && (
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-800 transition-all">
+            <IoArrowBack size={24} className="text-white" />
+          </button>
+        )}
+        <h2 className="text-xl font-semibold text-white">Add New Friends</h2>
       </div>
 
       {/* Search Input */}
@@ -155,13 +157,13 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
                       {user.name}
                     </div>
                     <div className="text-sm text-gray-400 truncate">
-                      {user.email}
+                      {user.username}
                     </div>
-                    {user.bio && (
+                    {/* {user.bio && (
                       <div className="text-xs text-gray-500 truncate mt-1">
                         {user.bio}
                       </div>
-                    )}
+                    )} */}
                   </div>
 
                   {/* Add Button */}
