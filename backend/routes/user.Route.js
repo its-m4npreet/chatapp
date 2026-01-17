@@ -1,5 +1,5 @@
 const express = require('express');
-const { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend, googleAuth } = require('../controllers/auth');
+const { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend, googleAuth, resendOtpCode, verifyOtpCode, loginWithVerifiedEmail } = require('../controllers/auth');
 const authMiddleware = require('../middleware/authMiddleware');
 
 const userRouter = express.Router();
@@ -10,6 +10,10 @@ userRouter.post('/signin', signIn);
 userRouter.post('/google-auth', googleAuth);
 userRouter.post('/logout', logout);
 userRouter.put('/updateProfile',authMiddleware, updateProfile);
+
+// Email verification OTP routes (used during signup)
+userRouter.post('/verify-otp', verifyOtpCode);
+userRouter.post('/resend-otp', resendOtpCode);
 
 // Get all users except current user
 userRouter.get('/users', authMiddleware, getAllUsers);

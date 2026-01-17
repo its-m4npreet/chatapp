@@ -47,7 +47,8 @@ export default function SignUp() {
         password,
       });
       setLoading(false);
-      navigate("/signin");
+      // Redirect to OTP verification page with email
+      navigate("/verify-email", { state: { email } });
     } catch (err) {
       setLoading(false);
       setError(err.response?.data?.message || "Sign up failed. Please try again.");

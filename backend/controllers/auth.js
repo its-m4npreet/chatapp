@@ -5,6 +5,7 @@ const { OAuth2Client } = require('google-auth-library');
 require('dotenv').config();
 const cookieParser = require('cookie-parser');
 const cloudinary = require('../config/cloudinary');
+const { generateOTP, sendOTP, verifyOTP } = require('../services/otpService');
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -28,15 +29,41 @@ const signUp = async (req, res) => {
         if (existingUser) {
             return res.status(400).json({ message: "User already exists" });
         }
+        
         const hashedPassword = await bcrypt.hash(password, 10);
+        
+        // Generate OTP for email verification
+        const otp = generateOTP();
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+        
         const newUser = new User({
             name,
             email,
             password: hashedPassword,
+            otp,
+            otpExpiry,
+            isEmailVerified: false
         });
-        console.log(newUser);
+        
         await newUser.save();
-        res.status(201).json({ message: "User created successfully" });
+        
+        // Send OTP via email
+        const emailResult = await sendOTP(email, otp);
+        
+        if (emailResult.success) {
+            res.status(201).json({ 
+                message: "User created. OTP sent to email for verification.",
+                email: email,
+                expiresIn: "10 minutes"
+            });
+        } else {
+            // User was created but email failed - still inform user
+            res.status(201).json({ 
+                message: "User created but OTP email failed to send. Please try resending.",
+                email: email,
+                error: emailResult.message
+            });
+        }
     } catch (error) {
         console.error("SignUp error:", error);
         res.status(500).json({ message: error.message || "Server error" });
@@ -328,4 +355,135 @@ const googleAuth = async (req, res) => {
     }
 };
 
-module.exports = { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend, googleAuth };
+// Resend OTP for email verification
+const resendOtpCode = async (req, res) => {
+    const { email } = req.body;
+    
+    if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+    }
+
+    try {
+        const user = await User.findOne({ email });
+        
+        if (!user) {
+            return res.status(400).json({ message: "User not found" });
+        }
+
+        // Generate new OTP
+        const otp = generateOTP();
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+        user.otp = otp;
+        user.otpExpiry = otpExpiry;
+        await user.save();
+
+        // Send OTP via email
+        const emailResult = await sendOTP(email, otp);
+        
+        if (emailResult.success) {
+            res.status(200).json({ 
+                message: "OTP resent successfully",
+                email: email,
+                expiresIn: "10 minutes"
+            });
+        } else {
+            res.status(500).json({ 
+                message: "Failed to resend OTP",
+                error: emailResult.message 
+            });
+        }
+    } catch (error) {
+        console.error("Resend OTP error:", error);
+        res.status(500).json({ message: error.message || "Server error" });
+    }
+};
+
+// Verify OTP code for email verification
+const verifyOtpCode = async (req, res) => {
+    const { email, otp } = req.body;
+    
+    if (!email || !otp) {
+        return res.status(400).json({ message: "Email and OTP are required" });
+    }
+
+    try {
+        const user = await User.findOne({ email });
+        
+        if (!user) {
+            return res.status(400).json({ message: "User not found" });
+        }
+
+        // Check if OTP has expired
+        if (new Date() > user.otpExpiry) {
+            return res.status(400).json({ message: "OTP has expired. Please request a new one." });
+        }
+
+        // Verify OTP
+        if (user.otp !== otp.toString()) {
+            return res.status(400).json({ message: "Invalid OTP" });
+        }
+
+        // Mark email as verified
+        user.isEmailVerified = true;
+        user.otp = null;
+        user.otpExpiry = null;
+        await user.save();
+
+        res.status(200).json({
+            message: "Email verified successfully",
+            email: email
+        });
+    } catch (error) {
+        console.error("Verify OTP error:", error);
+        res.status(500).json({ message: error.message || "Server error" });
+    }
+};
+
+// Login after OTP verification
+const loginWithVerifiedEmail = async (req, res) => {
+    const { email } = req.body;
+    
+    if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+    }
+
+    try {
+        const user = await User.findOne({ email });
+        
+        if (!user) {
+            return res.status(400).json({ message: "User not found" });
+        }
+
+        if (!user.isEmailVerified) {
+            return res.status(400).json({ message: "Email is not verified" });
+        }
+
+        // Generate JWT token
+        const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        
+        // Set HTTP-only cookie
+        res.cookie('jwt', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        res.status(200).json({
+            message: "Login successful",
+            token: token,
+            user: { 
+                id: user._id, 
+                name: user.name, 
+                email: user.email, 
+                profilePicture: user.profilePicture 
+            }
+        });
+    } catch (error) {
+        console.error("Login with email error:", error);
+        res.status(500).json({ message: error.message || "Server error" });
+    }
+};
+
+module.exports = { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend, googleAuth, resendOtpCode, verifyOtpCode, loginWithVerifiedEmail };
