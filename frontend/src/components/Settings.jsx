@@ -170,7 +170,7 @@ const Settings = ({ onClose, isMobile = true }) => {
                 icon={settings.darkMode ? MdDarkMode : MdLightMode}
                 title="Dark Mode"
                 description="Use dark theme for the app"
-                iconBg="bg-indigo-600/20"
+                iconBg="bg-[#4f38f7]/20"
                 iconColor="text-indigo-400"
               >
                 <Toggle

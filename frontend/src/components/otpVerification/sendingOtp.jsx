@@ -1,5 +1,6 @@
 import React from "react";
 import { Mail, ArrowLeft } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export default function SendingOtpCode() {
   return (
@@ -40,7 +41,7 @@ export default function SendingOtpCode() {
         {/* Manual Entry Link */}
         <button
           // onClick={handleSubmit}
-          className="w-full bg-indigo-600 text-white py-2.5 px-4 rounded-lg font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 transition-colors mb-8"
+          className="w-full bg-[#4f38f7] text-white py-2.5 px-4 rounded-lg font-medium hover:bg-[#6c50f9]  focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4f38f7] transition-colors mb-8"
         >
           Enter code manually
         </button>
@@ -48,12 +49,12 @@ export default function SendingOtpCode() {
         {/* Back to Login */}
         <div className="flex items-center justify-center gap-2">
           <ArrowLeft className="w-4 h-4 text-gray-200" />
-          <a
-            href="#"
+          <Link
+            to="#"
             className="text-sm font-semibold text-gray-400 hover:text-gray-200 hover:underline"
           >
             Back to log in
-          </a>
+          </Link>
         </div>
       </div>
     </div>
