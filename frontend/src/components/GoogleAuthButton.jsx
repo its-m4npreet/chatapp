@@ -3,7 +3,7 @@ import { GoogleLogin } from "@react-oauth/google";
 import axios from "../lib/axios";
 import { useNavigate } from "react-router-dom";
 
-export default function GoogleAuthButton({ onSuccess, onError }) {
+export default function GoogleAuthButton({ onSuccess, onError, className = "" }) {
   const navigate = useNavigate();
 
   const handleGoogleSuccess = async (credentialResponse) => {
@@ -42,11 +42,13 @@ export default function GoogleAuthButton({ onSuccess, onError }) {
   };
 
   return (
-    <GoogleLogin
-      onSuccess={handleGoogleSuccess}
-      onError={handleGoogleError}
-      theme="dark"
-      text="signin_with"
-    />
+    <div className={`${className}`}>
+      <GoogleLogin
+        onSuccess={handleGoogleSuccess}
+        onError={handleGoogleError}
+        theme="dark"
+        text="signin_with"
+      />
+    </div>
   );
 }
