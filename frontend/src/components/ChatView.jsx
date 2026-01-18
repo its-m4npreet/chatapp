@@ -10,6 +10,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
+import { useSettings } from "../context/useSettings";
 import {
   formatBold,
   formatItalic,
@@ -99,6 +100,7 @@ const ToolbarButton = ({ onClick, title, children, active }) => (
 );
 
 const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUserTyping, isMobile , onBack }) => {
+  const { settings, sendNotification } = useSettings();
   // Join current user's room for real-time updates and handle reconnection
   useEffect(() => {
     if (!socket || !currentUser || !currentUser._id) {
@@ -279,9 +281,19 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
         return [...prev, msg];
       });
 
-      // Mark message as read if it's from the other user
-      if (cu && senderId === u._id && receiverId === cu._id) {
+      // Mark message as read if it's from the other user and readReceipts are enabled
+      if (cu && senderId === u._id && receiverId === cu._id && settings.readReceipts) {
         socket.emit("markMessageRead", { messageId: msg._id, userId: cu._id });
+      }
+
+      // Send notification if a message is received from the other user
+      if (cu && senderId === u._id && receiverId === cu._id && settings.notifications) {
+        const senderName = typeof msg.sender === "object" ? msg.sender.name : "Someone";
+        const messagePreview = msg.content ? msg.content.substring(0, 50) : "sent you a message";
+        sendNotification(`New message from ${senderName}`, {
+          body: messagePreview,
+          tag: `message-${u._id}`,
+        });
       }
     };
 
@@ -334,7 +346,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       socket.off("messageStatusUpdate", handleMessageStatusUpdate);
       socket.off("connect", handleConnect);
     };
-  }, [socket]); // Only depend on socket, not user/currentUser
+  }, [socket, settings.readReceipts, settings.notifications, sendNotification]); // Include settings dependencies
 
   // Cleanup on unmount
   const startRecording = async () => {
@@ -777,10 +789,12 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-    socket.emit("stopTyping", {
-      senderId: currentUser._id,
-      receiverId: user._id,
-    });
+    if (settings.typingIndicator) {
+      socket.emit("stopTyping", {
+        senderId: currentUser._id,
+        receiverId: user._id,
+      });
+    }
 
     setInputValue("");
     handleRemoveImage();
@@ -1446,7 +1460,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
             setInputValue(value);
             
             // Debounced typing event
-            if (socket && currentUser && user) {
+            if (socket && currentUser && user && settings.typingIndicator) {
               // Clear previous timeout
               if (typingTimeoutRef.current) {
                 clearTimeout(typingTimeoutRef.current);

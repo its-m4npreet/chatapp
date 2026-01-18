@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSettings } from "../context/useSettings";
 import {
   MdOutlineSettings,
   MdDarkMode,
@@ -20,43 +21,29 @@ import {
 import { IoLanguage, IoArrowBack, IoShieldCheckmark } from "react-icons/io5";
 import { FaUserShield, FaDatabase } from "react-icons/fa6";
 
-// Helper function to get initial settings from localStorage
-const getInitialSettings = () => {
-  const savedSettings = localStorage.getItem("chatAppSettings");
-  if (savedSettings) {
-    return JSON.parse(savedSettings);
-  }
-  return {
-    darkMode: true,
-    notifications: true,
-    sound: true,
-    language: "English",
-    onlineStatus: true,
-    readReceipts: true,
-    typingIndicator: true,
-  };
-};
-
 // Toggle component
 const Toggle = ({ enabled, onChange }) => (
   <button
     onClick={() => onChange(!enabled)}
     className={`relative w-12 h-6 rounded-full transition-all duration-300 ${
-      enabled ? "bg-blue-600" : "bg-zinc-600"
+      enabled ? "bg-blue-600" : "bg-zinc-800 "
     }`}
   >
     <span
-      className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 ${
-        enabled ? "translate-x-6" : "translate-x-0"
+      className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform duration-300 ${
+        enabled ? "bg-white translate-x-6" : "bg-gray-800 translate-x-0 border border-gray-800"
       }`}
     />
   </button>
 );
 
 // SettingCard component for grouped settings
-const SettingCard = ({ children, className = "" }) => (
+const SettingCard = ({ children, className = "", isDarkMode = false }) => (
   <div
-    className={`bg-zinc-800/50 backdrop-blur-sm rounded-2xl border border-zinc-700/50 overflow-hidden ${className}`}
+    className={`bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 backdrop-blur-sm rounded-2xl overflow-hidden ${className}`}
+    style={{
+      backgroundColor: isDarkMode ? 'rgba(39, 39, 42, 0.5)' : 'white',
+    }}
   >
     {children}
   </div>
@@ -70,45 +57,45 @@ const SettingRow = ({
   children,
   onClick,
   showArrow = false,
-  iconBg = "bg-zinc-700",
-  iconColor = "text-gray-300",
+  iconBg = "bg-gray-100 dark:bg-zinc-700",
+  iconColor = "text-gray-600 dark:text-gray-300",
 }) => (
   <div
-    className={`flex items-center justify-between p-4 hover:bg-zinc-700/30 transition-colors ${
+    className={`flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-zinc-700/30 transition-colors ${
       onClick ? "cursor-pointer" : ""
     }`}
     onClick={onClick}
   >
     <div className="flex items-center gap-4">
       <div
-        className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center`}
+        className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center shrink-0`}
       >
         {Icon && <Icon size={20} className={iconColor} />}
       </div>
       <div>
-        <h4 className="text-white font-medium">{title}</h4>
+        <h4 className="text-gray-900 dark:text-white font-medium">{title}</h4>
         {description && (
-          <p className="text-gray-500 text-sm mt-0.5">{description}</p>
+          <p className="text-gray-500 dark:text-gray-500 text-sm mt-0.5">{description}</p>
         )}
       </div>
     </div>
     <div className="flex items-center gap-2">
       {children}
       {showArrow && (
-        <MdKeyboardArrowRight size={24} className="text-gray-500" />
+        <MdKeyboardArrowRight size={24} className="text-gray-500 dark:text-gray-500" />
       )}
     </div>
   </div>
 );
 
 // Divider component
-const Divider = () => <div className="h-px bg-zinc-700/50 mx-4" />;
+const Divider = () => <div className="h-px bg-gray-200 dark:bg-zinc-700/50 mx-4" />;
 
 // Section header
 const SectionHeader = ({ title, icon: Icon }) => (
   <div className="flex items-center gap-2 mb-3 px-1">
-    {Icon && <Icon size={16} className="text-gray-500" />}
-    <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider">
+    {Icon && <Icon size={16} className="text-gray-400 dark:text-gray-500" />}
+    <h3 className="text-gray-600 dark:text-gray-400 text-xs font-semibold uppercase tracking-wider">
       {title}
     </h3>
   </div>
@@ -116,7 +103,17 @@ const SectionHeader = ({ title, icon: Icon }) => (
 
 const Settings = ({ onClose, isMobile = true }) => {
   const navigate = useNavigate();
-  const [settings, setSettings] = useState(getInitialSettings);
+  const { settings, updateSetting, requestNotificationPermission } = useSettings();
+  const [notificationRequested, setNotificationRequested] = useState(false);
+
+  // Request notification permission when notifications are enabled
+  useEffect(() => {
+    if (settings.notifications && !notificationRequested) {
+      requestNotificationPermission().then(() => {
+        setNotificationRequested(true);
+      });
+    }
+  }, [settings.notifications, notificationRequested, requestNotificationPermission]);
 
   const handleBack = () => {
     if (isMobile) {
@@ -126,30 +123,33 @@ const Settings = ({ onClose, isMobile = true }) => {
     }
   };
 
-  // Save settings to localStorage whenever they change
-  const updateSetting = (key, value) => {
-    const newSettings = { ...settings, [key]: value };
-    setSettings(newSettings);
-    localStorage.setItem("chatAppSettings", JSON.stringify(newSettings));
-  };
-
   return (
-    <div className="h-full w-full min-h-screen flex flex-col">
+    <div 
+      className="h-full w-full min-h-screen flex flex-col bg-white dark:bg-[#0b0e12]"
+      style={{
+        backgroundColor: settings.darkMode ? '#0b0e12' : 'white',
+      }}
+    >
       {/* Header */}
-      <div className="sticky top-0 z-10  backdrop-blur-sm border-b border-zinc-800">
+      <div 
+        className="sticky top-0 z-10 backdrop-blur-sm border-b border-gray-200 dark:border-zinc-800 bg-white dark:bg-[#0b0e12]"
+        style={{
+          backgroundColor: settings.darkMode ? '#0b0e12' : 'white',
+        }}
+      >
         <div className="p-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
            {!isMobile && (
              <button
               onClick={handleBack}
-              className="p-2 hover:bg-zinc-800 rounded-xl text-gray-400 hover:text-white transition-all"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-xl text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all"
             >
               <IoArrowBack size={20} />
             </button>
            )}
             <div>
-              <h2 className="text-xl font-bold text-white">Settings</h2>
-              <p className="text-gray-500 text-sm">Customize your experience</p>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Settings</h2>
+              <p className="text-gray-600 dark:text-gray-500 text-sm">Customize your experience</p>
             </div>
           </div>
           {/* <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
@@ -167,7 +167,7 @@ const Settings = ({ onClose, isMobile = true }) => {
           {/* Appearance Section */}
           <div>
             <SectionHeader title="Appearance" icon={MdColorLens} />
-            <SettingCard>
+            <SettingCard isDarkMode={settings.darkMode}>
               <SettingRow
                 icon={settings.darkMode ? MdDarkMode : MdLightMode}
                 title="Dark Mode"
@@ -186,7 +186,7 @@ const Settings = ({ onClose, isMobile = true }) => {
           {/* Notifications Section */}
           <div>
             <SectionHeader title="Notifications" icon={MdNotifications} />
-            <SettingCard>
+            <SettingCard isDarkMode={settings.darkMode}>
               <SettingRow
                 icon={
                   settings.notifications ? MdNotifications : MdNotificationsOff
@@ -220,7 +220,7 @@ const Settings = ({ onClose, isMobile = true }) => {
           {/* Privacy Section */}
           <div>
             <SectionHeader title="Privacy" icon={MdPrivacyTip} />
-            <SettingCard>
+            <SettingCard isDarkMode={settings.darkMode}>
               <SettingRow
                 icon={IoShieldCheckmark}
                 title="Online Status"
@@ -265,7 +265,7 @@ const Settings = ({ onClose, isMobile = true }) => {
           {/* General Section */}
           <div>
             <SectionHeader title="General" icon={MdOutlineSettings} />
-            <SettingCard>
+            <SettingCard isDarkMode={settings.darkMode}>
               <SettingRow
                 icon={IoLanguage}
                 title="Language"
@@ -276,7 +276,7 @@ const Settings = ({ onClose, isMobile = true }) => {
                 <select
                   value={settings.language}
                   onChange={(e) => updateSetting("language", e.target.value)}
-                  className="bg-zinc-700 text-white px-3 py-2 rounded-lg outline-none border border-zinc-600 focus:border-blue-500 text-sm"
+                  className="bg-gray-100 dark:bg-zinc-700 text-gray-900 dark:text-white px-3 py-2 rounded-lg outline-none border border-gray-300 dark:border-zinc-600 focus:border-blue-500 text-sm"
                 >
                   <option value="English">English</option>
                   <option value="Spanish">Español</option>
@@ -293,7 +293,7 @@ const Settings = ({ onClose, isMobile = true }) => {
           {/* Security Section */}
           <div>
             <SectionHeader title="Security" icon={MdSecurity} />
-            <SettingCard>
+            <SettingCard isDarkMode={settings.darkMode}>
               <SettingRow
                 icon={MdLock}
                 title="Change Password"
@@ -323,7 +323,7 @@ const Settings = ({ onClose, isMobile = true }) => {
           {/* Support Section */}
           <div>
             <SectionHeader title="Support" icon={MdHelp} />
-            <SettingCard>
+            <SettingCard isDarkMode={settings.darkMode}>
               <SettingRow
                 icon={MdHelp}
                 title="Help Center"
@@ -353,7 +353,7 @@ const Settings = ({ onClose, isMobile = true }) => {
           {/* About Section */}
           <div>
             <SectionHeader title="About" icon={MdInfo} />
-            <SettingCard>
+            <SettingCard isDarkMode={settings.darkMode}>
               <SettingRow
                 icon={MdInfo}
                 title="App Version"
@@ -361,7 +361,7 @@ const Settings = ({ onClose, isMobile = true }) => {
                 iconBg="bg-gray-600/20"
                 iconColor="text-gray-400"
               >
-                <span className="px-3 py-1 bg-green-600/20 text-green-400 text-xs rounded-full font-medium">
+                <span className="px-3 py-1 bg-green-100 dark:bg-green-600/20 text-green-600 dark:text-green-400 text-xs rounded-full font-medium">
                   Latest
                 </span>
               </SettingRow>
@@ -371,21 +371,21 @@ const Settings = ({ onClose, isMobile = true }) => {
           {/* Danger Zone */}
           <div>
             <SectionHeader title="Danger Zone" />
-            <SettingCard className="border-red-900/50">
+            <SettingCard isDarkMode={settings.darkMode} className="border-red-200 dark:border-red-900/50">
               <div className="p-4">
                 <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-red-600/20 flex items-center justify-center shrink-0">
-                    <MdSecurity size={20} className="text-red-400" />
+                  <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-600/20 flex items-center justify-center shrink-0">
+                    <MdSecurity size={20} className="text-red-600 dark:text-red-400" />
                   </div>
                   <div className="flex-1">
-                    <h4 className="text-white font-medium mb-1">
+                    <h4 className="text-gray-900 dark:text-white font-medium mb-1">
                       Delete Account
                     </h4>
-                    <p className="text-gray-500 text-sm mb-4">
+                    <p className="text-gray-600 dark:text-gray-500 text-sm mb-4">
                       Permanently delete your account and all associated data.
                       This action cannot be undone.
                     </p>
-                    <button className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/50 hover:border-red-600 rounded-xl text-sm font-medium transition-all">
+                    <button className="px-4 py-2 bg-red-100 dark:bg-red-600/20 hover:bg-red-200 dark:hover:bg-red-600/30 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-600/50 hover:border-red-400 dark:hover:border-red-600 rounded-xl text-sm font-medium transition-all">
                       Delete My Account
                     </button>
                   </div>
@@ -395,7 +395,7 @@ const Settings = ({ onClose, isMobile = true }) => {
           </div>
 
           {/* Footer */}
-          <div className="text-center py-6 text-gray-600 text-sm">
+          <div className="text-center py-6 text-gray-500 dark:text-gray-600 text-sm">
             <p>Made with ❤️ by ChatApp Team</p>
             <p className="mt-1">© 2026 ChatApp. All rights reserved.</p>
           </div>

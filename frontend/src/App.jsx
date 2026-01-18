@@ -8,6 +8,7 @@ import EditProfile from './components/EditProfile';
 import Settings from './components/Settings';
 import VerifyEmail from './components/VerifyEmail';
 import { useState, useEffect } from 'react';
+import { SettingsProvider } from './context/SettingsContext';
 
 function AppRoutes({ currentUser, setCurrentUser }) {
   const navigate = useNavigate();
@@ -40,9 +41,11 @@ function App() {
   }, []);
   
   return (
-    <BrowserRouter>
-      <AppRoutes currentUser={currentUser} setCurrentUser={setCurrentUser} />
-    </BrowserRouter>
+    <SettingsProvider>
+      <BrowserRouter>
+        <AppRoutes currentUser={currentUser} setCurrentUser={setCurrentUser} />
+      </BrowserRouter>
+    </SettingsProvider>
   );
 }
 

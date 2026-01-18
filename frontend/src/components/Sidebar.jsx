@@ -6,8 +6,10 @@ import { IoChatboxEllipses, IoNotifications } from "react-icons/io5";
 import { TiGroup } from "react-icons/ti";
 import axios from '../lib/axios';
 import { ContentLoading } from './Loading';
+import { useSettings } from '../context/useSettings';
 
 const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick, showProfile, onSettingsClick, showSettings, onTabChange, viewingUserProfile, onlineUsers = [], refreshFriends, onNotificationClick, unreadNotifications = 0, groups = [], selectedGroup, onSelectGroup, onCreateGroup, externalActiveTab, isMobile, mobileSearchQuery = '' }) => {
+  const { settings } = useSettings();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -125,7 +127,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
             </div>
           )}
           {/* Online status indicator */}
-          {isOnline && (
+          {isOnline && settings.onlineStatus && (
             <span
               style={{
                 position: 'absolute',

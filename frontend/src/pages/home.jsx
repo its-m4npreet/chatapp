@@ -618,7 +618,7 @@ export const Home = () => {
           animation: slideInLeft 0.3s ease-out reverse;
         }
       `}</style>
-      <div className="relative w-screen h-screen overflow-hidden flex flex-col bg-black/80">
+      <div className="relative w-screen h-screen overflow-hidden flex flex-col bg-black/80 dark:bg-black/80">
       {/* Mobile Header */}
       {isMobile && showSidebar && !showEditProfile && !showProfile && !showSettings && !showNotificationsPage && ( 
         <div className=" border-b border-gray-700 px-4 py-3 flex items-center justify-between">
