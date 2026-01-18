@@ -44,6 +44,7 @@ export default function GoogleAuthButton({ onSuccess, onError, className = "" })
   return (
     <div className={`${className}`}>
       <GoogleLogin
+      className="w-full"
         onSuccess={handleGoogleSuccess}
         onError={handleGoogleError}
         theme="dark"
