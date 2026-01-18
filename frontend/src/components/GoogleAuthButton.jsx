@@ -48,6 +48,7 @@ export default function GoogleAuthButton({ onSuccess, onError, className = "" })
         onError={handleGoogleError}
         theme="dark"
         text="signin_with"
+        size="large"
       />
     </div>
   );
