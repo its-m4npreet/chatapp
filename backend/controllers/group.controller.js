@@ -459,6 +459,14 @@ const createGroupController = (io) => {
 
             const messages = await GroupMessage.find({ group: groupId })
                 .populate('sender', 'name profilePicture')
+                .populate({
+                    path: 'replyTo',
+                    select: 'content messageType sender',
+                    populate: {
+                        path: 'sender',
+                        select: 'name profilePicture'
+                    }
+                })
                 .sort({ createdAt: -1 })
                 .skip((page - 1) * limit)
                 .limit(parseInt(limit));
@@ -473,7 +481,7 @@ const createGroupController = (io) => {
     // Send group message
     const sendGroupMessage = async (req, res) => {
         try {
-            const { groupId, content, image, audio, tempId } = req.body;
+            const { groupId, content, image, audio, tempId, replyToId } = req.body;
             const userId = req.userId;
 
             const group = await Group.findById(groupId);
@@ -498,10 +506,23 @@ const createGroupController = (io) => {
                 audio: audio ? { url: audio, public_id: '' } : { url: '', public_id: '' },
                 messageType,
                 status: 'sent',
+                replyTo: replyToId || null
             });
 
             await message.save();
             await message.populate('sender', 'name profilePicture');
+            
+            // Populate replyTo if it exists
+            if (message.replyTo) {
+                await message.populate({
+                    path: 'replyTo',
+                    select: 'content messageType sender',
+                    populate: {
+                        path: 'sender',
+                        select: 'name profilePicture'
+                    }
+                });
+            }
 
             // Emit to all group members with tempId for optimistic updates
             const messageData = {

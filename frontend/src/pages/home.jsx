@@ -18,7 +18,15 @@ export const Home = () => {
   const navigate = useNavigate();
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-  const [unreadCounts, setUnreadCounts] = useState({});
+  const [unreadCounts, setUnreadCounts] = useState(() => {
+    // Initialize from localStorage
+    try {
+      const saved = localStorage.getItem('unreadCounts');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
   const [showProfile, setShowProfile] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -122,12 +130,44 @@ export const Home = () => {
     };
   }, []);
 
+  // Persist unread counts to localStorage
+  useEffect(() => {
+    localStorage.setItem('unreadCounts', JSON.stringify(unreadCounts));
+  }, [unreadCounts]);
+
   // Join socket room when currentUser is available
   useEffect(() => {
     if (socket && currentUser && currentUser._id) {
       console.log('Joining socket room with userId:', currentUser._id);
       socket.emit('join', currentUser._id);
     }
+  }, [currentUser]);
+
+  // Update activity status periodically to track lastSeen
+  useEffect(() => {
+    if (!socket || !currentUser || !currentUser._id) return;
+
+    // Send activity update every 30 seconds
+    const activityInterval = setInterval(() => {
+      socket.emit('updateActivity', currentUser._id);
+    }, 30000);
+
+    // Also send activity update on user interactions
+    const handleUserActivity = () => {
+      socket.emit('updateActivity', currentUser._id);
+    };
+
+    // Listen to various user interactions
+    window.addEventListener('mousemove', handleUserActivity);
+    window.addEventListener('keypress', handleUserActivity);
+    window.addEventListener('click', handleUserActivity);
+
+    return () => {
+      clearInterval(activityInterval);
+      window.removeEventListener('mousemove', handleUserActivity);
+      window.removeEventListener('keypress', handleUserActivity);
+      window.removeEventListener('click', handleUserActivity);
+    };
   }, [currentUser]);
 
   // Listen for online users updates
@@ -296,6 +336,25 @@ export const Home = () => {
       socket.off('newMessage', handleNewMessage);
     };
   }, [currentUser, selectedUser]);
+
+  // Listen for messages marked as read to clear unread counts
+  useEffect(() => {
+    if (!socket || !currentUser) return;
+
+    const handleMessagesMarkedRead = ({ receiverId }) => {
+      // Clear unread count for this user
+      setUnreadCounts((prev) => {
+        const updated = { ...prev };
+        delete updated[receiverId];
+        return updated;
+      });
+    };
+
+    socket.on('messagesMarkedRead', handleMessagesMarkedRead);
+    return () => {
+      socket.off('messagesMarkedRead', handleMessagesMarkedRead);
+    };
+  }, [currentUser]);
 
   // Clear unread count when selecting a user
   const handleSelectUser = (user) => {

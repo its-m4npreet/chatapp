@@ -136,6 +136,7 @@ const GroupChat = ({
   const [audioBlob, setAudioBlob] = useState(null);
   const [audioPreview, setAudioPreview] = useState(null);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [replyingTo, setReplyingTo] = useState(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
@@ -272,6 +273,29 @@ const GroupChat = ({
           if (optimisticIdx !== -1) {
             const updated = [...prev];
             updated[optimisticIdx] = { ...message, tempId: undefined };
+            return updated;
+          }
+
+          // Fallback: fuzzy match by content, image, and replyTo
+          const fuzzyIdx = prev.findIndex((m) => {
+            const prevImage = m.image ? m.image.url || m.image : "";
+            const incomingImage = message.image ? message.image.url || message.image : "";
+            const prevReplyId = m.replyTo ? (typeof m.replyTo === 'object' ? m.replyTo._id : m.replyTo) : null;
+            const incomingReplyId = message.replyTo ? (typeof message.replyTo === 'object' ? message.replyTo._id : message.replyTo) : null;
+            
+            return (
+              m.tempId &&
+              m.status === 'sending' &&
+              getId(m.sender) === getId(message.sender) &&
+              (m.content || "") === (message.content || "") &&
+              prevImage === incomingImage &&
+              prevReplyId === incomingReplyId
+            );
+          });
+
+          if (fuzzyIdx !== -1) {
+            const updated = [...prev];
+            updated[fuzzyIdx] = { ...message, tempId: undefined };
             return updated;
           }
 
@@ -465,6 +489,7 @@ const GroupChat = ({
         status: "sending",
         reactions: [],
         readBy: [],
+        replyTo: replyingTo || null,
       };
       setMessages((prev) => [...prev, optimisticMessage]);
       setTimeout(scrollToBottom, 100);
@@ -473,6 +498,7 @@ const GroupChat = ({
       setNewMessage("");
       handleRemoveImage();
       cancelRecording();
+      setReplyingTo(null);
 
       await axios.post("/groups/message", {
         groupId: group._id,
@@ -480,6 +506,7 @@ const GroupChat = ({
         image: imageUrl,
         audio: audioUrl,
         tempId,
+        replyToId: replyingTo?._id || null,
       });
 
   
@@ -555,6 +582,47 @@ const GroupChat = ({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showReactionPicker]);
+
+  // Handle double-tap on message for reply (web)
+  const _touchTimeoutRef = useRef(null);
+  const touchStartRef = useRef({ x: 0, messageId: null, timestamp: 0 });
+  
+  const handleMessageDoubleTap = useCallback((messageId) => {
+    const msg = messages.find(m => m._id === messageId);
+    if (msg) {
+      setReplyingTo(msg);
+    }
+  }, [messages]);
+
+  // Handle touch start for swipe detection (Mobile)
+  const handleTouchStart = useCallback((e, messageId) => {
+    if (!isMobile) return;
+    const now = Date.now();
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      messageId: messageId,
+      timestamp: now
+    };
+  }, [isMobile]);
+
+  // Handle touch end for swipe detection (Mobile)
+  const handleTouchEnd = useCallback((e, messageId) => {
+    if (!isMobile || !touchStartRef.current) return;
+    
+    const now = Date.now();
+    const touchEnd = {
+      x: e.changedTouches[0].clientX,
+      timestamp: now
+    };
+
+    const diffX = touchStartRef.current.x - touchEnd.x;
+    const diffTime = touchEnd.timestamp - touchStartRef.current.timestamp;
+
+    if (diffX > 50 && diffTime < 300) {
+      handleMessageDoubleTap(messageId);
+      touchStartRef.current = { x: 0, messageId: null, timestamp: 0 };
+    }
+  }, [isMobile, handleMessageDoubleTap]);
 
   // Handle reaction selection from quick bar
   const handleReaction = async (msg, symbol) => {
@@ -888,7 +956,24 @@ const GroupChat = ({
                         <div
                           className={`${isOwn ? "text-right" : "text-left"}`}
                         >
-                          <div className={messageClass}>
+                          <div 
+                            className={messageClass}
+                            onDoubleClick={() => handleMessageDoubleTap(msg._id)}
+                            onTouchStart={(e) => handleTouchStart(e, msg._id)}
+                            onTouchEnd={(e) => handleTouchEnd(e, msg._id)}
+                          >
+                            {msg.replyTo && (
+                              <div className={`mb-2 pb-2 border-l-2 ${isOwn ? "border-blue-400" : "border-gray-500"} pl-2 text-xs`}>
+                                <div className={`font-semibold ${isOwn ? "text-blue-200" : "text-gray-300"}`}>
+                                  Replying to {typeof msg.replyTo?.sender === 'object' ? msg.replyTo.sender.name : 'user'}
+                                </div>
+                                <div className={`${isOwn ? "text-blue-100" : "text-gray-400"} truncate line-clamp-1`}>
+                                  {msg.replyTo?.messageType === 'image' ? '📷 Sent an image' : 
+                                   msg.replyTo?.messageType === 'audio' ? '🎙️ Sent a voice message' :
+                                   msg.replyTo?.content || '...'}
+                                </div>
+                              </div>
+                            )}
                             {hasImage && (
                               <img
                                 src={msg.image.url}
@@ -927,6 +1012,7 @@ const GroupChat = ({
                           </div>
 
                           {/* Quick Reactions Bar */}
+                          {!isMobile && 
                           <div
                             className={`absolute ${
                               isOwn ? "right-0" : "left-0"
@@ -969,6 +1055,7 @@ const GroupChat = ({
                               <IoAddCircleOutline size={18} />
                             </button>
                           </div>
+                          }
 
                           <div
                             className={`${
@@ -1072,6 +1159,27 @@ const GroupChat = ({
             className={(isMobile ? "p-2" : "p-4") + " border-t border-gray-700"}
             style={{ paddingBottom: isMobile ? "env(safe-area-inset-bottom)" : undefined }}
           >
+            {/* Reply Preview Panel */}
+            {replyingTo && (
+              <div className="mb-3 p-2 bg-gray-800 border-l-4 border-blue-500 rounded flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-400">Replying to {typeof replyingTo.sender === 'object' ? replyingTo.sender.name : 'user'}</p>
+                  <p className="text-sm text-gray-200 truncate">
+                    {replyingTo.messageType === 'image' ? '📷 Sent an image' :
+                     replyingTo.messageType === 'audio' ? '🎙️ Sent a voice message' :
+                     replyingTo.content || '...'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReplyingTo(null)}
+                  className="ml-2 text-gray-400 hover:text-white p-1"
+                >
+                  <IoClose size={18} />
+                </button>
+              </div>
+            )}
+
             {/* Image Preview */}
             {imagePreview && (
               <div className="mb-3 relative inline-block">
@@ -1129,7 +1237,7 @@ const GroupChat = ({
                 <IoImageOutline size={22} />
               </button>
 
-              <button
+              {!isMobile && <button
                 type="button"
                 className="p-2 text-gray-400 hover:text-white transition"
                 onClick={() => setShowEmoji((v) => !v)}
@@ -1137,7 +1245,7 @@ const GroupChat = ({
                 title="Add emoji"
               >
                 <FaRegSmile size={22} className="cursor-pointer" />
-              </button>
+              </button>}
 
               <button
                 type="button"

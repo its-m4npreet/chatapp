@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './Sidebar.css';
 import { FaCircleUser } from "react-icons/fa6";
 import { MdOutlineSettings,MdPersonAddAlt1  } from "react-icons/md";
 import { IoChatboxEllipses, IoNotifications } from "react-icons/io5";
 import { TiGroup } from "react-icons/ti";
 import axios from '../lib/axios';
+import socket from '../lib/socket';
 import { ContentLoading } from './Loading';
 import { useSettings } from '../context/useSettings';
 
@@ -13,6 +14,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [lastMessages, setLastMessages] = useState({}); // Store last message for each user
   const [internalActiveTab, setInternalActiveTab] = useState('chats'); // 'chats' or 'groups'
   const [searchQuery, setSearchQuery] = useState('');
   const prevRefreshFriends = useRef(refreshFriends);
@@ -26,20 +28,70 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
     setInternalActiveTab(tab);
   };
 
+  // Function to format last seen time
+  const formatLastSeen = (lastSeen) => {
+  if (!lastSeen) return "";
+
+  const now = new Date();
+  const lastSeenDate = new Date(lastSeen);
+  const diffMs = now - lastSeenDate;
+
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSeconds < 30) return "Just now";
+  if (diffMinutes < 1) return "Active recently";
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  if (diffHours < 24) return `${diffHours} hr ago`;
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+
+  return lastSeenDate.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+
   // Check if viewing another user's profile (from chat)
   const isViewingOtherUserProfile = showProfile && viewingUserProfile;
 
-  const fetchFriends = async () => {
+  // Function to fetch last message for a user
+  const fetchLastMessageForUser = async (userId) => {
+    try {
+      const res = await axios.get(`/messages/last/${userId}`);
+      if (res.data.lastMessage) {
+        setLastMessages(prev => ({
+          ...prev,
+          [userId]: res.data.lastMessage
+        }));
+      }
+    } catch {
+      console.log(`No messages found for user ${userId}`);
+    }
+  };
+
+  const fetchFriends = useCallback(async () => {
     try {
       setLoading(true);
       const res = await axios.get('/friends');
-      setUsers(res.data.friends || []);
+      const friendsList = res.data.friends || [];
+      setUsers(friendsList);
+      
+      // Fetch last message for each friend
+      friendsList.forEach(friend => {
+        fetchLastMessageForUser(friend._id);
+      });
+      
       setLoading(false);
     } catch {
       setError("Failed to load friends");
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -56,8 +108,14 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
         setLoading(true);
         const res = await axios.get('/friends');
         if (isMounted) {
-          setUsers(res.data.friends || []);
+          const friendsList = res.data.friends || [];
+          setUsers(friendsList);
           setError("");
+          
+          // Fetch last message for each friend
+          friendsList.forEach(friend => {
+            fetchLastMessageForUser(friend._id);
+          });
         }
       } catch {
         if (isMounted) {
@@ -83,9 +141,36 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
       fetchFriends();
     }
     prevRefreshFriends.current = refreshFriends;
-  }, [refreshFriends]);
+  }, [refreshFriends, fetchFriends]);
 
-  // Filter users based on search query and sort by unread messages first
+  // Listen for new messages and update last message in sidebar
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewMessage = (msg) => {
+      // Update the last message for the sender or receiver
+      const otherUserId = typeof msg.sender === 'object' ? msg.sender._id : msg.sender;
+      
+      setLastMessages(prev => ({
+        ...prev,
+        [otherUserId]: {
+          content: msg.content || '',
+          messageType: msg.messageType,
+          createdAt: msg.createdAt || new Date().toISOString(),
+          sender: msg.sender,
+          receiver: msg.receiver,
+          _id: msg._id
+        }
+      }));
+    };
+
+    socket.on('newMessage', handleNewMessage);
+    return () => {
+      socket.off('newMessage', handleNewMessage);
+    };
+  }, []);
+
+  // Filter users based on search query and sort by unread messages first, then by most recent message
   const filteredUsers = users
     .filter((user) =>
       user.name.toLowerCase().includes(effectiveSearchQuery.toLowerCase()) ||
@@ -100,7 +185,19 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
         return unreadB - unreadA;
       }
       
-      // If same unread count, sort alphabetically by name
+      // If same unread count, sort by most recent message timestamp
+      const lastMessageA = lastMessages[a._id];
+      const lastMessageB = lastMessages[b._id];
+      
+      const timestampA = lastMessageA?.createdAt ? new Date(lastMessageA.createdAt).getTime() : 0;
+      const timestampB = lastMessageB?.createdAt ? new Date(lastMessageB.createdAt).getTime() : 0;
+      
+      // Sort by most recent message first (descending)
+      if (timestampA !== timestampB) {
+        return timestampB - timestampA;
+      }
+      
+      // If no messages or same timestamp, sort alphabetically by name
       return a.name.localeCompare(b.name);
     });
 
@@ -111,6 +208,27 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
   const renderChat = (user) => {
     const unreadCount = unreadCounts[user._id] || 0;
     const isOnline = onlineUsers.includes(user._id);
+    const lastMessage = lastMessages[user._id];
+    
+    // Format last message text
+    const getMessagePreview = () => {
+      if (!lastMessage) return "No messages yet";
+      
+      let messageText = '';
+      if (lastMessage.content) {
+        messageText = lastMessage.content;
+      } else if (lastMessage.messageType === 'image') {
+        messageText = '📷 Image';
+      } else if (lastMessage.messageType === 'audio') {
+        messageText = '🎙️ Audio';
+      } else if (lastMessage.messageType === 'mixed') {
+        messageText = lastMessage.content || '📷 Image with message';
+      }
+      
+      // Truncate if too long
+      return messageText.length > 40 ? messageText.substring(0, 40) + '...' : messageText;
+    };
+    
     return (
       <div
         className={`sidebar-chat${selectedUser && selectedUser._id === user._id ? ' sidebar-chat-active' : ''}`}
@@ -146,7 +264,8 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
         <div className="chat-info">
           <div className="chat-name-row">
             <span className="chat-name">{user.name}</span>
-                       {unreadCount > 0 && (
+            
+               {unreadCount > 0 && (
             <span
               style={{
                 background: '#ef4444',
@@ -165,11 +284,20 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )} 
+            
           </div>
           <div className="chat-message-row">
-            <span className="chat-message">{user.email}</span>
+            <span className="chat-message">{getMessagePreview()}</span>
+
+              <div className="chat-timestamp">
+          {/* Placeholder for timestamp or last message time if needed */}
+           <span className="last-seen text-sm text-gray-400">
+      {formatLastSeen(user.lastSeen)}
+    </span>
+        </div>
           </div>
         </div>
+        
       </div>
     );
   };

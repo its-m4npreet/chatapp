@@ -50,6 +50,11 @@ const groupMessageSchema = new mongoose.Schema({
             default: Date.now,
         }
     }],
+    replyTo: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'GroupMessage',
+        default: null
+    }
 }, { timestamps: true });
 
 // Index for faster queries

@@ -90,17 +90,6 @@ html:not(.dark) .hover\:bg-gray-50:hover {
   background-color: rgb(249, 250, 251) !important;
 }
 
-/* Disable all dark: modifier styles when dark mode is off */
-html:not(.dark) [class*="dark\:"] {
-  /* These should not apply, base classes should apply instead */
-}
-
-/* Force light mode styles to override any dark styling */
-html:not(.dark) [class*="dark:bg"],
-html:not(.dark) [class*="dark:text"],
-html:not(.dark) [class*="dark:border"] {
-  /* Tailwind dark: classes won't apply, which is correct */
-}
 
 html:not(.dark) .hover\\:text-white:hover {
   color: rgb(17, 24, 39);

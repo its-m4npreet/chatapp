@@ -121,7 +121,7 @@ const createMessageController = (io) => {
 
     // Send message and emit via socket.io
     const sendMessage = async (req, res) => {
-        const { receiverId, content, imageUrl, publicId, audioUrl } = req.body;
+        const { receiverId, content, imageUrl, publicId, audioUrl, replyToId } = req.body;
         const senderId = req.userId;
 
         if (!receiverId) {
@@ -143,12 +143,18 @@ const createMessageController = (io) => {
                 content: content?.trim() || '',
                 image: imageUrl ? { url: imageUrl, public_id: publicId } : null,
                 audio: audioUrl ? { url: audioUrl } : null,
-                messageType
+                messageType,
+                replyTo: replyToId || null
             });
 
             // Save to database
             await newMessage.save();
             await newMessage.populate('sender', 'name profilePicture');
+            
+            // Populate replyTo message if it exists
+            if (newMessage.replyTo) {
+                await newMessage.populate('replyTo', 'content messageType sender');
+            }
 
             // Cache the message with 5-second TTL
             const cacheKey = `message:${newMessage._id}`;
@@ -192,7 +198,15 @@ const createMessageController = (io) => {
             })
                 .sort({ createdAt: 1 })
                 .populate('sender', 'name profilePicture')
-                .populate('receiver', 'name profilePicture');
+                .populate('receiver', 'name profilePicture')
+                .populate({
+                    path: 'replyTo',
+                    select: 'content messageType sender',
+                    populate: {
+                        path: 'sender',
+                        select: 'name profilePicture'
+                    }
+                });
 
             res.status(200).json({
                 message: "Messages fetched successfully",
@@ -264,7 +278,38 @@ const createMessageController = (io) => {
         }
     };
 
-    return { sendMessage, getMessages, uploadImage, uploadAudio, reactToMessage };
+    // Get last message with a specific user
+    const getLastMessage = async (req, res) => {
+        try {
+            const { receiverId } = req.params;
+            const userId = req.userId;
+
+            if (!receiverId) {
+                return res.status(400).json({ message: "receiverId is required" });
+            }
+
+            // Find the last message between current user and the other user
+            const lastMessage = await Message.findOne({
+                $or: [
+                    { sender: userId, receiver: receiverId },
+                    { sender: receiverId, receiver: userId }
+                ]
+            })
+            .sort({ createdAt: -1 })
+            .select('content messageType createdAt sender receiver');
+
+            if (!lastMessage) {
+                return res.status(200).json({ lastMessage: null });
+            }
+
+            res.status(200).json({ lastMessage });
+        } catch (error) {
+            console.error('Get last message error:', error);
+            res.status(500).json({ message: "Server error" });
+        }
+    };
+
+    return { sendMessage, getMessages, uploadImage, uploadAudio, reactToMessage, getLastMessage };
 };
 
 module.exports = createMessageController;

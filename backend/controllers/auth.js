@@ -111,13 +111,21 @@ const signIn = async (req, res) => {
     }
 };
 
-const logout = (req, res) => {
-    res.clearCookie('jwt', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict'
-    });
-    res.status(200).json({ message: "Logout successful" });
+const logout = async (req, res) => {
+    try {
+        // Update last seen timestamp before logout
+        await User.findByIdAndUpdate(req.userId, { lastSeen: new Date() });
+
+        res.clearCookie('jwt', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict'
+        });
+        res.status(200).json({ message: "Logout successful" });
+    } catch (error) {
+        console.error('Logout error:', error);
+        res.status(500).json({ message: "Server error" });
+    }
 }
 
 const updateProfile = async (req, res) => {
@@ -171,7 +179,7 @@ const getAllUsers = async (req, res) => {
 // Get current user's friends
 const getFriends = async (req, res) => {
     try {
-        const user = await User.findById(req.userId).populate('friends', 'name email profilePicture bio username');
+        const user = await User.findById(req.userId).populate('friends', 'name email profilePicture bio username lastSeen');
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }

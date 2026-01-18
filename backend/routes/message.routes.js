@@ -9,6 +9,7 @@ module.exports = (messageController) => {
   messageRouter.post('/upload', authMiddleware, messageController.uploadImage);
   messageRouter.post('/upload-audio', authMiddleware, messageController.uploadAudio);
   messageRouter.post('/:messageId/react', authMiddleware, messageController.reactToMessage);
+  messageRouter.get('/last/:receiverId', authMiddleware, messageController.getLastMessage);
   messageRouter.get('/:receiverId', authMiddleware, messageController.getMessages);
 
   return messageRouter;

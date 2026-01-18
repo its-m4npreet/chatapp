@@ -146,6 +146,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   const [audioPreview, setAudioPreview] = useState(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const [showReactionPicker, setShowReactionPicker] = useState(null); // Track which message's reaction picker is open
+  const [replyingTo, setReplyingTo] = useState(null); // Message being replied to
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const reactionPickerRef = useRef(null);
@@ -155,6 +156,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const touchStartRef = useRef(null); // For swipe detection
   const [inputValue, setInputValue] = useState("");
   const [messages, setMessages] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -249,13 +251,17 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
         const fuzzyIdx = prev.findIndex((m) => {
           const prevImage = m.image ? m.image.url || m.image : "";
           const incomingImage = msg.image ? msg.image.url || msg.image : "";
+          const prevReplyId = m.replyTo ? (typeof m.replyTo === 'object' ? m.replyTo._id : m.replyTo) : null;
+          const incomingReplyId = msg.replyTo ? (typeof msg.replyTo === 'object' ? msg.replyTo._id : msg.replyTo) : null;
+          
           return (
             m.tempId &&
             m.status === 'sending' &&
             getId(m.sender) === senderId &&
             getId(m.receiver) === receiverId &&
             (m.content || "") === (msg.content || "") &&
-            prevImage === incomingImage
+            prevImage === incomingImage &&
+            prevReplyId === incomingReplyId
           );
         });
         
@@ -635,6 +641,50 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     setShowReactionPicker(null);
   };
 
+  // Handle double-tap to reply (Web)
+  const handleMessageDoubleTap = (messageId) => {
+    if (isMobile) return; // Only for web
+    const message = messages.find((m) => m._id === messageId);
+    if (message) {
+      setReplyingTo(message);
+      inputRef.current?.focus();
+    }
+  };
+
+  // Handle touch start for swipe detection (Mobile)
+  const handleTouchStart = (e, messageId) => {
+    if (!isMobile) return; // Only for mobile
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      messageId: messageId,
+      timestamp: Date.now()
+    };
+  };
+
+  // Handle touch end for swipe detection (Mobile)
+  const handleTouchEnd = (e, messageId) => {
+    if (!isMobile || !touchStartRef.current) return; // Only for mobile
+    
+    const touchEnd = {
+      x: e.changedTouches[0].clientX,
+      timestamp: Date.now()
+    };
+
+    const diffX = touchStartRef.current.x - touchEnd.x;
+    const diffTime = touchEnd.timestamp - touchStartRef.current.timestamp;
+
+    // If swiped left (opposite direction) with significant distance
+    if (diffX > 50 && diffTime < 300) {
+      const message = messages.find((m) => m._id === messageId);
+      if (message) {
+        setReplyingTo(message);
+        inputRef.current?.focus();
+      }
+    }
+
+    touchStartRef.current = null;
+  };
+
   // Compress image before upload
   const compressImage = (file, maxWidth = 1024, quality = 0.8) => {
     return new Promise((resolve) => {
@@ -762,6 +812,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       sender: currentUser._id,
       createdAt: new Date().toISOString(),
       tempId,
+      replyTo: replyingTo?._id || null,
     };
 
     // Optimistically add message to UI
@@ -772,6 +823,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       receiver: user,
       image: imageUrl ? { url: imageUrl } : null,
       audio: audioUrl ? { url: audioUrl } : null,
+      replyTo: replyingTo || null,
     };
     setMessages((prev) => [...prev, optimisticMessage]);
 
@@ -781,7 +833,8 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       sender: currentUser._id,
       hasContent: !!inputValue,
       hasImage: !!imageUrl,
-      hasAudio: !!audioUrl
+      hasAudio: !!audioUrl,
+      replyTo: replyingTo?._id || null
     });
     socket.emit("sendMessage", msg);
 
@@ -799,6 +852,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     setInputValue("");
     handleRemoveImage();
     cancelRecording();
+    setReplyingTo(null);
     
     // Scroll to bottom after sending message
     setTimeout(scrollToBottom, 100);
@@ -1075,8 +1129,25 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
                   isCurrentUser ? "items-end" : "items-start"
                 }`}
               >
-                <div className="relative">
+                <div 
+                  className="relative"
+                  onDoubleClick={() => handleMessageDoubleTap(msg._id)}
+                  onTouchStart={(e) => handleTouchStart(e, msg._id)}
+                  onTouchEnd={(e) => handleTouchEnd(e, msg._id)}
+                >
                   <div className={bubbleClass}>
+                    {msg.replyTo && (
+                      <div className={`mb-2 pb-2 border-l-2 ${isCurrentUser ? "border-blue-400" : "border-gray-600"} pl-2 text-xs`}>
+                        <div className={`font-semibold ${isCurrentUser ? "text-blue-200" : "text-gray-300"}`}>
+                          Replying to {typeof msg.replyTo?.sender === 'object' ? msg.replyTo.sender.name : 'user'}
+                        </div>
+                        <div className={`${isCurrentUser ? "text-blue-100" : "text-gray-400"} truncate line-clamp-1`}>
+                          {msg.replyTo?.messageType === 'image' ? '📷 Sent an image' : 
+                           msg.replyTo?.messageType === 'audio' ? '🎙️ Sent a voice message' :
+                           msg.replyTo?.content || '...'}
+                        </div>
+                      </div>
+                    )}
                     {imageUrl && (
                       <img
                         src={imageUrl}
@@ -1112,6 +1183,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
                   </div>
 
                   {/* Quick Reactions Bar - Shows on hover */}
+                  {!isMobile &&
                   <div
                     className={`absolute ${
                       isCurrentUser ? "right-0" : "left-0"
@@ -1180,6 +1252,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
                       <IoAddCircleOutline size={18} />
                     </button>
                   </div>
+                  }
                 </div>
 
                 {/* Reaction Summary and Timestamp */}
@@ -1309,6 +1382,27 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
         </div>
       )}
 
+      {/* Reply Preview Section */}
+      {replyingTo && (
+        <div className="px-4 py-3 border-l-4 border-blue-500 bg-blue-500/10 mx-4 rounded">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-400 mb-1">Replying to {replyingTo.sender?._id === currentUser?._id ? 'yourself' : replyingTo.sender?.name || 'User'}</p>
+              <p className="text-sm text-gray-200 truncate">
+                {replyingTo.content || (replyingTo.messageType === 'image' ? '📷 Image' : replyingTo.messageType === 'audio' ? '🎙️ Audio' : 'Message')}
+              </p>
+            </div>
+            <button
+              onClick={() => setReplyingTo(null)}
+              className="p-1 text-gray-400 hover:text-white transition-colors shrink-0"
+              title="Cancel reply"
+            >
+              <IoClose size={20} />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
         className={(isMobile ? "p-2 gap-1" : "p-4 gap-2") + " border-t border-gray-700 flex flex-wrap items-end  sm:gap-3 relative"}
         // style={{ paddingBottom: isMobile ? "env(safe-area-inset-bottom)" : undefined }}
@@ -1330,7 +1424,8 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
         >
           <IoImageOutline size={22} />
         </button>
-        <button
+        {!isMobile && 
+          <button
           type="button"
           className="p-2 text-gray-400 hover:text-white relative"
           onClick={() => setShowEmoji((v) => !v)}
@@ -1338,6 +1433,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
         >
           <FaRegSmile size={22} className="cursor-pointer" />
         </button>
+        }
         <button
           type="button"
           className={`p-2 transition ${
@@ -1362,7 +1458,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
             </span>
           </div>
         )}
-        {showEmoji && (
+        { showEmoji && (
           <div
             ref={emojiPickerRef}
             className="absolute bottom-12 left-0 z-50 "

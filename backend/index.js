@@ -124,6 +124,16 @@ io.on('connection', (socket) => {
     io.emit('onlineUsers', Array.from(onlineUsers.keys()));
   });
 
+  // Update lastSeen when user is actively using the app
+  socket.on('updateActivity', async (userId) => {
+    try {
+      await User.findByIdAndUpdate(userId, { lastSeen: new Date() });
+      console.log('Backend: Updated activity/lastSeen for user:', userId);
+    } catch (error) {
+      console.error('Error updating activity:', error);
+    }
+  });
+
   // Handle typing events
   socket.on('typing', ({ senderId, receiverId }) => {
     io.to(receiverId).emit('userTyping', { senderId });
@@ -134,10 +144,19 @@ io.on('connection', (socket) => {
   });
 
   // Handle disconnection
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     if (socket.userId) {
       console.log('Backend: User disconnected:', { userId: socket.userId, socketId: socket.id });
       onlineUsers.delete(socket.userId);
+
+      // Update last seen timestamp
+      try {
+        await User.findByIdAndUpdate(socket.userId, { lastSeen: new Date() });
+        console.log('Backend: Updated last seen for user:', socket.userId);
+      } catch (error) {
+        console.error('Error updating last seen on disconnect:', error);
+      }
+
       io.emit('onlineUsers', Array.from(onlineUsers.keys()));
     }
   });
@@ -145,8 +164,8 @@ io.on('connection', (socket) => {
   // Real-time message sending
   socket.on('sendMessage', async (msg) => {
     try {
-      const { sender, receiver, content, image, audio, tempId } = msg;
-      console.log('Backend: Received sendMessage:', { tempId, sender, receiver, hasContent: !!content, senderSocketId: socket.id });
+      const { sender, receiver, content, image, audio, tempId, replyTo } = msg;
+      console.log('Backend: Received sendMessage:', { tempId, sender, receiver, hasContent: !!content, senderSocketId: socket.id, replyTo });
       console.log('Backend: Online users:', Array.from(onlineUsers.keys()));
       console.log('Backend: Is receiver online?', onlineUsers.has(receiver));
       
@@ -167,10 +186,23 @@ io.on('connection', (socket) => {
         image: image ? { url: image, public_id: '' } : null,
         audio: audio ? { url: audio, public_id: '' } : null,
         messageType,
-        status: 'sent'
+        status: 'sent',
+        replyTo: replyTo || null
       });
       await newMessage.save();
       await newMessage.populate('sender', 'name profilePicture');
+      
+      // Populate replyTo if it exists
+      if (newMessage.replyTo) {
+        await newMessage.populate({
+          path: 'replyTo',
+          select: 'content messageType sender',
+          populate: {
+            path: 'sender',
+            select: 'name profilePicture'
+          }
+        });
+      }
 
       // Attach tempId for client-side optimistic update reconciliation (not stored in DB)
       if (tempId) newMessage.tempId = tempId;
