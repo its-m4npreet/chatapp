@@ -147,9 +147,12 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   const [recordingTime, setRecordingTime] = useState(0);
   const [showReactionPicker, setShowReactionPicker] = useState(null); // Track which message's reaction picker is open
   const [replyingTo, setReplyingTo] = useState(null); // Message being replied to
+  const [showLongPressReactions, setShowLongPressReactions] = useState(null); // {messageId, x, y}
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const reactionPickerRef = useRef(null);
+  const longPressTimerRef = useRef(null);
+  const longPressStartRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -172,6 +175,9 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
         mediaRecorderRef.current.stop();
+      }
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
       }
     };
   }, []);
@@ -481,19 +487,29 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     if (inputRef.current) inputRef.current.focus();
   };
 
-  // Close emoji picker when clicking outside
+  // Close emoji picker and long-press reactions when clicking outside
   useEffect(() => {
-    if (!showEmoji) return;
     const handleClickOutside = (event) => {
-      const isEmojiButton = event.target.closest('[data-emoji-button="true"]');
-      if (isEmojiButton) return;
-      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
-        setShowEmoji(false);
+      // Close emoji picker
+      if (showEmoji) {
+        const isEmojiButton = event.target.closest('[data-emoji-button="true"]');
+        if (isEmojiButton) return;
+        if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
+          setShowEmoji(false);
+        }
+      }
+      
+      // Close long-press reactions
+      if (showLongPressReactions) {
+        const isReactionPopup = event.target.closest('[data-reaction-popup="true"]');
+        if (!isReactionPopup) {
+          setShowLongPressReactions(null);
+        }
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showEmoji]);
+  }, [showEmoji, showLongPressReactions]);
 
 
   // Handle markdown formatting
@@ -651,19 +667,58 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     }
   };
 
-  // Handle touch start for swipe detection (Mobile)
+  // Handle touch start for swipe and long-press detection (Mobile)
   const handleTouchStart = (e, messageId) => {
     if (!isMobile) return; // Only for mobile
-    touchStartRef.current = {
+    
+    const touchPoint = {
       x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
       messageId: messageId,
       timestamp: Date.now()
     };
+    
+    touchStartRef.current = touchPoint;
+    longPressStartRef.current = touchPoint;
+    
+    // Set up long-press timer (500ms)
+    longPressTimerRef.current = setTimeout(() => {
+      if (longPressStartRef.current) {
+        // Long press detected - show reaction popup
+        setShowLongPressReactions({
+          messageId: messageId,
+          x: longPressStartRef.current.x,
+          y: longPressStartRef.current.y
+        });
+      }
+    }, 500);
   };
 
-  // Handle touch end for swipe detection (Mobile)
+  // Handle touch move to cancel long-press if moved too much
+  const handleTouchMove = (e) => {
+    if (!isMobile || !longPressStartRef.current || !longPressTimerRef.current) return;
+    
+    const currentTouch = e.touches[0];
+    const diffX = Math.abs(currentTouch.clientX - longPressStartRef.current.x);
+    const diffY = Math.abs(currentTouch.clientY - longPressStartRef.current.y);
+    
+    // If moved more than 10px, cancel long-press
+    if (diffX > 10 || diffY > 10) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+      longPressStartRef.current = null;
+    }
+  };
+
+  // Handle touch end for swipe and long-press detection (Mobile)
   const handleTouchEnd = (e, messageId) => {
     if (!isMobile || !touchStartRef.current) return; // Only for mobile
+    
+    // Clear long-press timer if still active
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
     
     const touchEnd = {
       x: e.changedTouches[0].clientX,
@@ -673,8 +728,8 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     const diffX = touchEnd.x - touchStartRef.current.x;
     const diffTime = touchEnd.timestamp - touchStartRef.current.timestamp;
 
-    // If swiped right (firward direction) with significant distance
-    if (diffX > 50 && diffTime < 300) {
+    // If swiped right (forward direction) with significant distance and not a long press
+    if (diffX > 50 && diffTime < 300 && !showLongPressReactions) {
       const message = messages.find((m) => m._id === messageId);
       if (message) {
         setReplyingTo(message);
@@ -683,6 +738,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     }
 
     touchStartRef.current = null;
+    longPressStartRef.current = null;
   };
 
   // Compress image before upload
@@ -1133,6 +1189,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
                   className="relative"
                   onDoubleClick={() => handleMessageDoubleTap(msg._id)}
                   onTouchStart={(e) => handleTouchStart(e, msg._id)}
+                  onTouchMove={handleTouchMove}
                   onTouchEnd={(e) => handleTouchEnd(e, msg._id)}
                 >
                   <div className={bubbleClass}>
@@ -1308,6 +1365,64 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
                     </div>
                   )}
                 </div>
+
+                {/* Long Press Reaction Popup (Mobile Only) */}
+                {isMobile && showLongPressReactions?.messageId === msg._id && (
+                  <>
+                    {/* Backdrop */}
+                    <div
+                      className="fixed inset-0 z-9998"
+                      onClick={() => setShowLongPressReactions(null)}
+                    />
+                    {/* Reaction Popup */}
+                    <div
+                      data-reaction-popup="true"
+                      className="fixed z-9999 flex items-center gap-1 bg-gray-900/95 backdrop-blur-sm rounded-full px-3 py-2 shadow-lg border border-gray-700"
+                      style={{
+                        left: `${showLongPressReactions.x}px`,
+                        top: `${showLongPressReactions.y - 60}px`,
+                        transform: 'translateX(-50%)'
+                      }}
+                    >
+                      {REACTIONS.map((symbol) => {
+                        const mine = msg.reactions?.some(
+                          (r) =>
+                            getId(r.user) === currentUser?._id &&
+                            r.reaction === symbol
+                        );
+                        return (
+                          <button
+                            key={symbol}
+                            type="button"
+                            data-reaction-popup="true"
+                            className={`text-xl leading-none p-2 rounded-full transition-all active:scale-90 ${
+                              mine ? "bg-blue-600" : "hover:bg-gray-700"
+                            }`}
+                            onClick={() => {
+                              handleReaction(msg, symbol);
+                              setShowLongPressReactions(null);
+                            }}
+                          >
+                            {symbol}
+                          </button>
+                        );
+                      })}
+                      <div className="w-px h-6 bg-gray-600 mx-1"></div>
+                      <button
+                        type="button"
+                        data-reaction-popup="true"
+                        className="text-gray-400 active:text-white p-2 rounded-full active:bg-gray-700 transition-all"
+                        onClick={() => {
+                          setShowReactionPicker(msg._id);
+                          setShowLongPressReactions(null);
+                        }}
+                        title="More reactions"
+                      >
+                        <IoAddCircleOutline size={20} />
+                      </button>
+                    </div>
+                  </>
+                )}
 
                 {/* Custom Emoji Picker for Reactions */}
                 {showReactionPicker === msg._id && (
