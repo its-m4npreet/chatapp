@@ -615,7 +615,7 @@ const GroupChat = ({
       timestamp: now
     };
 
-    const diffX = touchStartRef.current.x - touchEnd.x;
+    const diffX =  touchEnd.x - touchStartRef.current.x;
     const diffTime = touchEnd.timestamp - touchStartRef.current.timestamp;
 
     if (diffX > 50 && diffTime < 300) {

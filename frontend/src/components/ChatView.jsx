@@ -670,10 +670,10 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       timestamp: Date.now()
     };
 
-    const diffX = touchStartRef.current.x - touchEnd.x;
+    const diffX = touchEnd.x - touchStartRef.current.x;
     const diffTime = touchEnd.timestamp - touchStartRef.current.timestamp;
 
-    // If swiped left (opposite direction) with significant distance
+    // If swiped right (firward direction) with significant distance
     if (diffX > 50 && diffTime < 300) {
       const message = messages.find((m) => m._id === messageId);
       if (message) {
