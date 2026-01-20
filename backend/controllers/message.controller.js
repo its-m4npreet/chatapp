@@ -180,23 +180,33 @@ const createMessageController = (io) => {
         }
     };
 
-    // Get all messages between authenticated user and receiverId
+    // Get messages between authenticated user and receiverId with cursor-based pagination
+    // Latest 20 messages initially, older messages when scrolling up
     const getMessages = async (req, res) => {
         const receiverId = req.params.receiverId;
         const userId = req.userId;
+        const { cursor, limit = 20 } = req.query;
 
         if (!receiverId) {
             return res.status(400).json({ message: "receiverId is required" });
         }
 
         try {
-            const messages = await Message.find({
+            const query = {
                 $or: [
                     { sender: userId, receiver: receiverId },
                     { sender: receiverId, receiver: userId }
                 ]
-            })
-                .sort({ createdAt: 1 })
+            };
+
+            // If cursor provided, fetch older messages (messages created before cursor)
+            if (cursor) {
+                query.createdAt = { $lt: new Date(cursor) };
+            }
+
+            const messages = await Message.find(query)
+                .sort({ createdAt: -1 }) // Newest first for pagination
+                .limit(parseInt(limit) + 1) // +1 to check if there are more messages
                 .populate('sender', 'name profilePicture')
                 .populate('receiver', 'name profilePicture')
                 .populate({
@@ -208,9 +218,18 @@ const createMessageController = (io) => {
                     }
                 });
 
+            // Check if there are more messages
+            const hasMore = messages.length > parseInt(limit);
+            const messagesToSend = hasMore ? messages.slice(0, -1) : messages;
+
+            // Return in chronological order (oldest to newest) for display
+            messagesToSend.reverse();
+
             res.status(200).json({
                 message: "Messages fetched successfully",
-                data: messages
+                data: messagesToSend,
+                hasMore,
+                cursor: messagesToSend.length > 0 ? messagesToSend[0].createdAt : null
             });
         } catch (error) {
             console.error(error);

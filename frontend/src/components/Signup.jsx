@@ -48,7 +48,7 @@ export default function SignUp() {
       });
       setLoading(false);
       // Redirect to OTP verification page with email
-      navigate("/verify-email", { state: { email } });
+      navigate("/");
     } catch (err) {
       setLoading(false);
       setError(err.response?.data?.message || "Sign up failed. Please try again.");
@@ -170,7 +170,7 @@ export default function SignUp() {
             </button>
           </div>
 
-          <button
+          <buttonh
             onClick={handleSubmit}
             disabled={loading}
             className="flex justify-center items-center w-full bg-[#4f38f7] text-white py-2.5 px-4 rounded-lg font-medium hover:bg-[#6c50f9] focus:outline-none focus:ring-2 focus:ring-offset-2  transition-colors"
@@ -178,7 +178,7 @@ export default function SignUp() {
             {" "}
             {loading && <ButtonLoading color="#ffffff" />}
             {loading ? "Creating..." : "Sign Up"}
-          </button>
+          </buttonh>
           {error && <div className="text-red-400 text-sm mt-2">{error}</div>}
 
           {/* Divider */}

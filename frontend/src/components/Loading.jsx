@@ -66,4 +66,20 @@ export const InlineLoading = ({ color = '#3b82f6' }) => (
   <Spinner color={color} width={16} height={16} />
 );
 
+// Skeleton loader for older messages (pagination)
+export const MessageSkeletonLoader = ({ count = 3 }) => (
+  <div className="py-4 space-y-3">
+    {Array.from({ length: count }).map((_, idx) => (
+      <div key={idx} className={`flex ${idx % 2 === 0 ? 'justify-start' : 'justify-end'} mb-3`}>
+        <div className={`max-w-[88vw] sm:max-w-md md:max-w-lg ${idx % 2 === 0 ? 'bg-gray-800' : 'bg-blue-600'} rounded-2xl p-3 animate-pulse`}>
+          <div className={`h-4 ${idx % 2 === 0 ? 'bg-gray-700' : 'bg-blue-700'} rounded w-32`}></div>
+          {idx % 3 === 0 && (
+            <div className={`h-3 ${idx % 2 === 0 ? 'bg-gray-700' : 'bg-blue-700'} rounded w-24 mt-2`}></div>
+          )}
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
 export default Loading;

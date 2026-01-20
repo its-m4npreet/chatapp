@@ -306,6 +306,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
   const getActiveSection = () => {
     if (showSettings) return 'settings';
     if (showProfile && !isViewingOtherUserProfile) return 'profile';
+    if (activeTab === 'notifications' && !showProfile && !showSettings) return 'notifications';
     if (activeTab === 'groups' && !showProfile && !showSettings) return 'groups';
     if (activeTab === 'adduser' && !showProfile && !showSettings) return 'adduser';
     return 'chats'; // Default to chats (also when viewing other user's profile)
@@ -359,7 +360,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
             <div className="relative">
               <IoNotifications 
                 size={22} 
-                className="text-gray-400 hover:text-white cursor-pointer transition-colors duration-200" 
+                className={`${activeSection === 'notifications' ? 'text-white' : 'text-gray-400'} hover:text-white cursor-pointer transition-colors duration-200`} 
                 title='notifications'
                 onClick={onNotificationClick}
               />
@@ -369,6 +370,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
                 </span>
               )}
             </div>
+            <span className={`absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-blue-500 rounded-r transition-all duration-300 ease-out pointer-events-none ${activeSection === 'notifications' ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0'}`}></span>
           </div>
         </div>
         <div className="flex-1" />

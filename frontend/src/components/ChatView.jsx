@@ -1,11 +1,10 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { IoMdSend } from "react-icons/io";
 import { FaRegSmile } from "react-icons/fa";
 import { IoImageOutline, IoClose, IoAddCircleOutline, IoMicOutline, IoStopCircleOutline } from "react-icons/io5";
 import { IoCheckmark, IoCheckmarkDone } from "react-icons/io5";
 import EmojiPicker from "emoji-picker-react";
-import { ButtonLoading } from "./Loading";
-import { ContentLoading } from "./Loading";
+import { ButtonLoading, ContentLoading, MessageSkeletonLoader } from "./Loading";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import hljs from "highlight.js";
@@ -133,11 +132,16 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   // Refs to always have latest user/currentUser in socket listener
   const userRef = useRef(user);
   const currentUserRef = useRef(currentUser);
+  const settingsRef = useRef(settings);
 
   useEffect(() => {
     userRef.current = user;
     currentUserRef.current = currentUser;
   }, [user, currentUser]);
+
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
   const [showEmoji, setShowEmoji] = useState(false);
   const [showToolbar, setShowToolbar] = useState(false);
@@ -160,12 +164,21 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   const recordingIntervalRef = useRef(null);
   const messagesEndRef = useRef(null);
   const touchStartRef = useRef(null); // For swipe detection
+  const messagesContainerRef = useRef(null); // For scroll detection
+  const previousScrollHeightRef = useRef(null); // To maintain scroll position
+  const isLoadingOlderRef = useRef(false); // Prevent simultaneous loads
+  
   const [inputValue, setInputValue] = useState("");
   const [messages, setMessages] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  
+  // Pagination state
+  const [cursor, setCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -233,60 +246,41 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       }
 
       setMessages((prev) => {
-        // Try to reconcile optimistic message using tempId
-        const optimisticIdx = prev.findIndex(
-          (m) =>
-            m.tempId &&
-            m.tempId === msg.tempId &&
-            getId(m.sender) === senderId &&
-            getId(m.receiver) === receiverId
-        );
-        
-        if (optimisticIdx !== -1) {
-          console.log('ChatView: Reconciling message with tempId:', msg.tempId);
-          const updated = [...prev];
-          updated[optimisticIdx] = { 
-            ...msg, 
-            tempId: undefined,
-            status: msg.status || 'sent'
-          };
-          return updated;
-        }
-
-        // Fallback: reconcile by matching sender/receiver/content when tempId missing
-        const fuzzyIdx = prev.findIndex((m) => {
-          const prevImage = m.image ? m.image.url || m.image : "";
-          const incomingImage = msg.image ? msg.image.url || msg.image : "";
-          const prevReplyId = m.replyTo ? (typeof m.replyTo === 'object' ? m.replyTo._id : m.replyTo) : null;
-          const incomingReplyId = msg.replyTo ? (typeof msg.replyTo === 'object' ? msg.replyTo._id : msg.replyTo) : null;
-          
-          return (
-            m.tempId &&
-            m.status === 'sending' &&
-            getId(m.sender) === senderId &&
-            getId(m.receiver) === receiverId &&
-            (m.content || "") === (msg.content || "") &&
-            prevImage === incomingImage &&
-            prevReplyId === incomingReplyId
+        // Try to reconcile optimistic message using tempId first
+        if (msg.tempId) {
+          const optimisticIdx = prev.findIndex(
+            (m) =>
+              m.tempId &&
+              m.tempId === msg.tempId &&
+              getId(m.sender) === senderId &&
+              getId(m.receiver) === receiverId
           );
-        });
-        
-        if (fuzzyIdx !== -1) {
-          console.log('ChatView: Fuzzy reconciling message without tempId match');
+          
+          if (optimisticIdx !== -1) {
+            console.log('ChatView: Reconciling message with tempId:', msg.tempId);
+            const updated = [...prev];
+            updated[optimisticIdx] = { 
+              ...msg, 
+              tempId: undefined,
+              status: msg.status || 'sent'
+            };
+            return updated;
+          }
+        }
+
+        // Check if message already exists by _id to prevent duplicates
+        const existsIdx = prev.findIndex((m) => m._id && msg._id && m._id === msg._id);
+        if (existsIdx !== -1) {
+          console.log('ChatView: Message already exists, updating:', msg._id);
+          // Update the existing message instead of skipping
           const updated = [...prev];
-          updated[fuzzyIdx] = { 
-            ...msg, 
+          updated[existsIdx] = { 
+            ...prev[existsIdx],
+            ...msg,
             tempId: undefined,
             status: msg.status || 'sent'
           };
           return updated;
-        }
-
-        // Check if message already exists to prevent duplicates
-        const exists = prev.some((m) => m._id && msg._id && m._id === msg._id);
-        if (exists) {
-          console.log('ChatView: Message already exists, skipping:', msg._id);
-          return prev;
         }
         
         console.log('ChatView: Adding new message to chat:', msg._id);
@@ -294,12 +288,12 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       });
 
       // Mark message as read if it's from the other user and readReceipts are enabled
-      if (cu && senderId === u._id && receiverId === cu._id && settings.readReceipts) {
+      if (cu && senderId === u._id && receiverId === cu._id && settingsRef.current.readReceipts) {
         socket.emit("markMessageRead", { messageId: msg._id, userId: cu._id });
       }
 
       // Send notification if a message is received from the other user
-      if (cu && senderId === u._id && receiverId === cu._id && settings.notifications) {
+      if (cu && senderId === u._id && receiverId === cu._id && settingsRef.current.notifications) {
         const senderName = typeof msg.sender === "object" ? msg.sender.name : "Someone";
         const messagePreview = msg.content ? msg.content.substring(0, 50) : "sent you a message";
         sendNotification(`New message from ${senderName}`, {
@@ -358,7 +352,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       socket.off("messageStatusUpdate", handleMessageStatusUpdate);
       socket.off("connect", handleConnect);
     };
-  }, [socket, settings.readReceipts, settings.notifications, sendNotification]); // Include settings dependencies
+  }, [socket, sendNotification]);
 
   // Cleanup on unmount
   const startRecording = async () => {
@@ -426,10 +420,64 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Fetch messages when user changes
+  // Load older messages (cursor-based pagination)
+  const loadOlderMessages = useCallback(async () => {
+    if (!user || !user._id || isLoadingOlderRef.current || !hasMore || !cursor) {
+      return;
+    }
+
+    isLoadingOlderRef.current = true;
+    setIsLoadingOlder(true);
+
+    try {
+      // Store current scroll height to maintain scroll position
+      if (messagesContainerRef.current) {
+        previousScrollHeightRef.current = messagesContainerRef.current.scrollHeight;
+      }
+
+      const { default: axios } = await import("../lib/axios");
+      const res = await axios.get(`/messages/${user._id}`, {
+        params: {
+          cursor: cursor,
+          limit: 20
+        }
+      });
+
+      const olderMessages = res.data.data || [];
+      const newHasMore = res.data.hasMore ?? false;
+      const newCursor = res.data.cursor;
+
+      if (olderMessages.length > 0) {
+        // Prepend older messages
+        setMessages((prev) => [...olderMessages, ...prev]);
+        setCursor(newCursor);
+        setHasMore(newHasMore);
+
+        // Maintain scroll position after prepending messages
+        setTimeout(() => {
+          if (messagesContainerRef.current && previousScrollHeightRef.current) {
+            const scrollDiff =
+              messagesContainerRef.current.scrollHeight - previousScrollHeightRef.current;
+            messagesContainerRef.current.scrollTop += scrollDiff;
+          }
+        }, 0);
+      } else {
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error("Failed to load older messages:", error);
+    } finally {
+      isLoadingOlderRef.current = false;
+      setIsLoadingOlder(false);
+    }
+  }, [user, hasMore, cursor]);
+
+  // Fetch messages when user changes - Load latest 20 messages initially
   useEffect(() => {
     if (!user || !user._id) {
       setMessages([]);
+      setCursor(null);
+      setHasMore(true);
       return;
     }
 
@@ -437,13 +485,22 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       setIsLoadingMessages(true);
       try {
         const { default: axios } = await import("../lib/axios");
-        const res = await axios.get(`/messages/${user._id}`);
-        // console.log("Fetched messages response:", res.data);
+        // Get latest 20 messages (no cursor for initial load)
+        const res = await axios.get(`/messages/${user._id}`, {
+          params: { limit: 20 }
+        });
         
         // Handle different response structures
-        const fetchedMessages = res.data.messages || res.data.data || res.data || [];
-        // console.log("Setting messages:", fetchedMessages);
+        const fetchedMessages = res.data.data || res.data.messages || [];
         setMessages(fetchedMessages);
+        
+        // Set cursor to oldest message createdAt for pagination
+        if (fetchedMessages.length > 0) {
+          setCursor(fetchedMessages[0].createdAt);
+          setHasMore(res.data.hasMore ?? true);
+        } else {
+          setHasMore(false);
+        }
         
         // Scroll to bottom after messages load
         setTimeout(scrollToBottom, 100);
@@ -480,6 +537,22 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       setTimeout(scrollToBottom, 100);
     }
   }, [messages.length]);
+
+  // Detect scroll to top and load older messages
+  useEffect(() => {
+    const messagesContainer = messagesContainerRef.current;
+    if (!messagesContainer || isLoadingOlder || !hasMore) return;
+
+    const handleScroll = () => {
+      // If scrolled near top (within 200px), load older messages
+      if (messagesContainer.scrollTop < 200) {
+        loadOlderMessages();
+      }
+    };
+
+    messagesContainer.addEventListener('scroll', handleScroll);
+    return () => messagesContainer.removeEventListener('scroll', handleScroll);
+  }, [isLoadingOlder, hasMore, loadOlderMessages]);
 
   // Handle emoji click
   const handleEmojiClick = (emojiData) => {
@@ -859,7 +932,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       setIsUploading(false);
     }
 
-    const tempId = `temp_${Date.now()}_${Math.random()}`;
+    const tempId = `temp_${Date.now()}`;
     const msg = {
       content: inputValue,
       image: imageUrl,
@@ -920,6 +993,37 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       handleSend();
     }
   };
+
+  // Optimized input handler to prevent lag during typing
+  const handleInputChange = useCallback((e) => {
+    const value = e.target.value;
+    setInputValue(value);
+    
+    // Only handle typing indicator if enabled
+    if (!socket || !currentUser || !user || !settings.typingIndicator) {
+      return;
+    }
+    
+    // Clear previous timeout if exists
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    } else if (value.length === 1) {
+      // Only emit typing on first character
+      socket.emit("typing", {
+        senderId: currentUser._id,
+        receiverId: user._id,
+      });
+    }
+    
+    // Set timeout to stop typing after 1 second of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit("stopTyping", {
+        senderId: currentUser._id,
+        receiverId: user._id,
+      });
+      typingTimeoutRef.current = null;
+    }, 1000);
+  }, [socket, currentUser, user, settings.typingIndicator]);
 
   const handleReaction = async (msg, symbol) => {
     const existing = msg.reactions?.find(
@@ -1140,6 +1244,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       {/* )} */}
 
       <div
+        ref={messagesContainerRef}
         className={"flex-1 " + (isMobile ? "p-3" : "p-6") + " overflow-y-auto text-white scrollbar-hide"}
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
@@ -1148,7 +1253,11 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
         ) : messages.length === 0 ? (
           <div className="text-center text-gray-500 my-4">No messages yet.</div>
         ) : (
-          messages.map((msg, idx) => {
+          <>
+            {/* Skeleton loader at top while loading older messages */}
+            {isLoadingOlder && <MessageSkeletonLoader count={2} />}
+            
+            {messages.map((msg, idx) => {
             const senderId =
               typeof msg.sender === "object" ? msg.sender._id : msg.sender;
             const isCurrentUser = currentUser && senderId === currentUser._id;
@@ -1454,10 +1563,12 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
                 )}
               </div>
             );
-          })
+          })}
+            
+            {/* Scroll anchor */}
+            <div ref={messagesEndRef} />
+          </>
         )}
-        {/* Scroll anchor */}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Image Preview Section */}
@@ -1666,33 +1777,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
           className="flex-1 min-w-0 p-2 rounded border border-gray-700 text-white outline-none bg-transparent"
           placeholder="Type a message..."
           value={inputValue}
-          onChange={(e) => {
-            const value = e.target.value;
-            setInputValue(value);
-            
-            // Debounced typing event
-            if (socket && currentUser && user && settings.typingIndicator) {
-              // Clear previous timeout
-              if (typingTimeoutRef.current) {
-                clearTimeout(typingTimeoutRef.current);
-              } else if (value.length === 1) {
-                // Only emit typing on first character
-                socket.emit("typing", {
-                  senderId: currentUser._id,
-                  receiverId: user._id,
-                });
-              }
-              
-              // Stop typing after 1 seconds of inactivity
-              typingTimeoutRef.current = setTimeout(() => {
-                socket.emit("stopTyping", {
-                  senderId: currentUser._id,
-                  receiverId: user._id,
-                });
-                typingTimeoutRef.current = null;
-              }, 1000);
-            }
-          }}
+          onChange={handleInputChange}
           onKeyDown={handleKeyPress}
         />
         <button

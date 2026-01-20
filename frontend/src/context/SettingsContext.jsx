@@ -73,10 +73,17 @@ export const SettingsProvider = ({ children }) => {
   const sendNotification = (title, options = {}) => {
     if (settings.notifications && "Notification" in window) {
       if (Notification.permission === "granted") {
-        new Notification(title, {
+        const notification = new Notification(title, {
           icon: "/favicon.ico",
           ...options,
         });
+
+        // Handle notification click to focus the window
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+
         playSoundNotification();
       }
     }
