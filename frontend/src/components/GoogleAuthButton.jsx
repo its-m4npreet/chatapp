@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 export default function GoogleAuthButton({ onSuccess, onError, className = "" }) {
 
   const signInBtnRef = useRef(null);
-const [googleWidth, setGoogleWidth] = useState(320);
+const [googleWidth, setGoogleWidth] = useState(300);
 
 useLayoutEffect(() => {
   if (signInBtnRef.current) {
