@@ -204,28 +204,29 @@ io.on('connection', (socket) => {
         });
       }
 
-      // Attach tempId for client-side optimistic update reconciliation (not stored in DB)
-      if (tempId) newMessage.tempId = tempId;
+      // Convert to plain object and attach tempId for client-side optimistic update reconciliation
+      const messageToEmit = newMessage.toObject();
+      if (tempId) messageToEmit.tempId = tempId;
 
       // Cache the message with 5-second TTL
       const cacheKey = `message:${newMessage._id}`;
       await cacheService.setCache(cacheKey, newMessage, 5);
 
       console.log('Backend: Emitting newMessage to rooms:', { 
-        messageId: newMessage._id,
-        tempId: newMessage.tempId,
+        messageId: messageToEmit._id,
+        tempId: messageToEmit.tempId,
         sender,
         receiver,
-        status: newMessage.status,
+        status: messageToEmit.status,
         receiverSocketId: onlineUsers.get(receiver)
       });
 
       // Emit to both sender and receiver rooms
       console.log(`Backend: io.to('${receiver}').emit('newMessage', ...)`);
-      io.to(receiver).emit('newMessage', newMessage);
+      io.to(receiver).emit('newMessage', messageToEmit);
       
       console.log(`Backend: io.to('${sender}').emit('newMessage', ...)`);
-      io.to(sender).emit('newMessage', newMessage);
+      io.to(sender).emit('newMessage', messageToEmit);
 
       // Update status to delivered if receiver is online
       if (onlineUsers.has(receiver)) {

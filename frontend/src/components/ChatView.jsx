@@ -246,7 +246,22 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       }
 
       setMessages((prev) => {
-        // Try to reconcile optimistic message using tempId first
+        // First, check if message already exists by _id to prevent duplicates
+        const existsIdx = prev.findIndex((m) => m._id && msg._id && m._id === msg._id);
+        if (existsIdx !== -1) {
+          console.log('ChatView: Message already exists by _id, updating:', msg._id);
+          // Update the existing message instead of adding a duplicate
+          const updated = [...prev];
+          updated[existsIdx] = { 
+            ...prev[existsIdx],
+            ...msg,
+            tempId: undefined,
+            status: msg.status || 'sent'
+          };
+          return updated;
+        }
+
+        // Try to reconcile optimistic message using tempId
         if (msg.tempId) {
           const optimisticIdx = prev.findIndex(
             (m) =>
@@ -266,21 +281,6 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
             };
             return updated;
           }
-        }
-
-        // Check if message already exists by _id to prevent duplicates
-        const existsIdx = prev.findIndex((m) => m._id && msg._id && m._id === msg._id);
-        if (existsIdx !== -1) {
-          console.log('ChatView: Message already exists, updating:', msg._id);
-          // Update the existing message instead of skipping
-          const updated = [...prev];
-          updated[existsIdx] = { 
-            ...prev[existsIdx],
-            ...msg,
-            tempId: undefined,
-            status: msg.status || 'sent'
-          };
-          return updated;
         }
         
         console.log('ChatView: Adding new message to chat:', msg._id);
@@ -1476,7 +1476,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
                 </div>
 
                 {/* Long Press Reaction Popup (Mobile Only) */}
-                {isMobile && showLongPressReactions?.messageId === msg._id && (
+                {isMobile && showLongPressReactions?.messageId === msg._id && showLongPressReactions?.x !== undefined && (
                   <>
                     {/* Backdrop */}
                     <div
@@ -1488,8 +1488,8 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
                       data-reaction-popup="true"
                       className="fixed z-9999 flex items-center gap-1 bg-gray-900/95 backdrop-blur-sm rounded-full px-3 py-2 shadow-lg border border-gray-700"
                       style={{
-                        left: `${showLongPressReactions.x}px`,
-                        top: `${showLongPressReactions.y - 60}px`,
+                        left: `${showLongPressReactions?.x ?? 0}px`,
+                        top: `${(showLongPressReactions?.y ?? 0) - 60}px`,
                         transform: 'translateX(-50%)'
                       }}
                     >

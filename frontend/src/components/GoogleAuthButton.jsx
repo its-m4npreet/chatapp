@@ -1,9 +1,33 @@
-import React from "react";
+import React , {useEffect, useLayoutEffect, useRef , useState} from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import axios from "../lib/axios";
 import { useNavigate } from "react-router-dom";
 
 export default function GoogleAuthButton({ onSuccess, onError, className = "" }) {
+
+  const signInBtnRef = useRef(null);
+const [googleWidth, setGoogleWidth] = useState(320);
+
+useLayoutEffect(() => {
+  if (signInBtnRef.current) {
+    setGoogleWidth(signInBtnRef.current.offsetWidth);
+  }
+}, []);
+
+
+useEffect(() => {
+  const updateWidth = () => {
+    if (signInBtnRef.current) {
+      setGoogleWidth(signInBtnRef.current.offsetWidth);
+    }
+  };
+
+  updateWidth();
+  window.addEventListener("resize", updateWidth);
+  return () => window.removeEventListener("resize", updateWidth);
+}, []);
+
+
   const navigate = useNavigate();
 
   const handleGoogleSuccess = async (credentialResponse) => {
@@ -12,44 +36,36 @@ export default function GoogleAuthButton({ onSuccess, onError, className = "" })
         credential: credentialResponse.credential,
       });
 
-      if (response.data && response.data.user) {
+      if (response.data?.user) {
         localStorage.setItem("user", JSON.stringify(response.data.user));
         if (response.data.token) {
           localStorage.setItem("jwt_token", response.data.token);
         }
       }
 
-      if (onSuccess) {
-        onSuccess(response.data);
-      } else {
-        navigate("/");
-      }
+      onSuccess ? onSuccess(response.data) : navigate("/");
     } catch (error) {
       console.error("Google Auth Error:", error);
-      const errorMessage =
-        error.response?.data?.message || "Google authentication failed";
-      if (onError) {
-        onError(errorMessage);
-      }
-    }
-  };
-
-  const handleGoogleError = () => {
-    const errorMessage = "Google login failed. Please try again.";
-    if (onError) {
-      onError(errorMessage);
+      onError?.(
+        error.response?.data?.message || "Google authentication failed"
+      );
     }
   };
 
   return (
-    <div className={`google-auth-button-wrapper w-full ${className}`}>
+    <div className={`w-full flex justify-center ${className}`}>
       <GoogleLogin
         onSuccess={handleGoogleSuccess}
-        onError={handleGoogleError}
-        theme="dark"
-        text="signin_with"
+        onError={() =>
+          onError?.("Google login failed. Please try again.")
+        }
+        theme="outline"
         size="large"
+        width={googleWidth}   // ✅ MUST be number, not "px"
+        text="signin_with"
       />
     </div>
   );
 }
+
+
