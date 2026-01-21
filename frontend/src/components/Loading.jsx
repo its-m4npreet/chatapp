@@ -82,4 +82,42 @@ export const MessageSkeletonLoader = ({ count = 3 }) => (
   </div>
 );
 
+// Skeleton loader for friends list
+export const FriendsSkeletonLoader = ({ count = 5 }) => (
+  <div className="py-2 space-y-2">
+    {Array.from({ length: count }).map((_, idx) => (
+      <div key={idx} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-700 cursor-pointer animate-pulse bg-gray-800/50 transition-colors">
+        {/* Avatar placeholder */}
+        <div className="w-10 h-10 rounded-full bg-gray-700 shrink-0"></div>
+        {/* Chat info placeholder */}
+        <div className="flex-1 min-w-0">
+          {/* Name placeholder */}
+          <div className="h-4 bg-gray-700 rounded w-32 mb-2"></div>
+          {/* Message preview placeholder */}
+          <div className="h-3 bg-gray-700 rounded w-24"></div>
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+// Skeleton loader for groups list
+export const GroupsSkeletonLoader = ({ count = 3 }) => (
+  <div className="py-2 space-y-2">
+    {Array.from({ length: count }).map((_, idx) => (
+      <div key={idx} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-700 cursor-pointer animate-pulse bg-gray-800/50 transition-colors">
+        {/* Group avatar placeholder */}
+        <div className="w-10 h-10 rounded-full bg-gray-700 shrink-0"></div>
+        {/* Group info placeholder */}
+        <div className="flex-1 min-w-0">
+          {/* Group name placeholder */}
+          <div className="h-4 bg-gray-700 rounded w-40 mb-2"></div>
+          {/* Members count placeholder */}
+          <div className="h-3 bg-gray-700 rounded w-20"></div>
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
 export default Loading;

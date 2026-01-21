@@ -6,7 +6,7 @@ import { IoChatboxEllipses, IoNotifications } from "react-icons/io5";
 import { TiGroup } from "react-icons/ti";
 import axios from '../lib/axios';
 import socket from '../lib/socket';
-import { ContentLoading } from './Loading';
+import { ContentLoading, FriendsSkeletonLoader, GroupsSkeletonLoader } from './Loading';
 import { useSettings } from '../context/useSettings';
 
 const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick, showProfile, onSettingsClick, showSettings, onTabChange, viewingUserProfile, onlineUsers = [], refreshFriends, onNotificationClick, unreadNotifications = 0, groups = [], selectedGroup, onSelectGroup, onCreateGroup, externalActiveTab, isMobile, mobileSearchQuery = '' }) => {
@@ -396,7 +396,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
       </div>
 
       {/* Main sidebar */}
-      <div className="sidebar w-full md:w-auto">
+      <div className={`sidebar w-full md:w-auto ${isMobile ? 'pb-20' : ''}`}>
         {/* Hide header on mobile since we have top header in home.jsx */}
         {!isMobile && (
           <div className="sidebar-header">
@@ -485,7 +485,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
               <div className="section-title">Chats</div>
             )}
             {loading ? (
-              <ContentLoading text="Loading friends..." />
+              <FriendsSkeletonLoader count={5} />
             ) : error ? (
               <div className="sidebar-error">{error}</div>
             ) : filteredUsers.length === 0 ? (

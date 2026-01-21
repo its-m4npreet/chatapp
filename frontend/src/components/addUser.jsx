@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { IoArrowBack, IoSearch, IoPersonAdd } from 'react-icons/io5';
 import { FaCircleUser, FaCheck } from 'react-icons/fa6';
 import axios from '../lib/axios';
-import { ContentLoading } from './Loading';
+import { FriendsSkeletonLoader } from './Loading';
 
 const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -118,7 +118,7 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
       {/* Users List */}
       <div className="flex-1 overflow-y-auto px-4 pb-4 scrollbar-hide ">
         {loading ? (
-          <ContentLoading text="Loading users..." />
+          <FriendsSkeletonLoader count={6} />
         ) : error ? (
           <div className="text-center text-red-400 py-8">{error}</div>
         ) : filteredUsers.length === 0 ? (
@@ -193,11 +193,13 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
       </div>
 
       {/* Info Footer */}
-      <div className="p-4 border-t border-gray-700">
+      {!isMobile && (
+        <div className="p-4 border-t border-gray-700">
         <p className="text-sm text-gray-500 text-center">
           Click the + button to add a user to your chat list
         </p>
       </div>
+      )}
     </div>
   );
 };

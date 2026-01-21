@@ -55,7 +55,6 @@ export const Home = () => {
   // New: responsive + mobile sidebar visibility
   const [isMobile, setIsMobile] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [mobileSearchQuery, setMobileSearchQuery] = useState('');
 
@@ -718,43 +717,21 @@ export const Home = () => {
                 <IoSearch size={20} />
               </button>            
 
-              <div className="relative">
-                <button
-                  onClick={() => setShowMobileMenu(!showMobileMenu)}
-                  className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
-                >
-                  <IoEllipsisVertical size={20} />
-                </button>
-                {showMobileMenu && (
-                  <>
-                    <div 
-                      className="fixed inset-0 z-30" 
-                      onClick={() => setShowMobileMenu(false)}
-                    />
-                    <div className="absolute right-0 top-full mt-1 w-48 bg-[#141417] border border-gray-700 rounded-lg shadow-lg z-999 py-1">
-                      <button
-                        onClick={() => {
-                          handleProfileClick();
-                          setShowMobileMenu(false);
-                        }}
-                        className="w-full bg-[#141417] text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 transition"
-                      >
-                        Profile
-                      </button>
-                      <div className='h-px w-full bg-gray-700'></div>
-                      <button
-                        onClick={() => {
-                          handleSettingsClick();
-                          setShowMobileMenu(false);
-                        }}
-                        className="w-full bg-[#141417] text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 transition"
-                      >
-                        Settings
-                      </button>
-                    </div>
-                  </>
+              <button
+                onClick={handleProfileClick}
+                className="p-2 hover:bg-zinc-700 rounded-full text-gray-400 hover:text-white transition"
+                title="Profile"
+              >
+                {currentUser?.profilePicture ? (
+                  <img 
+                    src={currentUser.profilePicture} 
+                    alt="Profile" 
+                    className="w-7 h-7 rounded-full object-cover"
+                  />
+                ) : (
+                  <FaCircleUser size={20} />
                 )}
-              </div>
+              </button>
             </div>
           )}
         </div>
@@ -809,14 +786,14 @@ export const Home = () => {
             />
           </div>
         ) : showSettings ? (
-          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}>
+          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto ${isMobile ? 'pb-20' : ''}`}>
             <Settings 
               onClose={handleCloseSettings}
               isMobile={isMobile}
             />
           </div>
         ) : showAddUser ? (
-          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}>
+          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto ${isMobile ? 'pb-20' : ''}`}>
             <AddUser 
               onClose={handleCloseAddUser}
               onSelectUser={handleSelectUser}
@@ -825,7 +802,7 @@ export const Home = () => {
             />
           </div>
         ) : showNotificationsPage ? (
-          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}>
+          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto ${isMobile ? 'pb-20' : ''}`}>
             <NotificationPage
               onClose={() => {
                 setShowNotificationsPage(false);

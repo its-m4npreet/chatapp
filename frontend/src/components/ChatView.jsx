@@ -10,6 +10,8 @@ import DOMPurify from "dompurify";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
 import { useSettings } from "../context/useSettings";
+import { IoIosArrowBack } from "react-icons/io";
+
 import {
   formatBold,
   formatItalic,
@@ -1184,14 +1186,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       {/* {!isMobile && ( */}
         <div className="chat-header p-4 border-b border-gray-700 flex items-center gap-4">
           {isMobile && (
-            <button
-            onClick={onBack}
-            aria-label="Back to chat list"
-            className="text-gray-300 hover:text-white"
-            title="Back"
-          >
-            <span className="inline-block">&larr;</span>
-          </button>
+          <IoIosArrowBack onClick={onBack}/>
               )
               }
           <div
@@ -1249,7 +1244,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         {isLoadingMessages ? (
-          <ContentLoading />
+          <MessageSkeletonLoader count={4} />
         ) : messages.length === 0 ? (
           <div className="text-center text-gray-500 my-4">No messages yet.</div>
         ) : (

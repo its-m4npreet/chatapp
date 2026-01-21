@@ -170,15 +170,15 @@ export default function SignUp() {
             </button>
           </div>
 
-          <buttonh
+          <button
             onClick={handleSubmit}
             disabled={loading}
-            className="flex justify-center items-center w-full bg-[#4f38f7] text-white py-2.5 px-4 rounded-lg font-medium hover:bg-[#6c50f9] focus:outline-none focus:ring-2 focus:ring-offset-2  transition-colors"
+            className="flex justify-center items-center w-full bg-[#4f38f7] text-white py-2.5 px-4 rounded-lg font-medium hover:bg-[#6c50f9] focus:outline-none focus:ring-2 focus:ring-offset-2  transition-colors gap-2"
           >
             {" "}
             {loading && <ButtonLoading color="#ffffff" />}
             {loading ? "Creating..." : "Sign Up"}
-          </buttonh>
+          </button>
           {error && <div className="text-red-400 text-sm mt-2">{error}</div>}
 
           {/* Divider */}

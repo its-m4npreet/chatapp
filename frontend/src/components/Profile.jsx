@@ -16,6 +16,7 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile = 
   const handleBack = () => {
     if (isMobile) {
       navigate(-1);
+      // navigate('/');
     } else {
       onClose && onClose();
     }

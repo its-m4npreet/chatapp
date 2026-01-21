@@ -11,11 +11,12 @@ import {
   IoMicOutline,
   IoStopCircleOutline,
 } from "react-icons/io5";
+import { CiMenuKebab } from "react-icons/ci";
 import { MdEdit } from "react-icons/md";
 import { TiGroup } from "react-icons/ti";
 import { FaCircleUser } from "react-icons/fa6";
 import axios from "../lib/axios";
-import { ContentLoading } from "./Loading";
+import { ContentLoading, MessageSkeletonLoader } from "./Loading";
 import EditGroupModal from "./EditGroupModal";
 import { FaRegSmile } from "react-icons/fa";
 import EmojiPicker from "emoji-picker-react";
@@ -31,6 +32,7 @@ import {
   formatInlineCode,
   formatHighlight,
 } from "../lib/markdownParser";
+import { IoIosArrowBack } from "react-icons/io";
 
 // Support underline and highlight formatting just like ChatPage
 const underlineExtension = {
@@ -124,9 +126,10 @@ const GroupChat = ({
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [showMembers, setShowMembers] = useState(false);
+  const [showGroupProfile, setShowGroupProfile] = useState(false);
   const [showEditGroup, setShowEditGroup] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -147,6 +150,7 @@ const GroupChat = ({
   const reactionPickerRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
+  const mobileMenuRef = useRef(null);
   const getId = (val) =>
     typeof val === "object" && val !== null ? val._id : val;
 
@@ -171,6 +175,21 @@ const GroupChat = ({
       }
     };
   }, []);
+
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    if (!showMobileMenu) return;
+    const handleClickOutside = (event) => {
+      if (
+        mobileMenuRef.current &&
+        !mobileMenuRef.current.contains(event.target)
+      ) {
+        setShowMobileMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showMobileMenu]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -817,15 +836,14 @@ const GroupChat = ({
       )} */}
       {/* Desktop header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 ">
-        <div className="flex items-center gap-3">
-        <button
-            onClick={onBack}
-            aria-label="Back to chat list"
-            className="text-gray-300 hover:text-white"
-            title="Back"
-          >
-            <span className="inline-block">&larr;</span>
-          </button>
+        <div 
+          className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition"
+          onClick={() => setShowGroupProfile(true)}
+        >
+          <IoIosArrowBack onClick={(e) => {
+            e.stopPropagation();
+            onBack();
+          }} />
           <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
             {group.avatar ? (
               <img
@@ -844,7 +862,59 @@ const GroupChat = ({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        {isMobile ? (
+          <div className="relative" ref={mobileMenuRef}>
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
+              title="More options"
+            >
+              {showMobileMenu ? <IoClose size={20} /> : <CiMenuKebab size={20} />}
+            </button>
+            {showMobileMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowMobileMenu(false)}
+                />
+                <div className="absolute right-0 mt-2 w-48 bg-zinc-800 border border-gray-700 rounded-lg shadow-lg z-50">
+                  {/* <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+                    <span className="text-white font-semibold text-sm">Menu</span>
+                    <button
+                      onClick={() => setShowMobileMenu(false)}
+                      className="p-1 hover:bg-zinc-700 rounded text-gray-400 hover:text-white transition"
+                    >
+                      <IoClose size={18} />
+                    </button>
+                  </div> */}
+                  {(isCreator || isAdmin) && (
+                    <button
+                      onClick={() => {
+                        setShowEditGroup(true);
+                        setShowMobileMenu(false);
+                      }}
+                      className="w-full text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 hover:text-white transition flex items-center gap-2"
+                    >
+                      <MdEdit size={18} />
+                      Edit Group
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      onOpenInvite && onOpenInvite(group);
+                      setShowMobileMenu(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 hover:text-white transition flex items-center gap-2"
+                  >
+                    <IoPersonAddOutline size={18} />
+                    Add Members
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
           {(isCreator || isAdmin) && (
             <button
               onClick={() => setShowEditGroup(true)}
@@ -861,22 +931,17 @@ const GroupChat = ({
           >
             <IoPersonAddOutline size={20} />
           </button>
-          <button
-            onClick={() => setShowMembers(!showMembers)}
-            className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
-            title="View members"
-          >
-            <IoSettingsOutline size={20} />
-          </button>
-          {onClose && (
+          {/* {onClose && (
             <button
               onClick={onClose}
               className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
             >
               <IoClose size={20} />
             </button>
-          )}
+          )} */}
         </div>
+        )}
+        
       </div>
 
       <div className="flex-1 flex overflow-hidden">
@@ -887,7 +952,7 @@ const GroupChat = ({
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             {loading ? (
-              <ContentLoading text="Loading messages..." />
+              <MessageSkeletonLoader count={4} />
             ) : messages.length === 0 ? (
               <div className="text-center text-gray-400 py-8">
                 No messages yet. Start the conversation!
@@ -1157,7 +1222,6 @@ const GroupChat = ({
           <form
             onSubmit={handleSendMessage}
             className={(isMobile ? "p-2" : "p-4") + " border-t border-gray-700"}
-            style={{ paddingBottom: isMobile ? "env(safe-area-inset-bottom)" : undefined }}
           >
             {/* Reply Preview Panel */}
             {replyingTo && (
@@ -1218,7 +1282,7 @@ const GroupChat = ({
               </div>
             )}
 
-            <div className="flex flex-wrap items-end gap-2 sm:gap-3 relative">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 relative">
               {/* Hidden file input */}
               <input
                 type="file"
@@ -1386,65 +1450,183 @@ const GroupChat = ({
           </form>
         </div>
 
-        {/* Members Sidebar */}
-        {showMembers && (
-          <div className="w-64 border-l border-gray-700 bg-zinc-800 overflow-y-auto">
-            <div className="p-4">
-              <h4 className="text-white font-semibold mb-4">
-                Members ({group.members?.length})
-              </h4>
-              <div className="space-y-2">
-                {group.members?.map((member) => (
-                  <div
-                    key={member._id}
-                    className="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-700"
-                  >
-                    <div className="w-8 h-8 rounded-full overflow-hidden">
-                      {member.profilePicture ? (
+        {/* Group Profile Modal */}
+        {showGroupProfile && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center">
+            <div className="bg-zinc-900 w-full sm:w-full sm:max-w-md max-h-[90vh] rounded-t-3xl sm:rounded-lg overflow-y-auto border border-gray-700">
+              {/* Close Button */}
+              <div className="sticky top-0 flex justify-end p-3 bg-zinc-900 border-b border-gray-700">
+                <button
+                  onClick={() => setShowGroupProfile(false)}
+                  className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
+                >
+                  <IoClose size={24} />
+                </button>
+              </div>
+
+              {/* Group Avatar */}
+              <div className="flex justify-center py-6">
+                <div className="w-32 h-32 rounded-full bg-blue-600 flex items-center justify-center border-4 border-gray-700 overflow-hidden">
+                  {group.avatar ? (
+                    <img
+                      src={group.avatar}
+                      alt={group.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <TiGroup size={64} className="text-white" />
+                  )}
+                </div>
+              </div>
+
+              {/* Group Info */}
+              <div className="px-6 pb-6">
+                <h2 className="text-2xl font-bold text-white text-center mb-2">
+                  {group.name}
+                </h2>
+                {group.description && (
+                  <p className="text-gray-300 text-center text-sm mb-6">
+                    {group.description}
+                  </p>
+                )}
+
+                {/* Group Stats */}
+                <div className="grid grid-cols-3 gap-4 mb-6 py-4 border-y border-gray-700">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-blue-400">
+                      {group.members?.length || 0}
+                    </p>
+                    <p className="text-xs text-gray-400">Members</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-green-400">
+                      {group.admins?.length || 0}
+                    </p>
+                    <p className="text-xs text-gray-400">Admins</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xl font-bold text-purple-400">
+                      {new Date(group.createdAt).getFullYear()}
+                    </p>
+                    <p className="text-xs text-gray-400">Created</p>
+                  </div>
+                </div>
+
+                {/* Creator Info */}
+                <div className="mb-6 p-3 bg-gray-800 rounded-lg">
+                  <p className="text-xs text-gray-400 mb-2">Group Creator</p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-700">
+                      {group.creator?.profilePicture ? (
                         <img
-                          src={member.profilePicture}
+                          src={group.creator.profilePicture}
                           alt=""
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full bg-gray-600 flex items-center justify-center">
-                          <FaCircleUser size={16} />
-                        </div>
+                        <FaCircleUser size={24} className="text-gray-500" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-white text-sm truncate">
-                        {member.name}
+                      <p className="text-white text-sm font-medium">
+                        {group.creator?.name}
                       </p>
-                      {group.creator?._id === member._id && (
-                        <span className="text-xs text-blue-400">Creator</span>
-                      )}
-                      {group.admins?.some((a) => a._id === member._id) &&
-                        group.creator?._id !== member._id && (
-                          <span className="text-xs text-green-400">Admin</span>
-                        )}
+                      <p className="text-xs text-gray-400">Creator</p>
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
 
-              {/* Group Actions */}
-              <div className="mt-6 pt-4 border-t border-gray-700">
-                {group.creator?._id === currentUser?._id ? (
+                {/* Members List */}
+                <div className="mb-6">
+                  <h4 className="text-white font-semibold mb-3">
+                    Members ({group.members?.length})
+                  </h4>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {group.members?.map((member) => (
+                      <div
+                        key={member._id}
+                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-zinc-700 transition"
+                      >
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-700 shrink-0">
+                          {member.profilePicture ? (
+                            <img
+                              src={member.profilePicture}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <FaCircleUser size={16} className="text-gray-500" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white text-sm truncate">
+                            {member.name}
+                          </p>
+                          <div className="flex gap-1 flex-wrap">
+                            {group.creator?._id === member._id && (
+                              <span className="text-[10px] text-blue-400 font-medium bg-blue-400/10 px-1.5 py-0.5 rounded">
+                                Creator
+                              </span>
+                            )}
+                            {group.admins?.some((a) => a._id === member._id) &&
+                              group.creator?._id !== member._id && (
+                                <span className="text-[10px] text-green-400 font-medium bg-green-400/10 px-1.5 py-0.5 rounded">
+                                  Admin
+                                </span>
+                              )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="space-y-2">
+                  {(isCreator || isAdmin) && (
+                    <button
+                      onClick={() => {
+                        setShowEditGroup(true);
+                        setShowGroupProfile(false);
+                      }}
+                      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
+                    >
+                      <MdEdit size={18} />
+                      Edit Group
+                    </button>
+                  )}
                   <button
-                    onClick={handleDeleteGroup}
-                    className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition"
+                    onClick={() => {
+                      onOpenInvite && onOpenInvite(group);
+                      setShowGroupProfile(false);
+                    }}
+                    className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
                   >
-                    Delete Group
+                    <IoPersonAddOutline size={18} />
+                    Add Members
                   </button>
-                ) : (
-                  <button
-                    onClick={handleLeaveGroup}
-                    className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition"
-                  >
-                    Leave Group
-                  </button>
-                )}
+                  {group.creator?._id === currentUser?._id ? (
+                    <button
+                      onClick={() => {
+                        handleDeleteGroup();
+                        setShowGroupProfile(false);
+                      }}
+                      className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition"
+                    >
+                      Delete Group
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        handleLeaveGroup();
+                        setShowGroupProfile(false);
+                      }}
+                      className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition"
+                    >
+                      Leave Group
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
