@@ -1,5 +1,5 @@
 const express = require('express');
-const { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend, googleAuth, resendOtpCode, verifyOtpCode, loginWithVerifiedEmail, sendResetPasswordEmail, resetPassword } = require('../controllers/auth');
+const { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend, googleAuth, resendOtpCode, verifyOtpCode, loginWithVerifiedEmail, sendResetPasswordEmail, resetPassword, sendBugReport } = require('../controllers/auth');
 const authMiddleware = require('../middleware/authMiddleware');
 
 const userRouter = express.Router();
@@ -18,6 +18,9 @@ userRouter.post('/resend-otp', resendOtpCode);
 // Password reset routes
 userRouter.post('/send-reset-password-email', sendResetPasswordEmail);
 userRouter.post('/reset-password', resetPassword);
+
+// Bug report route
+userRouter.post('/send-bug-report', sendBugReport);
 
 // Get all users except current user
 userRouter.get('/users', authMiddleware, getAllUsers);

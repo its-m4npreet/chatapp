@@ -618,4 +618,96 @@ const resetPassword = async (req, res) => {
     }
 };
 
-module.exports = { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend, googleAuth, resendOtpCode, verifyOtpCode, loginWithVerifiedEmail, sendResetPasswordEmail, resetPassword };
+// Send bug report
+const sendBugReport = async (req, res) => {
+    const { title, description, steps, severity, affectedFeature, email, images, timestamp, userAgent } = req.body;
+
+    if (!title || !description || !steps || !email) {
+        return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    try {
+        const nodemailer = require('nodemailer');
+        const transporter = nodemailer.createTransport({
+            service: process.env.EMAIL_SERVICE,
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASSWORD,
+            }
+        });
+
+        // Prepare email content
+        let emailHtml = `
+            <h2>Bug Report Submitted</h2>
+            <p><strong>Title:</strong> ${title}</p>
+            <p><strong>Severity:</strong> ${severity}</p>
+            <p><strong>Feature:</strong> ${affectedFeature || "Not specified"}</p>
+            <p><strong>User Email:</strong> ${email}</p>
+            <p><strong>Submitted at:</strong> ${timestamp}</p>
+            <p><strong>User Agent:</strong> ${userAgent}</p>
+            
+            <h3>Description:</h3>
+            <p>${description.replace(/\n/g, "<br>")}</p>
+            
+            <h3>Steps to Reproduce:</h3>
+            <p>${steps.replace(/\n/g, "<br>")}</p>
+        `;
+
+        // Add image info if exists
+        if (images && images.length > 0) {
+            emailHtml += `<p><strong>Number of images attached:</strong> ${images.length}</p>`;
+        }
+
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: process.env.BUG_REPORT_EMAIL || process.env.EMAIL_USER,
+            replyTo: email,
+            subject: `Bug Report: ${title}`,
+            html: emailHtml
+        };
+
+        // If there are images, attach them
+        if (images && images.length > 0) {
+            mailOptions.attachments = images.map((imageData, index) => {
+                // Extract base64 data and format
+                const base64Data = imageData.split(",")[1] || imageData;
+                return {
+                    filename: `bug-screenshot-${index + 1}.png`,
+                    content: Buffer.from(base64Data, "base64"),
+                    contentType: "image/png"
+                };
+            });
+        }
+
+        await transporter.sendMail(mailOptions);
+
+        // Also send confirmation email to user
+        const confirmationMail = {
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: "Bug Report Received - ChatApp Support",
+            html: `
+                <h2>Thank you for reporting a bug!</h2>
+                <p>We've received your bug report with the title: <strong>${title}</strong></p>
+                <p>Our team will review it shortly and get back to you if we need more information.</p>
+                <p>Severity level: <strong>${severity}</strong></p>
+                <hr>
+                <p style="font-size: 12px; color: #888;">
+                    This is an automated email. Please don't reply to this email directly. 
+                    We'll contact you at ${email} if needed.
+                </p>
+            `
+        };
+
+        await transporter.sendMail(confirmationMail);
+
+        res.status(200).json({ 
+            message: "Bug report submitted successfully. Thank you!"
+        });
+    } catch (error) {
+        console.error("Send bug report error:", error);
+        res.status(500).json({ message: error.message || "Failed to submit bug report" });
+    }
+};
+
+module.exports = { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend, googleAuth, resendOtpCode, verifyOtpCode, loginWithVerifiedEmail, sendResetPasswordEmail, resetPassword, sendBugReport };

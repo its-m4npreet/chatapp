@@ -10,6 +10,8 @@ import VerifyEmail from './components/VerifyEmail';
 import ChangePasswordPage from './components/changePasswordPage';
 import SetNewPassword from './components/setNewPassword';
 import ForgotPassword from './components/forgetpass';
+import BugReport from './components/BugReport';
+import HelpCenter from './components/HelpCenter';
 import { useState, useEffect } from 'react';
 import { SettingsProvider } from './context/SettingsContext';
 
@@ -28,6 +30,8 @@ function AppRoutes({ currentUser, setCurrentUser }) {
       <Route path='/change-password' element={<ChangePasswordPage />} />
       <Route path='/set-new-password' element={<SetNewPassword />} />
       <Route path='/forgot-password' element={<ForgotPassword />} />
+      <Route path='/report-bug' element={<BugReport />} />
+      <Route path='/help-center' element={<HelpCenter />} />
     </Routes>
   );
 }

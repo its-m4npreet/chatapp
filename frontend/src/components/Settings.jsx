@@ -385,7 +385,7 @@ function Settings({ onClose, isMobile = true }) {
                 iconColor="text-sky-400"
                 showArrow
                 onClick={() => {
-                  /* TODO: Implement help center */
+                  navigate("/help-center");
                 }}
               />
               <Divider />
@@ -397,7 +397,7 @@ function Settings({ onClose, isMobile = true }) {
                 iconColor="text-amber-400"
                 showArrow
                 onClick={() => {
-                  /* TODO: Implement bug report */
+                  navigate("/report-bug");
                 }}
               />
             </SettingCard>
