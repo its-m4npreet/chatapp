@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSettings } from "../context/useSettings";
 import {
@@ -12,6 +12,8 @@ import {
   MdLock,
   MdInfo,
   MdKeyboardArrowRight,
+  MdKeyboardArrowDown,
+  MdKeyboardArrowUp,
   MdColorLens,
   MdSecurity,
   MdHelp,
@@ -22,7 +24,7 @@ import { IoLanguage, IoArrowBack, IoShieldCheckmark } from "react-icons/io5";
 import { FaUserShield, FaDatabase } from "react-icons/fa6";
 
 // Toggle component
-const Toggle = ({ enabled, onChange }) => (
+const Toggle = React.memo(({ enabled, onChange }) => (
   <button
     onClick={() => onChange(!enabled)}
     className={`relative w-12 h-6 rounded-full transition-all duration-300 ${
@@ -35,10 +37,10 @@ const Toggle = ({ enabled, onChange }) => (
       }`}
     />
   </button>
-);
+));
 
 // SettingCard component for grouped settings
-const SettingCard = ({ children, className = "", isDarkMode = false }) => (
+const SettingCard = React.memo(({ children, className = "", isDarkMode = false }) => (
   <div
     className={`bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 backdrop-blur-sm rounded-2xl overflow-hidden ${className}`}
     style={{
@@ -47,10 +49,10 @@ const SettingCard = ({ children, className = "", isDarkMode = false }) => (
   >
     {children}
   </div>
-);
+));
 
 // SettingRow component for individual settings
-const SettingRow = ({
+const SettingRow = React.memo(({
   icon: Icon,
   title,
   description,
@@ -86,25 +88,26 @@ const SettingRow = ({
       )}
     </div>
   </div>
-);
+));
 
 // Divider component
-const Divider = () => <div className="h-px bg-gray-200 dark:bg-zinc-700/50 mx-4" />;
+const Divider = React.memo(() => <div className="h-px bg-gray-200 dark:bg-zinc-700/50 mx-4" />);
 
 // Section header
-const SectionHeader = ({ title, icon: Icon }) => (
+const SectionHeader = React.memo(({ title, icon: Icon }) => (
   <div className="flex items-center gap-2 mb-3 px-1">
     {Icon && <Icon size={16} className="text-gray-400 dark:text-gray-500" />}
     <h3 className="text-gray-600 dark:text-gray-400 text-xs font-semibold uppercase tracking-wider">
-      {title}
+    {title}
     </h3>
   </div>
-);
+));
 
-const Settings = ({ onClose, isMobile = true }) => {
+function Settings({ onClose, isMobile = true }) {
   const navigate = useNavigate();
   const { settings, updateSetting, requestNotificationPermission } = useSettings();
   const [notificationRequested, setNotificationRequested] = useState(false);
+  const [expandTheme, setExpandTheme] = useState(false);
 
   // Request notification permission when notifications are enabled
   useEffect(() => {
@@ -115,13 +118,13 @@ const Settings = ({ onClose, isMobile = true }) => {
     }
   }, [settings.notifications, notificationRequested, requestNotificationPermission]);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     if (isMobile) {
       navigate(-1);
     } else {
       onClose && onClose();
     }
-  };
+  }, [isMobile, navigate, onClose]);
 
   return (
     <div 
@@ -180,6 +183,56 @@ const Settings = ({ onClose, isMobile = true }) => {
                   onChange={(value) => updateSetting("darkMode", value)}
                 />
               </SettingRow>
+              <Divider />
+              <div >
+                <button
+                  onClick={() => setExpandTheme(!expandTheme)}
+                  className="w-full flex items-center justify-between p-3 hover:bg-gray-100 dark:hover:bg-zinc-700/30 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <MdColorLens size={20} className="text-blue-500" />
+                    <div className="text-left">
+                      <h4 className="text-gray-900 dark:text-white font-medium">Message Theme</h4>
+                      <p className="text-gray-600 dark:text-gray-500 text-sm">
+                        {settings.messageTheme?.charAt(0).toUpperCase() + settings.messageTheme?.slice(1) || "Default"}
+                      </p>
+                    </div>
+                  </div>
+                  {expandTheme ? (
+                    <MdKeyboardArrowUp size={24} className="text-gray-500 dark:text-gray-400" />
+                  ) : (
+                    <MdKeyboardArrowDown size={24} className="text-gray-500 dark:text-gray-400" />
+                  )}
+                </button>
+
+                {expandTheme && (
+                  <div className="m-4 grid grid-cols-2 gap-3 px-1">
+                    {[
+                      { value: "default", label: "Default", colors: "from-blue-600 to-gray-700" },
+                      { value: "vibrant", label: "Vibrant", colors: "from-blue-500 to-pink-500" },
+                      { value: "pastel", label: "Pastel", colors: "from-blue-400 to-green-400" },
+                      { value: "dark", label: "Dark", colors: "from-gray-900 to-gray-700" },
+                      { value: "minimal", label: "Minimal", colors: "from-gray-700 to-gray-600" },
+                    ].map((theme) => (
+                      <button
+                        key={theme.value}
+                        onClick={() => {
+                          updateSetting("messageTheme", theme.value);
+                          setExpandTheme(false);
+                        }}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          settings.messageTheme === theme.value
+                            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30"
+                            : "border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500"
+                        }`}
+                      >
+                        <div className={`w-full h-8 rounded bg-linear-to-r ${theme.colors} mb-2`} />
+                        <p className="text-xs font-medium text-gray-900 dark:text-white text-center">{theme.label}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </SettingCard>
           </div>
 
@@ -302,7 +355,7 @@ const Settings = ({ onClose, isMobile = true }) => {
                 iconColor="text-red-400"
                 showArrow
                 onClick={() => {
-                  /* TODO: Implement change password modal */
+                  navigate("/change-password");
                 }}
               />
               <Divider />
@@ -403,6 +456,6 @@ const Settings = ({ onClose, isMobile = true }) => {
       </div>
     </div>
   );
-};
+}
 
-export default Settings;
+export default React.memo(Settings);

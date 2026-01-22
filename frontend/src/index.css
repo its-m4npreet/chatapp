@@ -50,49 +50,92 @@ h1 {
 /* Global Dark Mode Overrides for Light Mode */
 /* This converts hardcoded dark colors to light mode when .dark is removed */
 
-html:not(.dark) .text-white {
+html .text-white {
   color: rgb(17, 24, 39) !important;
 }
 
-html:not(.dark) .text-gray-300,
-html:not(.dark) .text-gray-400,
-html:not(.dark) .text-gray-500,
-html:not(.dark) .text-gray-600 {
+html.dark .text-white {
+  color: rgb(255, 255, 255) !important;
+}
+
+html .text-gray-300,
+html .text-gray-400,
+html .text-gray-500,
+html .text-gray-600 {
   color: rgb(55, 65, 81) !important;
 }
 
-html:not(.dark) .text-gray-900 {
+html.dark .text-gray-300,
+html.dark .text-gray-400,
+html.dark .text-gray-500,
+html.dark .text-gray-600 {
+  color: rgb(209, 213, 219) !important;
+}
+
+html .text-gray-900 {
   color: rgb(17, 24, 39) !important;
 }
 
-html:not(.dark) .bg-black,
-html:not(.dark) .bg-\[\#0b0e12\],
-html:not(.dark) .bg-\[\#141417\],
-html:not(.dark) .bg-black\/80,
-html:not(.dark) [class*="bg-zinc"],
-html:not(.dark) [class*="bg-gray-9"],
-html:not(.dark) .bg-zinc-800\/50 {
-  /* background-color: white !important; */
+html.dark .text-gray-900 {
+  color: rgb(255, 255, 255) !important;
+}
+
+html .bg-black,
+html .bg-\[\#0b0e12\],
+html .bg-\[\#141417\],
+html .bg-black\/80,
+html [class*="bg-zinc"],
+html [class*="bg-gray-9"],
+html .bg-zinc-800\/50 {
+  background-color: white !important;
   border-color: rgb(229, 231, 235) !important;
 }
 
-html:not(.dark) .border-gray-700,
-html:not(.dark) .border-zinc-700,
-html:not(.dark) .border-zinc-800 {
+html.dark .bg-black,
+html.dark .bg-\[\#0b0e12\],
+html.dark .bg-\[\#141417\],
+html.dark .bg-black\/80,
+html.dark [class*="bg-zinc"],
+html.dark [class*="bg-gray-9"],
+html.dark .bg-zinc-800\/50 {
+  background-color: rgba(39, 39, 42, 0.5) !important;
+  border-color: rgba(63, 63, 70, 0.5) !important;
+}
+
+html .border-gray-700,
+html .border-zinc-700,
+html .border-zinc-800 {
   border-color: rgb(229, 231, 235) !important;
 }
 
-html:not(.dark) .hover\:bg-zinc-700:hover {
+html.dark .border-gray-700,
+html.dark .border-zinc-700,
+html.dark .border-zinc-800 {
+  border-color: rgb(63, 63, 70) !important;
+}
+
+html .hover\:bg-zinc-700:hover {
   background-color: rgb(243, 244, 246) !important;
 }
 
-html:not(.dark) .hover\:bg-gray-50:hover {
+html.dark .hover\:bg-zinc-700:hover {
+  background-color: rgb(63, 63, 70) !important;
+}
+
+html .hover\:bg-gray-50:hover {
   background-color: rgb(249, 250, 251) !important;
 }
 
+html.dark .hover\:bg-gray-50:hover {
+  background-color: rgb(39, 39, 42) !important;
+}
 
-html:not(.dark) .hover\\:text-white:hover {
-  color: rgb(17, 24, 39);
+html .hover\\:text-white:hover {
+  color: rgb(17, 24, 39) !important;
+}
+
+html.dark .hover\\:text-white:hover {
+  color: rgb(255, 255, 255) !important;
 }
 
 
@@ -102,17 +145,30 @@ html:not(.dark) .hover\\:text-white:hover {
 }
 
 /* Extended light mode color overrides for hardcoded dark colors */
-html:not(.dark) .bg-black\/80 { 
+html .bg-black\/80 { 
   background-color: rgba(255, 255, 255, 0.8) !important; 
 }
-html:not(.dark) .bg-\[\#141417\] { 
+html .bg-\[\#141417\] { 
   background-color: white !important; 
 }
-html:not(.dark) .bg-\[\#0b0e12\] { 
+html .bg-\[\#0b0e12\] { 
   background-color: white !important; 
 }
-html:not(.dark) .border-\[\#141417\] { 
+html .border-\[\#141417\] { 
   border-color: rgb(229, 231, 235) !important; 
+}
+
+html.dark .bg-black\/80 { 
+  background-color: rgba(11, 14, 18, 0.8) !important; 
+}
+html.dark .bg-\[\#141417\] { 
+  background-color: #141417 !important; 
+}
+html.dark .bg-\[\#0b0e12\] { 
+  background-color: #0b0e12 !important; 
+}
+html.dark .border-\[\#141417\] { 
+  border-color: #141417 !important; 
 }
 
 /* Markdown Formatting Styles */
@@ -120,8 +176,14 @@ html:not(.dark) .border-\[\#141417\] {
   display: flex;
   gap: 0.25rem;
   padding: 0.5rem;
-  background-color: rgba(31, 41, 55, 0.8);
+  background-color: rgba(243, 244, 246, 0.8);
   border-radius: 0.5rem;
+  border: 1px solid rgba(209, 213, 219, 0.5);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+html.dark .markdown-toolbar {
+  background-color: rgba(31, 41, 55, 0.8);
   border: 1px solid rgba(55, 65, 81, 0.5);
 }
 
@@ -134,7 +196,7 @@ html:not(.dark) .border-\[\#141417\] {
   border-radius: 0.375rem;
   background: transparent;
   border: none;
-  color: rgba(156, 163, 175, 0.8);
+  color: rgba(75, 85, 99, 0.8);
   cursor: pointer;
   transition: all 0.2s ease;
   font-size: 14px;
@@ -142,26 +204,25 @@ html:not(.dark) .border-\[\#141417\] {
 }
 
 .markdown-toolbar-btn:hover {
-  background-color: rgba(55, 65, 81, 0.8);
-  color: white;
-}
-
-html:not(.dark) .markdown-toolbar {
-  background-color: rgba(243, 244, 246, 0.8);
-  border: 1px solid rgba(209, 213, 219, 0.5);
-}
-
-html:not(.dark) .markdown-toolbar-btn {
-  color: rgba(75, 85, 99, 0.8);
-}
-
-html:not(.dark) .markdown-toolbar-btn:hover {
   background-color: rgba(209, 213, 219, 0.8);
   color: rgb(17, 24, 39);
 }
 
-html:not(.dark) .markdown-divider {
+html.dark .markdown-toolbar-btn {
+  color: rgba(156, 163, 175, 0.8);
+}
+
+html.dark .markdown-toolbar-btn:hover {
+  background-color: rgba(55, 65, 81, 0.8);
+  color: white;
+}
+
+html .markdown-divider {
   background-color: rgba(209, 213, 219, 0.5);
+}
+
+html.dark .markdown-divider {
+  background-color: rgba(75, 85, 99, 0.5);
 }
 
 .markdown-toolbar-btn.active {

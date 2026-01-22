@@ -13,9 +13,11 @@ import CreateGroupModal from '../components/CreateGroupModal';
 import InviteToGroupModal from '../components/InviteToGroupModal';
 import socket from '../lib/socket';
 import axios from '../lib/axios';
+import { useSettings } from '../context/useSettings';
 
 export const Home = () => {
   const navigate = useNavigate();
+  const { settings } = useSettings();
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [unreadCounts, setUnreadCounts] = useState(() => {
@@ -137,10 +139,21 @@ export const Home = () => {
   // Join socket room when currentUser is available
   useEffect(() => {
     if (socket && currentUser && currentUser._id) {
-      console.log('Joining socket room with userId:', currentUser._id);
-      socket.emit('join', currentUser._id);
+      console.log('Home: Joining socket room with userId:', currentUser._id, 'onlineStatus:', settings.onlineStatus);
+      socket.emit('join', { userId: currentUser._id, onlineStatus: settings.onlineStatus });
     }
-  }, [currentUser]);
+  }, [currentUser, socket]); // Include socket in dependency array
+
+  // Update online status when settings change
+  useEffect(() => {
+    if (socket && currentUser && currentUser._id) {
+      console.log('Home: Updating online status:', { userId: currentUser._id, onlineStatus: settings.onlineStatus });
+      socket.emit('updateOnlineStatus', {
+        userId: currentUser._id,
+        onlineStatus: settings.onlineStatus
+      });
+    }
+  }, [settings.onlineStatus, socket, currentUser]);
 
   // Update activity status periodically to track lastSeen
   useEffect(() => {

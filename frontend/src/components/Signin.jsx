@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "../lib/axios";
@@ -6,7 +6,21 @@ import { ButtonLoading } from "./Loading";
 import { MessageCircleCode } from "lucide-react";
 import GoogleAuthButton from "./GoogleAuthButton";
 
-export default function SignIn() {
+const BG_STYLES_MOBILE = {
+  backgroundImage: `linear-gradient(to right, #d1d5db 1px, transparent 1px), linear-gradient(to bottom, #d1d5db 1px, transparent 1px)`,
+  backgroundSize: "40px 40px",
+  WebkitMaskImage: "radial-gradient(ellipse 100% 50% at 50% 10%, #000 30%, transparent 70%)",
+  maskImage: "radial-gradient(ellipse 100% 50% at 50% 10%, #000 30%, transparent 70%)",
+};
+
+const BG_STYLES_DESKTOP = {
+  backgroundImage: `linear-gradient(to right, #d1d5db 1px, transparent 1px), linear-gradient(to bottom, #d1d5db 1px, transparent 1px)`,
+  backgroundSize: "40px 40px",
+  WebkitMaskImage: "radial-gradient(ellipse 50% 50% at 50% 10%, #000 30%, transparent 70%)",
+  maskImage: "radial-gradient(ellipse 50% 50% at 50% 10%, #000 30%, transparent 70%)",
+};
+
+function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -14,15 +28,7 @@ export default function SignIn() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const [remember, setRemember] = useState(false);
-  const [isMobile , setIsMobile] = useState(false);
-
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // setActiveBox((prev) => (prev + 1) % 9);
-    }, 250);
-    return () => clearInterval(interval);
-  }, []);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
 
   useEffect(() => {
     const handleResize = () => {
@@ -30,66 +36,31 @@ export default function SignIn() {
     };
 
     window.addEventListener('resize', handleResize);
-    handleResize(); // Initial check
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
     try {
       const res = await axios.post("/signin", { email, password });
-      console.log("[SignIn] Response:", res.data);
 
-      // Save user info to localStorage for socket
       if (res.data && res.data.user) {
         localStorage.setItem("user", JSON.stringify(res.data.user));
-        console.log("[SignIn] User saved to localStorage");
 
-        // Also save token if provided in response
         if (res.data.token) {
           localStorage.setItem("jwt_token", res.data.token);
-          console.log(
-            "[SignIn] Token saved to localStorage:",
-            res.data.token.substring(0, 20) + "..."
-          );
-        } else {
-          console.warn("[SignIn] No token in response");
         }
       }
-      setLoading(false);
       navigate("/");
     } catch (err) {
+      setError(err.response?.data?.message || "Sign in failed. Please try again.");
       setLoading(false);
-      setError(
-        err.response?.data?.message || "Sign in failed. Please try again."
-      );
     }
-  };
+  }, [email, password, navigate]);
 
-  const bgStyles = isMobile ? {
-          backgroundImage: `
-        linear-gradient(to right, #d1d5db 1px, transparent 1px),
-        linear-gradient(to bottom, #d1d5db 1px, transparent 1px)
-      `,
-          backgroundSize: "40px 40px",
-          WebkitMaskImage:
-            "radial-gradient(ellipse 100% 50% at 50% 10%, #000 30%, transparent 70%)",
-          maskImage:
-            "radial-gradient(ellipse 100% 50% at 50% 10%, #000 30%, transparent 70%)",
-        } : {backgroundImage: `
-        linear-gradient(to right, #d1d5db 1px, transparent 1px),
-        linear-gradient(to bottom, #d1d5db 1px, transparent 1px)
-      `,
-          backgroundSize: "40px 40px",
-          WebkitMaskImage:
-            "radial-gradient(ellipse 50% 50% at 50% 10%, #000 30%, transparent 70%)",
-          maskImage:
-            "radial-gradient(ellipse 50% 50% at 50% 10%, #000 30%, transparent 70%)",};
+  const bgStyles = useMemo(() => (isMobile ? BG_STYLES_MOBILE : BG_STYLES_DESKTOP), [isMobile]);
   
 
   return (
@@ -183,7 +154,7 @@ export default function SignIn() {
               </label>
             </div>
             <Link
-              href="#"
+              to="/forgot-password"
               className="text-sm font-medium text-[#4f38f7] hover:text-[#6c50f9] transition-colors  "
             >
               Forgot password
@@ -229,3 +200,5 @@ export default function SignIn() {
     </div>
   );
 }
+
+export default React.memo(SignIn);

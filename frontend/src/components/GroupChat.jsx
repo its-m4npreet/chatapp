@@ -24,6 +24,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
+import { useSettings } from "../context/useSettings";
 import {
   formatBold,
   formatItalic,
@@ -100,6 +101,91 @@ const ToolbarButton = ({ onClick, title, children, active }) => (
   </button>
 );
 
+// Helper to get message theme colors based on dark mode
+const getGroupMessageThemeClasses = (theme, isOwn, isDarkMode) => {
+  const themes = {
+    default: {
+      ownDark: "bg-blue-600 text-white",
+      otherDark: "bg-zinc-700 text-white",
+      ownLight: "bg-blue-500 text-white",
+      otherLight: "bg-gray-400 text-gray-900",
+    },
+    vibrant: {
+      ownDark: "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg",
+      otherDark: "bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-lg",
+      ownLight: "bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-md",
+      otherLight: "bg-gradient-to-r from-orange-400 to-red-400 text-white shadow-md",
+    },
+    pastel: {
+      ownDark: "bg-blue-400 text-gray-900 shadow-md",
+      otherDark: "bg-green-400 text-gray-900 shadow-md",
+      ownLight: "bg-blue-300 text-gray-900 shadow-sm",
+      otherLight: "bg-green-300 text-gray-900 shadow-sm",
+    },
+    dark: {
+      ownDark: "bg-gray-900 text-white border border-gray-700",
+      otherDark: "bg-gray-700 text-white border border-gray-600",
+      ownLight: "bg-gray-800 text-white border border-gray-600",
+      otherLight: "bg-gray-600 text-white border border-gray-500",
+    },
+    minimal: {
+      ownDark: "bg-gray-700 text-white",
+      otherDark: "bg-gray-600 text-white",
+      ownLight: "bg-gray-200 text-gray-900",
+      otherLight: "bg-gray-100 text-gray-900",
+    },
+  };
+
+  const selectedTheme = themes[theme] || themes.default;
+  if (isDarkMode) {
+    return isOwn ? selectedTheme.ownDark : selectedTheme.otherDark;
+  } else {
+    return isOwn ? selectedTheme.ownLight : selectedTheme.otherLight;
+  }
+};
+
+const getGroupAudioThemeClasses = (theme, isOwn, isDarkMode) => {
+  const themes = {
+    default: {
+      ownDark: "bg-blue-600",
+      otherDark: "bg-zinc-700",
+      ownLight: "bg-blue-500",
+      otherLight: "bg-gray-400",
+    },
+    vibrant: {
+      ownDark: "bg-gradient-to-r from-blue-600 to-blue-500",
+      otherDark: "bg-gradient-to-r from-purple-600 to-pink-500",
+      ownLight: "bg-gradient-to-r from-blue-500 to-cyan-400",
+      otherLight: "bg-gradient-to-r from-orange-400 to-red-400",
+    },
+    pastel: {
+      ownDark: "bg-blue-400",
+      otherDark: "bg-green-400",
+      ownLight: "bg-blue-300",
+      otherLight: "bg-green-300",
+    },
+    dark: {
+      ownDark: "bg-gray-900",
+      otherDark: "bg-gray-700",
+      ownLight: "bg-gray-800",
+      otherLight: "bg-gray-600",
+    },
+    minimal: {
+      ownDark: "bg-gray-700",
+      otherDark: "bg-gray-600",
+      ownLight: "bg-gray-200",
+      otherLight: "bg-gray-100",
+    },
+  };
+
+  const selectedTheme = themes[theme] || themes.default;
+  if (isDarkMode) {
+    return isOwn ? selectedTheme.ownDark : selectedTheme.otherDark;
+  } else {
+    return isOwn ? selectedTheme.ownLight : selectedTheme.otherLight;
+  }
+};
+
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 // Add global styles for reaction animations
@@ -122,6 +208,7 @@ const GroupChat = ({
   isMobile,
   onBack,
 }) => {
+  const { settings } = useSettings();
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -963,12 +1050,13 @@ const GroupChat = ({
                 const hasImage = !!msg.image?.url;
                 const hasAudio = !!msg.audio?.url;
                 const hasContent = !!msg.content;
+                const messageTheme = settings.messageTheme || "default";
                 let messageClass = `rounded-2xl max-w-[88vw] sm:max-w-md md:max-w-xl ${
                   isOwn ? "rounded-br-md" : "rounded-bl-md"
                 }`;
                 if (hasContent || (hasContent && (hasImage || hasAudio))) {
                   messageClass += ` px-4 py-2 ${
-                    isOwn ? "bg-blue-600 text-white" : "bg-zinc-700 text-white"
+                    getGroupMessageThemeClasses(messageTheme, isOwn, settings.darkMode)
                   }`;
                 } else if (hasImage || hasAudio) {
                   messageClass += " p-0 bg-transparent";
@@ -1049,7 +1137,7 @@ const GroupChat = ({
                               />
                             )}
                             {hasAudio && (
-                              <div className={`flex items-center gap-2 ${hasContent ? "mb-2" : "p-3"} ${!hasContent && (isOwn ? "bg-blue-600" : "bg-zinc-700")} rounded-2xl`}>
+                              <div className={`flex items-center gap-2 ${hasContent ? "mb-2" : "p-3"} ${!hasContent && getGroupAudioThemeClasses(messageTheme, isOwn, settings.darkMode)} rounded-2xl`}>
                                 <IoMicOutline size={20} className="text-white" />
                                 <audio 
                                   src={msg.audio.url} 
@@ -1135,7 +1223,7 @@ const GroupChat = ({
                             </span>
 
                             {/* Message status indicator (only for own messages) */}
-                            {isOwn && (
+                            {isOwn && settings.readReceipts && (
                               <span className="flex items-center">
                                 {msg.status === "sending" ? (
                                   <span

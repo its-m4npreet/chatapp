@@ -9,6 +9,7 @@ const defaultSettings = {
   onlineStatus: true,
   readReceipts: true,
   typingIndicator: true,
+  messageTheme: "default", // 'default', 'vibrant', 'pastel', 'dark', 'minimal'
 };
 
 export const SettingsProvider = ({ children }) => {

@@ -7,10 +7,10 @@ import { TiGroup } from "react-icons/ti";
 import axios from '../lib/axios';
 import socket from '../lib/socket';
 import { ContentLoading, FriendsSkeletonLoader, GroupsSkeletonLoader } from './Loading';
-import { useSettings } from '../context/useSettings';
+// import { useSettings } from '../context/useSettings';
 
 const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick, showProfile, onSettingsClick, showSettings, onTabChange, viewingUserProfile, onlineUsers = [], refreshFriends, onNotificationClick, unreadNotifications = 0, groups = [], selectedGroup, onSelectGroup, onCreateGroup, externalActiveTab, isMobile, mobileSearchQuery = '' }) => {
-  const { settings } = useSettings();
+  // const { settings } = useSettings();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -245,7 +245,7 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
             </div>
           )}
           {/* Online status indicator */}
-          {isOnline && settings.onlineStatus && (
+          {isOnline && (
             <span
               style={{
                 position: 'absolute',

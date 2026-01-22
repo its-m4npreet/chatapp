@@ -100,6 +100,91 @@ const ToolbarButton = ({ onClick, title, children, active }) => (
   </button>
 );
 
+// Helper to get message theme colors based on dark mode
+const getMessageThemeClasses = (theme, isCurrentUser, isDarkMode) => {
+  const themes = {
+    default: {
+      ownDark: "bg-blue-600 text-white",
+      otherDark: "bg-gray-800 text-white",
+      ownLight: "bg-blue-500 text-white",
+      otherLight: "bg-gray-300 text-gray-900",
+    },
+    vibrant: {
+      ownDark: "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg",
+      otherDark: "bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-lg",
+      ownLight: "bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-md",
+      otherLight: "bg-gradient-to-r from-orange-400 to-red-400 text-white shadow-md",
+    },
+    pastel: {
+      ownDark: "bg-blue-400 text-gray-900 shadow-md",
+      otherDark: "bg-green-400 text-gray-900 shadow-md",
+      ownLight: "bg-blue-300 text-gray-900 shadow-sm",
+      otherLight: "bg-green-300 text-gray-900 shadow-sm",
+    },
+    dark: {
+      ownDark: "bg-gray-900 text-white border border-gray-700",
+      otherDark: "bg-gray-700 text-white border border-gray-600",
+      ownLight: "bg-gray-800 text-white border border-gray-600",
+      otherLight: "bg-gray-600 text-white border border-gray-500",
+    },
+    minimal: {
+      ownDark: "bg-gray-700 text-white",
+      otherDark: "bg-gray-600 text-white",
+      ownLight: "bg-gray-200 text-gray-900",
+      otherLight: "bg-gray-100 text-gray-900",
+    },
+  };
+
+  const selectedTheme = themes[theme] || themes.default;
+  if (isDarkMode) {
+    return isCurrentUser ? selectedTheme.ownDark : selectedTheme.otherDark;
+  } else {
+    return isCurrentUser ? selectedTheme.ownLight : selectedTheme.otherLight;
+  }
+};
+
+const getAudioThemeClasses = (theme, isCurrentUser, isDarkMode) => {
+  const themes = {
+    default: {
+      ownDark: "bg-blue-600",
+      otherDark: "bg-gray-800",
+      ownLight: "bg-blue-500",
+      otherLight: "bg-gray-300",
+    },
+    vibrant: {
+      ownDark: "bg-gradient-to-r from-blue-600 to-blue-500",
+      otherDark: "bg-gradient-to-r from-purple-600 to-pink-500",
+      ownLight: "bg-gradient-to-r from-blue-500 to-cyan-400",
+      otherLight: "bg-gradient-to-r from-orange-400 to-red-400",
+    },
+    pastel: {
+      ownDark: "bg-blue-400",
+      otherDark: "bg-green-400",
+      ownLight: "bg-blue-300",
+      otherLight: "bg-green-300",
+    },
+    dark: {
+      ownDark: "bg-gray-900",
+      otherDark: "bg-gray-700",
+      ownLight: "bg-gray-800",
+      otherLight: "bg-gray-600",
+    },
+    minimal: {
+      ownDark: "bg-gray-700",
+      otherDark: "bg-gray-600",
+      ownLight: "bg-gray-200",
+      otherLight: "bg-gray-100",
+    },
+  };
+
+  const selectedTheme = themes[theme] || themes.default;
+  if (isDarkMode) {
+    return isCurrentUser ? selectedTheme.ownDark : selectedTheme.otherDark;
+  } else {
+    return isCurrentUser ? selectedTheme.ownLight : selectedTheme.otherLight;
+  }
+};
+
 const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUserTyping, isMobile , onBack }) => {
   const { settings, sendNotification } = useSettings();
   // Join current user's room for real-time updates and handle reconnection
@@ -112,7 +197,11 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     const handleConnect = () => {
       console.log('ChatView: Socket connected, joining room:', currentUser._id);
       console.log('ChatView: Socket connected status:', socket.connected);
-      socket.emit("join", currentUser._id);
+      // Send join with onlineStatus setting
+      socket.emit("join", { 
+        userId: currentUser._id,
+        onlineStatus: settings.onlineStatus 
+      });
     };
 
     console.log('ChatView: Setting up join effect', { currentUserId: currentUser._id, socketConnected: socket.connected, socketId: socket.id });
@@ -129,7 +218,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     return () => {
       socket.off("connect", handleConnect);
     };
-  }, [socket, currentUser]);
+  }, [socket, currentUser, settings.onlineStatus]);
 
   // Refs to always have latest user/currentUser in socket listener
   const userRef = useRef(user);
@@ -1114,6 +1203,37 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   return lines;
 };
 
+// Format last seen time
+const formatLastSeen = (lastSeenDate) => {
+  if (!lastSeenDate) return "Offline";
+  
+  const now = new Date();
+  const lastSeen = new Date(lastSeenDate);
+  const diffInSeconds = Math.floor((now - lastSeen) / 1000);
+  
+  if (diffInSeconds < 60) {
+    return "Last seen just now";
+  }
+  
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) {
+    return `Last seen ${diffInMinutes}m ago`;
+  }
+  
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) {
+    return `Last seen ${diffInHours}h ago`;
+  }
+  
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 7) {
+    return `Last seen ${diffInDays}d ago`;
+  }
+  
+  // For older dates, show the date
+  return `Last seen ${lastSeen.toLocaleDateString()}`;
+};
+
 
   if (!user) {
     return (
@@ -1178,7 +1298,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
           <div className="flex items-center gap-2">
             <span className="text-white font-medium">{user?.name || 'Chat'}</span>
             {isUserOnline && <span className="text-xs text-green-500">● Online</span>}
-            {isUserTyping && <span className="text-xs text-blue-400">typing...</span>}
+            {isUserTyping && settings.typingIndicator && <span className="text-xs text-blue-400">typing...</span>}
           </div>
         </div>
       )} */}
@@ -1199,7 +1319,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
                 alt={user.name}
                 className="w-full h-full rounded-full object-cover"
               />
-              {isUserOnline && (
+            {isUserOnline && (
                 <span
                   className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"
                   title="Online"
@@ -1209,7 +1329,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
             <div>
               <div className="font-semibold text-white">{user.name}</div>
               <div className="text-xs text-gray-400">
-                {isUserTyping ? (
+                {isUserTyping && settings.typingIndicator ? (
                   <span className="text-green-400 flex items-end gap-1">
                     typing
                     <span className="flex gap-0.5">
@@ -1230,7 +1350,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
                 ) : isUserOnline ? (
                   <span className="text-green-400">Online</span>
                 ) : (
-                  user.bio || "Offline"
+                  <span className="text-gray-400">{formatLastSeen(user.lastSeen)}</span>
                 )}
               </div>
             </div>
@@ -1261,14 +1381,14 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
             const isImageOnly = imageUrl && !msg.content && !audioUrl;
             const isAudioOnly = audioUrl && !msg.content && !imageUrl;
             const bubbleBase = "max-w-[88vw] sm:max-w-md md:max-w-lg shadow-md";
+            const messageTheme = settings.messageTheme || "default";
             const bubbleClass = `${bubbleBase} ${
               isImageOnly || isAudioOnly
                 ? "p-0 bg-transparent rounded-2xl " +
                   (isCurrentUser ? "rounded-br-md" : "rounded-bl-md")
                 : "p-3 rounded-2xl " +
-                  (isCurrentUser
-                    ? "bg-blue-600 text-white rounded-br-md"
-                    : "bg-gray-800 text-white rounded-bl-md")
+                  getMessageThemeClasses(messageTheme, isCurrentUser, settings.darkMode) +
+                  " rounded-" + (isCurrentUser ? "br-md" : "bl-md")
             }`;
 
             // Get unique reactions with counts
@@ -1320,7 +1440,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
                       />
                     )}
                     {audioUrl && (
-                      <div className={`flex items-center gap-2 ${!isAudioOnly ? "mb-2" : "p-3"} ${isAudioOnly && (isCurrentUser ? "bg-blue-600" : "bg-gray-800")} rounded-2xl`}>
+                      <div className={`flex items-center gap-2 ${!isAudioOnly ? "mb-2" : "p-3"} ${isAudioOnly && getAudioThemeClasses(messageTheme, isCurrentUser, settings.darkMode)} rounded-2xl`}>
                         <IoMicOutline size={20} className="text-white" />
                         <audio 
                           src={audioUrl} 
@@ -1426,7 +1546,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
                   </span>
 
                   {/* Message status indicator (only for current user's messages) */}
-                  {isCurrentUser && (
+                  {isCurrentUser && settings.readReceipts && (
                     <span className="flex items-center">
                       {msg.status === "sending" ? (
                         <span

@@ -1,67 +1,123 @@
-import React, { useState, useEffect } from "react";
-import { ArrowLeft, LockKeyhole, Check } from "lucide-react";
-import { FaDiceFive } from "react-icons/fa";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { ArrowLeft, LockKeyhole, Check, Loader2 } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
-export default function SetNewPassword() {
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+const PASSWORD_REGEX = {
+  special: /[!@#$%^&*(),.?":{}|<>]/,
+  number: /\d/,
+};
+
+const BG_STYLES_MOBILE = {
+  backgroundImage: `linear-gradient(to right, #d1d5db 1px, transparent 1px), linear-gradient(to bottom, #d1d5db 1px, transparent 1px)`,
+  backgroundSize: "40px 40px",
+  WebkitMaskImage: "radial-gradient(ellipse 100% 50% at 50% 10%, #000 30%, transparent 70%)",
+  maskImage: "radial-gradient(ellipse 100% 50% at 50% 10%, #000 30%, transparent 70%)",
+};
+
+const BG_STYLES_DESKTOP = {
+  backgroundImage: `linear-gradient(to right, #d1d5db 1px, transparent 1px), linear-gradient(to bottom, #d1d5db 1px, transparent 1px)`,
+  backgroundSize: "40px 40px",
+  WebkitMaskImage: "radial-gradient(ellipse 50% 50% at 50% 10%, #000 30%, transparent 70%)",
+  maskImage: "radial-gradient(ellipse 50% 50% at 50% 10%, #000 30%, transparent 70%)",
+};
+
+function SetNewPassword() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token");
 
-  const hasMinLength = password.length >= 8;
-  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-  const hasNumber = /\d/.test(password);
+  const hasMinLength = useMemo(() => password.length >= 8, [password]);
+  const hasSpecialChar = useMemo(() => PASSWORD_REGEX.special.test(password), [password]);
+  const hasNumber = useMemo(() => PASSWORD_REGEX.number.test(password), [password]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
-    if (
-      password === confirmPassword &&
-      hasMinLength &&
-      hasSpecialChar &&
-      hasNumber
-    ) {
-      console.log("Password reset successful");
-    }
-  };
+    setError("");
+    setIsLoading(true);
 
-  const isMatch =
-    password.length > 0 &&
-    confirmPassword.length > 0 &&
-    password === confirmPassword;
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      setIsLoading(false);
+      return;
+    }
+
+    if (!hasMinLength || !hasSpecialChar || !hasNumber) {
+      setError("Password does not meet requirements");
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/user/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password, token }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Failed to reset password");
+        setIsLoading(false);
+        return;
+      }
+
+      setSuccess(true);
+      const timer = setTimeout(() => navigate("/signin"), 3000);
+      return () => clearTimeout(timer);
+    } catch (err) {
+      setError(err.message || "An error occurred");
+      setIsLoading(false);
+    }
+  }, [password, confirmPassword, token, navigate, hasMinLength, hasSpecialChar, hasNumber]);
+
+  const isMatch = useMemo(
+    () => password.length > 0 && confirmPassword.length > 0 && password === confirmPassword,
+    [password, confirmPassword]
+  );
 
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth <= 768);
     };
     window.addEventListener("resize", handleResize);
-    handleResize();
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const bgStyles = isMobile
-    ? {
-        backgroundImage: `
-        linear-gradient(to right, #d1d5db 1px, transparent 1px),
-        linear-gradient(to bottom, #d1d5db 1px, transparent 1px)
-      `,
-        backgroundSize: "40px 40px",
-        WebkitMaskImage:
-          "radial-gradient(ellipse 100% 50% at 50% 10%, #000 30%, transparent 70%)",
-        maskImage:
-          "radial-gradient(ellipse 100% 50% at 50% 10%, #000 30%, transparent 70%)",
-      }
-    : {
-        backgroundImage: `
-        linear-gradient(to right, #d1d5db 1px, transparent 1px),
-        linear-gradient(to bottom, #d1d5db 1px, transparent 1px)
-      `,
-        backgroundSize: "40px 40px",
-        WebkitMaskImage:
-          "radial-gradient(ellipse 50% 50% at 50% 10%, #000 30%, transparent 70%)",
-        maskImage:
-          "radial-gradient(ellipse 50% 50% at 50% 10%, #000 30%, transparent 70%)",
-      };
+  const bgStyles = useMemo(() => (isMobile ? BG_STYLES_MOBILE : BG_STYLES_DESKTOP), [isMobile]);
+
+  if (success) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 relative">
+        <div
+          className="absolute top-0 inset-0 z-0 opacity-10"
+          style={{
+            ...bgStyles,
+          }}
+        />
+        <div className="w-full max-w-md z-10 text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-600/20 rounded-full mb-6 border border-green-500">
+            <Check className="w-8 h-8 text-green-400" />
+          </div>
+          <h1 className="text-3xl font-semibold text-white mb-3">Password Reset Successful</h1>
+          <p className="text-gray-400 mb-6">
+            Your password has been successfully updated. Redirecting to login...
+          </p>
+          <div className="flex justify-center">
+            <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-start justify-center pt-20 p-4 relative">
@@ -83,6 +139,12 @@ export default function SetNewPassword() {
             Your new password must be different to previously used passwords.
           </p>
         </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-600/20 border border-red-500 rounded-lg">
+            <p className="text-red-400 text-sm text-center">{error}</p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="mb-8">
           <div className="mb-4">
@@ -168,14 +230,19 @@ export default function SetNewPassword() {
 
           <button
             type="submit"
-            className="w-full bg-[#4f38f7] text-white py-2.5 px-4 rounded-lg font-medium hover:bg-[#3b2d9c] transition-colors"
+            disabled={isLoading || !isMatch || !hasMinLength || !hasSpecialChar || !hasNumber}
+            className="w-full bg-[#4f38f7] text-white py-2.5 px-4 rounded-lg font-medium hover:bg-[#3b2d9c] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            Save
+            {isLoading && <Loader2 size={18} className="animate-spin" />}
+            {isLoading ? "Saving..." : "Save"}
           </button>
         </form>
 
         <div className="text-center">
-          <button className="inline-flex items-center gap-2 text-sm text-gray-400 font-medium hover:text-gray-200 hover:underline">
+          <button 
+            onClick={() => navigate("/signin")}
+            className="inline-flex items-center gap-2 text-sm text-gray-400 font-medium hover:text-gray-200 hover:underline"
+          >
             <ArrowLeft className="w-4 h-4" />
             Back to log in
           </button>
@@ -184,3 +251,5 @@ export default function SetNewPassword() {
     </div>
   );
 }
+
+export default React.memo(SetNewPassword);

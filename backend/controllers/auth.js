@@ -494,4 +494,128 @@ const loginWithVerifiedEmail = async (req, res) => {
     }
 };
 
-module.exports = { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend, googleAuth, resendOtpCode, verifyOtpCode, loginWithVerifiedEmail };
+// Send password reset email
+const sendResetPasswordEmail = async (req, res) => {
+    const { email } = req.body;
+
+    if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+    }
+
+    try {
+        const user = await User.findOne({ email });
+        
+        if (!user) {
+            return res.status(400).json({ message: "User not found" });
+        }
+
+        // Generate reset token
+        const resetToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '15m' });
+        
+        // Save reset token to database
+        user.resetPasswordToken = resetToken;
+        user.resetPasswordExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+        await user.save();
+
+        // Send reset email
+        const nodemailer = require('nodemailer');
+        const transporter = nodemailer.createTransport({
+            service: process.env.EMAIL_SERVICE,
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASSWORD,
+            }
+        });
+
+        const resetLink = `${process.env.FRONTEND_URL}/set-new-password?token=${resetToken}`;
+
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: 'Password Reset Request',
+            html: `
+                <h2>Reset Your Password</h2>
+                <p>You requested to reset your password. Click the link below to proceed:</p>
+                <a href="${resetLink}" style="background-color: #4f38f7; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                    Reset Password
+                </a>
+                <p>This link will expire in 15 minutes.</p>
+                <p>If you didn't request this, you can ignore this email.</p>
+                <hr/>
+                <p style="font-size: 12px; color: #888;">
+                    Don't click the link if you didn't request a password reset.
+                </p>
+            `
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        res.status(200).json({ 
+            message: "Password reset link sent to your email"
+        });
+    } catch (error) {
+        console.error("Send reset email error:", error);
+        res.status(500).json({ message: error.message || "Server error" });
+    }
+};
+
+// Reset password with token
+const resetPassword = async (req, res) => {
+    const { password, token } = req.body;
+
+    if (!password || !token) {
+        return res.status(400).json({ message: "Password and token are required" });
+    }
+
+    if (password.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters long" });
+    } else if (!/\d/.test(password)) {
+        return res.status(400).json({ message: "Password must contain at least one number" });
+    } else if (!/[!@#$%^&*]/.test(password)) {
+        return res.status(400).json({ message: "Password must contain at least one special character" });
+    }
+
+    try {
+        // Verify token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        
+        const user = await User.findById(decoded.userId);
+
+        if (!user) {
+            return res.status(400).json({ message: "User not found" });
+        }
+
+        // Check if token matches and hasn't expired
+        if (user.resetPasswordToken !== token) {
+            return res.status(400).json({ message: "Invalid reset token" });
+        }
+
+        if (new Date() > user.resetPasswordExpiry) {
+            return res.status(400).json({ message: "Reset token has expired" });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        // Update password and clear reset fields
+        user.password = hashedPassword;
+        user.resetPasswordToken = null;
+        user.resetPasswordExpiry = null;
+        await user.save();
+
+        res.status(200).json({ 
+            message: "Password reset successful"
+        });
+    } catch (error) {
+        if (error.name === 'TokenExpiredError') {
+            return res.status(400).json({ message: "Reset token has expired" });
+        }
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(400).json({ message: "Invalid reset token" });
+        }
+        console.error("Reset password error:", error);
+        res.status(500).json({ message: error.message || "Server error" });
+    }
+};
+
+module.exports = { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend, googleAuth, resendOtpCode, verifyOtpCode, loginWithVerifiedEmail, sendResetPasswordEmail, resetPassword };

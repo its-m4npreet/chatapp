@@ -106,22 +106,42 @@ const Message = require('./model/message');
 const User = require('./model/user');
 const cacheService = require('./services/cacheService');
 
-// Track online users: { odId: odId }
+// Track online users: Map { userId: { socketId, onlineStatus } }
+// Track online users: Map { userId: { socketId, onlineStatus } }
 const onlineUsers = new Map();
+// Track user online status preferences
+const userOnlineStatusPreferences = new Map();
+
+// Helper function to get visible online users
+const getVisibleOnlineUsers = () => {
+  const visible = Array.from(onlineUsers.entries())
+    .filter(([_, data]) => {
+      console.log('Backend: Filtering user:', { userId: _, onlineStatus: data.onlineStatus, isVisible: data.onlineStatus === true });
+      return data.onlineStatus === true;
+    })
+    .map(([userId, _]) => userId);
+  console.log('Backend: Visible online users after filtering:', visible);
+  return visible;
+};
 
 io.on('connection', (socket) => {
   console.log('Backend: New socket connection:', socket.id);
   
   // Join room by userId for bi-directional messaging
-  socket.on('join', (userId) => {
-    console.log('Backend: Join event received:', { userId, socketId: socket.id });
+  socket.on('join', ({ userId, onlineStatus }) => {
+    console.log('Backend: Join event received:', { userId, socketId: socket.id, onlineStatus, typeOfOnlineStatus: typeof onlineStatus });
     socket.join(userId);
     socket.userId = userId;
-    onlineUsers.set(userId, socket.id);
-    console.log('Backend: User joined room:', { userId, socketId: socket.id });
-    console.log('Backend: Online users now:', Array.from(onlineUsers.keys()));
-    // Broadcast updated online users list to all connected clients
-    io.emit('onlineUsers', Array.from(onlineUsers.keys()));
+    const normalizedStatus = onlineStatus === true;
+    console.log('Backend: Normalized onlineStatus:', { userId, original: onlineStatus, normalized: normalizedStatus });
+    onlineUsers.set(userId, { socketId: socket.id, onlineStatus: normalizedStatus });
+    userOnlineStatusPreferences.set(userId, normalizedStatus);
+    console.log('Backend: User joined room:', { userId, socketId: socket.id, onlineStatus: normalizedStatus });
+    console.log('Backend: All online users in map:', Array.from(onlineUsers.entries()).map(([id, data]) => ({ id, onlineStatus: data.onlineStatus })));
+    // Broadcast only users with onlineStatus enabled
+    const visibleOnlineUsers = getVisibleOnlineUsers();
+    console.log('Backend: Broadcasting visible online users:', visibleOnlineUsers);
+    io.emit('onlineUsers', visibleOnlineUsers);
   });
 
   // Update lastSeen when user is actively using the app
@@ -131,6 +151,24 @@ io.on('connection', (socket) => {
       console.log('Backend: Updated activity/lastSeen for user:', userId);
     } catch (error) {
       console.error('Error updating activity:', error);
+    }
+  });
+
+  // Update online status setting
+  socket.on('updateOnlineStatus', ({ userId, onlineStatus }) => {
+    console.log('Backend: updateOnlineStatus:', { userId, newStatus: onlineStatus });
+    if (onlineUsers.has(userId)) {
+      const userData = onlineUsers.get(userId);
+      const oldStatus = userData.onlineStatus;
+      userData.onlineStatus = onlineStatus === true;
+      userOnlineStatusPreferences.set(userId, onlineStatus === true);
+      console.log('Backend: Online status updated:', { userId, oldStatus, newStatus: userData.onlineStatus });
+      // Broadcast updated online users (only those with onlineStatus enabled)
+      const visibleOnlineUsers = getVisibleOnlineUsers();
+      console.log('Backend: Broadcasting updated visible online users:', visibleOnlineUsers);
+      io.emit('onlineUsers', visibleOnlineUsers);
+    } else {
+      console.log('Backend: User not found in onlineUsers:', userId);
     }
   });
 
@@ -148,6 +186,7 @@ io.on('connection', (socket) => {
     if (socket.userId) {
       console.log('Backend: User disconnected:', { userId: socket.userId, socketId: socket.id });
       onlineUsers.delete(socket.userId);
+      userOnlineStatusPreferences.delete(socket.userId);
 
       // Update last seen timestamp
       try {
@@ -157,7 +196,10 @@ io.on('connection', (socket) => {
         console.error('Error updating last seen on disconnect:', error);
       }
 
-      io.emit('onlineUsers', Array.from(onlineUsers.keys()));
+      // Broadcast updated online users (only those with onlineStatus enabled)
+      const visibleOnlineUsers = getVisibleOnlineUsers();
+      console.log('Backend: Broadcasting visible online users after disconnect:', visibleOnlineUsers);
+      io.emit('onlineUsers', visibleOnlineUsers);
     }
   });
 
