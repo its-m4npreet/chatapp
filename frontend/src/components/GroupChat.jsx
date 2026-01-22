@@ -816,6 +816,28 @@ const GroupChat = ({
     setNewMessage(e.target.value);
   }, []);
 
+  const handleKeyDownGroup = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      // Get the form and submit it
+      const form = e.target.closest('form');
+      if (form) {
+        form.dispatchEvent(new Event('submit', { bubbles: true }));
+      }
+    }
+  };
+
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const scrollHeight = textarea.scrollHeight;
+      const newHeight = Math.min(scrollHeight, 150); // Max 150px height
+      textarea.style.height = `${newHeight}px`;
+    }
+  }, [newMessage]);
+
   // Voice recording functions
   const startRecording = async () => {
     try {
@@ -1514,14 +1536,27 @@ const GroupChat = ({
                 </div>
               )}
 
-              <input
+              <textarea
                 ref={inputRef}
-                type="text"
                 value={newMessage}
                 onChange={handleInputChange}
+                onKeyDown={handleKeyDownGroup}
                 placeholder="Type a message..."
-                className="flex-1 min-w-0 text-white px-4 py-2 rounded-lg outline-none border border-gray-700 focus:border-blue-500 bg-transparent"
+                className="flex-1 min-w-0 text-white px-4 py-2 rounded-lg outline-none border border-gray-700 focus:border-blue-500 bg-transparent resize-none scroll-hide"
+                rows="1"
+                style={{
+                  maxHeight: '150px',
+                  overflowY: 'auto',
+                  minHeight: '40px',
+                    scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+                }}
               />
+              <style>{`
+          textarea::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
 
               <button
                 type="submit"

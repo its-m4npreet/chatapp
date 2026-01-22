@@ -1116,6 +1116,17 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     }, 1000);
   }, [socket, currentUser, user, settings.typingIndicator]);
 
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const scrollHeight = textarea.scrollHeight;
+      const newHeight = Math.min(scrollHeight, 150); // Max 150px height
+      textarea.style.height = `${newHeight}px`;
+    }
+  }, [inputValue]);
+
   const handleReaction = async (msg, symbol) => {
     const existing = msg.reactions?.find(
       (r) => getId(r.user) === currentUser?._id
@@ -1887,14 +1898,27 @@ const formatLastSeen = (lastSeenDate) => {
           </div>
         )}
 
-       <input
+       <textarea
           ref={inputRef}
-          className="flex-1 min-w-0 p-2 rounded border border-gray-700 text-white outline-none bg-transparent"
-          placeholder="Type a message..."
+          className="flex-1 min-w-0 p-2 rounded border border-gray-700 text-white outline-none bg-transparent resize-none scrollbar-hide"
+          placeholder="Type a message... "
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyPress}
+          rows="1"
+          style={{
+            maxHeight: '150px',
+            overflowY: 'auto',
+            minHeight: '40px',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}
         />
+        <style>{`
+          textarea::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
         <button
           type="button"
           onClick={handleSend}
