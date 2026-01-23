@@ -176,6 +176,23 @@ const getAllUsers = async (req, res) => {
     }
 };
 
+// Get a specific user by ID
+const getUserById = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const user = await User.findById(userId).select('name email profilePicture bio username aboutMe location website portfolio banner');
+        
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        
+        res.status(200).json({ user });
+    } catch (error) {
+        console.error("Get user by ID error:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
 // Get current user's friends
 const getFriends = async (req, res) => {
     try {
@@ -718,4 +735,4 @@ const sendBugReport = async (req, res) => {
     }
 };
 
-module.exports = { signUp, signIn, logout, updateProfile, getAllUsers, getFriends, addFriend, removeFriend, googleAuth, resendOtpCode, verifyOtpCode, loginWithVerifiedEmail, sendResetPasswordEmail, resetPassword, sendBugReport };
+module.exports = { signUp, signIn, logout, updateProfile, getAllUsers, getUserById, getFriends, addFriend, removeFriend, googleAuth, resendOtpCode, verifyOtpCode, loginWithVerifiedEmail, sendResetPasswordEmail, resetPassword, sendBugReport };

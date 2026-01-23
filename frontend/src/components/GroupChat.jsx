@@ -817,12 +817,20 @@ const GroupChat = ({
   }, []);
 
   const handleKeyDownGroup = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      // Get the form and submit it
-      const form = e.target.closest('form');
-      if (form) {
-        form.dispatchEvent(new Event('submit', { bubbles: true }));
+    if (isMobile) {
+      // On mobile: Enter creates a new line, Send button sends the message
+      // Do nothing - let Enter create new line naturally
+      if (e.key === "Enter" && e.shiftKey) {
+        // Allow normal behavior for Shift+Enter on mobile too
+      }
+    } else {
+      // On desktop: Enter sends, Shift+Enter creates new line
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        const form = e.target.closest('form');
+        if (form) {
+          form.dispatchEvent(new Event('submit', { bubbles: true }));
+        }
       }
     }
   };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { IoArrowBack, IoSearch, IoPersonAdd } from 'react-icons/io5';
 import { FaCircleUser, FaCheck } from 'react-icons/fa6';
+import { useNavigate } from 'react-router-dom';
 import axios from '../lib/axios';
 import { FriendsSkeletonLoader } from './Loading';
 
@@ -12,7 +13,8 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
   const [addedUsers, setAddedUsers] = useState([]);
   const [addingUser, setAddingUser] = useState(null);
   
-
+  const navigate = useNavigate();
+  const isDarkMode = localStorage.getItem('chatAppSettings') ? JSON.parse(localStorage.getItem('chatAppSettings')).darkMode : true;
   const isMobile = window.innerWidth <= 768;
 
   useEffect(() => {
@@ -80,22 +82,20 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
   };
 
   const handleUserClick = (user) => {
-    // If already a friend, open chat directly
-    if (addedUsers.includes(user._id) && onSelectUser) {
-      onSelectUser(user);
-    }
+    // Navigate to user's profile
+    navigate(`/profile/${user._id}`);
   };
 
   return (
     <div className="h-full w-full flex flex-col">
       {/* Header */}
-      <div className="p-3 border-b border-gray-700 flex items-center gap-4">
+      <div className={`p-3 border-b ${isDarkMode ? 'border-gray-700 bg-[#0b0e12]' : 'border-gray-300 bg-white'} flex items-center gap-4`}>
         {!isMobile && (
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-800 transition-all">
-            <IoArrowBack size={24} className="text-white" />
+          <button onClick={onClose} className={`p-2 rounded-full transition-all ${isDarkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-200'}`}>
+            <IoArrowBack size={24} className={isDarkMode ? 'text-white' : 'text-gray-900'} />
           </button>
         )}
-        <h2 className="text-xl font-semibold text-white">Add New Friends</h2>
+        <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Add New Friends</h2>
       </div>
 
       {/* Search Input */}
@@ -103,26 +103,26 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
         <div className="relative">
           <IoSearch
             size={20}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}
           />
           <input
             type="text"
             placeholder="Search users by name or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 border border-gray-700 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-all"
+            className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none transition-all ${isDarkMode ? 'border-gray-700 bg-[#1a1f26] text-white placeholder-gray-400 focus:border-blue-500' : 'border-gray-300 bg-white text-gray-900 placeholder-gray-500 focus:border-blue-500'}`}
           />
         </div>
       </div>
 
       {/* Users List */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4 scrollbar-hide ">
+      <div className={`flex-1 overflow-y-auto px-4 pb-4 scrollbar-hide ${isDarkMode ? '' : 'bg-white'}`}>
         {loading ? (
           <FriendsSkeletonLoader count={6} />
         ) : error ? (
-          <div className="text-center text-red-400 py-8">{error}</div>
+          <div className={`text-center py-8 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>{error}</div>
         ) : filteredUsers.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
+          <div className={`text-center py-8 ${isDarkMode ? 'text-gray-500' : 'text-gray-600'}`}>
             {searchQuery ? 'No users found matching your search' : 'No users available'}
           </div>
         ) : (
@@ -133,30 +133,37 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
               return (
                 <div
                   key={user._id}
-                  className={`flex items-center gap-4 p-3 rounded-xl hover:bg-gray-800 transition-all ${isAdded ? 'cursor-pointer' : 'cursor-default'} group`}
-                  onClick={() => handleUserClick(user)}
+                  className={`flex items-center gap-4 p-3 rounded-xl transition-all group ${isDarkMode ? 'hover:bg-gray-800 text-white' : 'hover:bg-gray-100 text-gray-900'}`}
                 >
                   {/* Avatar */}
-                  <div className="relative">
+                  <div 
+                    className="relative cursor-pointer"
+                    onClick={() => handleUserClick(user)}
+                    title="View profile"
+                  >
                     {user.profilePicture ? (
                       <img
                         src={user.profilePicture}
                         alt={user.name}
-                        className="w-12 h-12 rounded-full object-cover"
+                        className="w-12 h-12 rounded-full object-cover hover:opacity-80 transition-opacity"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center">
-                        <FaCircleUser size={32} className="text-gray-500" />
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`}>
+                        <FaCircleUser size={32} className={isDarkMode ? 'text-gray-500' : 'text-gray-600'} />
                       </div>
                     )}
                   </div>
 
                   {/* User Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-white truncate">
+                  <div 
+                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={() => handleUserClick(user)}
+                    title="View profile"
+                  >
+                    <div className={`font-semibold truncate hover:underline transition-all ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                       {user.name}
                     </div>
-                    <div className="text-sm text-gray-400 truncate">
+                    <div className={`text-sm truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                       {user.username}
                     </div>
                     {/* {user.bio && (
@@ -194,8 +201,8 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
 
       {/* Info Footer */}
       {!isMobile && (
-        <div className="p-4 border-t border-gray-700">
-        <p className="text-sm text-gray-500 text-center">
+        <div className={`p-4 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-300'}`}>
+        <p className={`text-sm text-center ${isDarkMode ? 'text-gray-500' : 'text-gray-600'}`}>
           Click the + button to add a user to your chat list
         </p>
       </div>

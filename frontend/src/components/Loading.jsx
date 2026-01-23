@@ -1,5 +1,10 @@
 import React from 'react';
 
+// Theme detection utility
+const isDarkMode = () => {
+  return localStorage.getItem('chatAppSettings') ? JSON.parse(localStorage.getItem('chatAppSettings')).darkMode : true;
+};
+
 // Custom CSS-based loading spinner (React 19 compatible)
 const Spinner = ({ color = '#3b82f6', width = 40, height = 40 }) => (
   <div 
@@ -47,13 +52,13 @@ const Loading = ({
 
 // Preset loading components for common use cases
 export const PageLoading = ({ text = 'Loading...' }) => (
-  <div className="h-full w-full flex items-center justify-center bg-zinc-900">
+  <div className={`h-full w-full flex items-center justify-center ${isDarkMode() ? 'bg-zinc-900' : 'bg-gray-100'}`}>
     <Loading size="large" text={text} />
   </div>
 );
 
 export const ContentLoading = ({ text = '' }) => (
-  <div className="py-8 flex items-center justify-center">
+  <div className={`py-8 flex items-center justify-center ${isDarkMode() ? '' : 'bg-white'}`}>
     <Loading size="medium" text={text} />
   </div>
 );
@@ -67,57 +72,68 @@ export const InlineLoading = ({ color = '#3b82f6' }) => (
 );
 
 // Skeleton loader for older messages (pagination)
-export const MessageSkeletonLoader = ({ count = 3 }) => (
-  <div className="py-4 space-y-3">
-    {Array.from({ length: count }).map((_, idx) => (
-      <div key={idx} className={`flex ${idx % 2 === 0 ? 'justify-start' : 'justify-end'} mb-3`}>
-        <div className={`max-w-[88vw] sm:max-w-md md:max-w-lg ${idx % 2 === 0 ? 'bg-gray-800' : 'bg-blue-600'} rounded-2xl p-3 animate-pulse`}>
-          <div className={`h-4 ${idx % 2 === 0 ? 'bg-gray-700' : 'bg-blue-700'} rounded w-32`}></div>
-          {idx % 3 === 0 && (
-            <div className={`h-3 ${idx % 2 === 0 ? 'bg-gray-700' : 'bg-blue-700'} rounded w-24 mt-2`}></div>
-          )}
+export const MessageSkeletonLoader = ({ count = 3 }) => {
+  const dark = isDarkMode();
+  return (
+    <div className="py-4 space-y-3">
+      {Array.from({ length: count }).map((_, idx) => (
+        <div key={idx} className={`flex ${idx % 2 === 0 ? 'justify-start' : 'justify-end'} mb-3`}>
+          <div className={`max-w-[88vw] sm:max-w-md md:max-w-lg ${idx % 2 === 0 ? dark ? 'bg-gray-800' : 'bg-gray-300' : dark ? 'bg-blue-600' : 'bg-blue-400'} rounded-2xl p-3 animate-pulse`}>
+            <div className={`h-4 ${idx % 2 === 0 ? dark ? 'bg-gray-700' : 'bg-gray-400' : dark ? 'bg-blue-700' : 'bg-blue-500'} rounded w-32`}></div>
+            {idx % 3 === 0 && (
+              <div className={`h-3 ${idx % 2 === 0 ? dark ? 'bg-gray-700' : 'bg-gray-400' : dark ? 'bg-blue-700' : 'bg-blue-500'} rounded w-24 mt-2`}></div>
+            )}
+          </div>
         </div>
-      </div>
-    ))}
-  </div>
-);
+      ))}
+    </div>
+  );
+};
 
 // Skeleton loader for friends list
-export const FriendsSkeletonLoader = ({ count = 5 }) => (
-  <div className="py-2 space-y-2">
-    {Array.from({ length: count }).map((_, idx) => (
-      <div key={idx} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-700 cursor-pointer animate-pulse bg-gray-800/50 transition-colors">
-        {/* Avatar placeholder */}
-        <div className="w-10 h-10 rounded-full bg-gray-700 shrink-0"></div>
-        {/* Chat info placeholder */}
-        <div className="flex-1 min-w-0">
-          {/* Name placeholder */}
-          <div className="h-4 bg-gray-700 rounded w-32 mb-2"></div>
-          {/* Message preview placeholder */}
-          <div className="h-3 bg-gray-700 rounded w-24"></div>
+export const FriendsSkeletonLoader = ({ count = 5 }) => {
+  const dark = isDarkMode();
+  return (
+    <div className="py-2 space-y-2">
+      {Array.from({ length: count }).map((_, idx) => (
+        <div key={idx} className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer animate-pulse transition-all duration-200 ${dark ? 'hover:bg-gray-700/80 bg-gray-800/50 hover:shadow-md' : 'hover:bg-gray-200 bg-gray-100 hover:shadow-md'}`}>
+          {/* Avatar placeholder */}
+          <div className={`w-10 h-10 rounded-full shrink-0 ${dark ? 'bg-gray-700' : 'bg-gray-400'}`}></div>
+          {/* Chat info placeholder */}
+          <div className="flex-1 min-w-0">
+            {/* Name placeholder */}
+            <div className={`h-4 rounded w-32 mb-2 ${dark ? 'bg-gray-700' : 'bg-gray-400'}`}></div>
+            {/* Message preview placeholder */}
+            <div className={`h-3 rounded w-24 ${dark ? 'bg-gray-700' : 'bg-gray-400'}`}></div>
+          </div>
         </div>
-      </div>
-    ))}
-  </div>
-);
+      ))}
+    </div>
+  );
+};
+
 
 // Skeleton loader for groups list
-export const GroupsSkeletonLoader = ({ count = 3 }) => (
-  <div className="py-2 space-y-2">
-    {Array.from({ length: count }).map((_, idx) => (
-      <div key={idx} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-700 cursor-pointer animate-pulse bg-gray-800/50 transition-colors">
-        {/* Group avatar placeholder */}
-        <div className="w-10 h-10 rounded-full bg-gray-700 shrink-0"></div>
-        {/* Group info placeholder */}
-        <div className="flex-1 min-w-0">
-          {/* Group name placeholder */}
-          <div className="h-4 bg-gray-700 rounded w-40 mb-2"></div>
-          {/* Members count placeholder */}
-          <div className="h-3 bg-gray-700 rounded w-20"></div>
+export const GroupsSkeletonLoader = ({ count = 3 }) => {
+  const dark = isDarkMode();
+  return (
+    <div className="py-2 space-y-2">
+      {Array.from({ length: count }).map((_, idx) => (
+        <div key={idx} className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer animate-pulse transition-all duration-200 ${dark ? 'hover:bg-gray-700/80 bg-gray-800/50 hover:shadow-md' : 'hover:bg-gray-200 bg-gray-100 hover:shadow-md'}`}>
+          {/* Group avatar placeholder */}
+          <div className={`w-10 h-10 rounded-full shrink-0 ${dark ? 'bg-gray-700' : 'bg-gray-400'}`}></div>
+          {/* Group info placeholder */}
+          <div className="flex-1 min-w-0">
+            {/* Group name placeholder */}
+            <div className={`h-4 rounded w-40 mb-2 ${dark ? 'bg-gray-700' : 'bg-gray-400'}`}></div>
+            {/* Members count placeholder */}
+            <div className={`h-3 rounded w-20 ${dark ? 'bg-gray-700' : 'bg-gray-400'}`}></div>
+          </div>
         </div>
-      </div>
-    ))}
-  </div>
-);
+      ))}
+    </div>
+  );
+};
+
 
 export default Loading;

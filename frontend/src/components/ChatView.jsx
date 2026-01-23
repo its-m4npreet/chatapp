@@ -1079,9 +1079,18 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   };
 
   const handleKeyPress = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+    if (isMobile) {
+      // On mobile: Enter creates a new line, Send button sends the message
+      // Do nothing - let Enter create new line naturally
+      if (e.key === "Enter" && e.shiftKey) {
+        // Allow normal behavior for Shift+Enter on mobile too
+      }
+    } else {
+      // On desktop: Enter sends, Shift+Enter creates new line
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
     }
   };
 

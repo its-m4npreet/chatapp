@@ -6,7 +6,7 @@ import axios from '../lib/axios';
 import { useNavigate } from 'react-router-dom';
 import { ContentLoading } from './Loading';
 
-const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile = true }) => {
+const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile }) => {
   // If viewingUser is provided, show their profile (read-only), otherwise show currentUser's profile (editable)
   const isViewingOther = viewingUser && viewingUser._id !== currentUser?._id;
   const user = isViewingOther ? viewingUser : currentUser;
@@ -36,16 +36,18 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile = 
     }
   };
 
+  const isDarkMode =localStorage.getItem('chatAppSettings') ? JSON.parse(localStorage.getItem('chatAppSettings')).darkMode : true;
+
   if (!user) {
     return (
-      <div className="flex items-center justify-center h-full bg-[#0f1419]">
+      <div className={`flex items-center justify-center h-full ${isDarkMode ? 'bg-[#0b0e12] text-white' : 'bg-white text-gray-900'}`}>
         <ContentLoading text="Loading profile..." />
       </div>
     );
   }
 
   return (
-    <div className="h-full w-full min-h-screen flex flex-col overflow-y-auto scrollbar-hide " style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+    <div className={`h-full w-full min-h-screen flex flex-col overflow-y-auto scrollbar-hide ${isDarkMode ? 'bg-[#0b0e12]' : 'bg-white'}`} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
       {/* Banner Section */}
       <div className="relative">
         {/* Banner Image */}
@@ -57,18 +59,20 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile = 
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="absolute inset-0 bg-linear-to-br from-blue-600 via-purple-600 to-pink-500"></div>
+            <div className={`absolute z-0 inset-0 bg-linear-to-br ${isDarkMode ? 'from-blue-600 via-purple-600 to-pink-500' : 'from-blue-400 via-purple-400 to-pink-400'}`}></div>
           )}
-          <div className="absolute inset-0 bg-black/20"></div>
+          <div className={`absolute inset-0 ${isDarkMode ? 'bg-black/20' : 'bg-white/10'}`}></div>
         </div>
 
         {/* Back Button */}
-        <button
+        {isMobile && (
+          <button
           onClick={handleBack}
-          className="absolute top-4 left-4 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white backdrop-blur-sm transition-all"
+          className={`absolute top-4 left-4 p-2 ${isDarkMode ? 'bg-black/50 hover:bg-black/70 text-white' : 'bg-white/50 hover:bg-white/70 text-black'} rounded-full  backdrop-blur-sm transition-all`}
         >
           <IoArrowBack size={20} />
         </button>
+        )}
 
         {/* Profile Picture */}
         <div className="absolute -bottom-16 left-6 md:left-10">
@@ -77,16 +81,16 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile = 
               <img
                 src={user.profilePicture}
                 alt={user.name}
-                className="w-28 h-28 md:w-32 md:h-32 rounded-full object-cover border-4 border-[#0f1419] shadow-xl"
+                className={`w-28 h-28 md:w-32 md:h-32 rounded-full object-cover border-4 shadow-xl ${isDarkMode ? 'border-[#0f1419]' : 'border-gray-300'}`}
               />
             ) : (
-              <div className="w-28 h-28 md:w-32 md:h-32 rounded-full bg-gray-800 flex items-center justify-center border-4 border-[#0f1419] shadow-xl">
-                <FaCircleUser size={80} className="text-gray-600" />
+              <div className={`w-28 h-28 md:w-32 md:h-32 rounded-full flex items-center justify-center border-4 shadow-xl ${isDarkMode ? 'bg-gray-800 border-[#0f1419] text-gray-600' : 'bg-gray-200 border-gray-400 text-gray-500'}`}>
+                <FaCircleUser size={80} />
               </div>
             )}
-            <div className="absolute bottom-1 right-1 bg-[#EAB308] rounded-full p-1">
+            {/* <div className="absolute bottom-1 right-1 bg-[#EAB308] rounded-full p-1">
               <MdVerified size={16} className="text-white " />
-            </div>
+            </div> */}
           </div>
         </div>
 
@@ -95,7 +99,7 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile = 
           <div className="absolute -bottom-12 right-4 md:right-6 flex items-center gap-2">
             <button
               onClick={onEditProfile}
-              className="px-4 py-2 bg-transparent border border-gray-600 hover:bg-gray-800 text-white rounded text-sm font-medium flex items-center gap-2 transition-all cursor-pointer"
+              className={`px-4 py-2 bg-transparent border rounded text-sm font-medium flex items-center gap-2 transition-all cursor-pointer ${isDarkMode ? 'border-gray-600 hover:bg-gray-800 text-white' : 'border-gray-400 hover:bg-gray-100 text-gray-900'}`}
             >
               <MdEdit size={16} />
               Edit Profile
@@ -108,28 +112,28 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile = 
       <div className="mt-20 px-6 md:px-10">
         {/* Name and Title */}
         <div className="flex items-center gap-2 mb-1">
-          <h1 className="text-2xl md:text-3xl font-bold text-white">{user.name}</h1>
-          <div className='flex justify-center items-center mt-4'>
+          <h1 className={`text-2xl md:text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{user.name}</h1>
+          {/* <div className='flex justify-center items-center mt-4'>
                       <MdVerified size={22} className="text-[#EAB308] flex justify-center items-center" />
 
-          </div>
+          </div> */}
         </div>
-        <p className="text-gray-400 text-sm md:text-base">{user.email}</p>
+        <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'} text-sm md:text-base`}>{user.email}</p>
 
         {/* Experience/Bio Section */}
         <div className="mt-6">
-          <h3 className="text-gray-400 text-sm font-medium mb-2">Bio</h3>
-          <p className="text-gray-300 text-sm leading-relaxed">
+          <h3 className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'} text-sm font-medium mb-2`}>Bio</h3>
+          <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'} text-sm leading-relaxed`}>
             {user.bio || 'Hii'}
           </p>
         </div>
 
         {/* About Me & Details Grid */}
-        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-gray-700 py-5">
+        <div className={`mt-2 grid grid-cols-1 md:grid-cols-2 gap-6 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-300'} py-5`}>
           {/* About Me */}
           <div>
-            <h3 className="text-white font-semibold mb-3">About me</h3>
-            <p className="text-gray-400 text-sm leading-relaxed">
+            <h3 className={`${isDarkMode ? 'text-white' : 'text-gray-900'} font-semibold mb-3`}>About me</h3>
+            <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'} text-sm leading-relaxed`}>
               {user.aboutMe || 'Tell people about yourself. Share your interests, what you\'re working on, or anything else you\'d like others to know.'}
             </p>
           </div>
@@ -137,43 +141,43 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile = 
           {/* Contact Details */}
           <div className="space-y-4 grid grid-cols-2">
             <div>
-              <span className="text-gray-500 text-xs uppercase tracking-wider">Location</span>
+              <span className={`${isDarkMode ? 'text-gray-500' : 'text-gray-600'} text-xs uppercase tracking-wider`}>Location</span>
               <div className="flex items-center gap-2 mt-1">
-                <MdLocationOn size={16} className="text-gray-400" />
-                <span className="text-gray-300 text-sm">{user.location || 'Add your location'}</span>
+                <MdLocationOn size={16} className={isDarkMode ? 'text-gray-400' : 'text-gray-600'} />
+                <span className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'} text-sm`}>{user.location || 'Add your location'}</span>
               </div>
             </div>
             <div>
-              <span className="text-gray-500 text-xs uppercase tracking-wider">Website</span>
+              <span className={`${isDarkMode ? 'text-gray-500' : 'text-gray-600'} text-xs uppercase tracking-wider`}>Website</span>
               <div className="flex items-center gap-2 mt-1">
-                <MdLink size={16} className="text-gray-400" />
+                <MdLink size={16} className={isDarkMode ? 'text-gray-400' : 'text-gray-600'} />
                 {user.website ? (
-                  <a href={user.website} target="_blank" rel="noopener noreferrer" className="text-blue-400 text-sm hover:underline">
+                  <a href={user.website} target="_blank" rel="noopener noreferrer" className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'} text-sm hover:underline`}>
                     {user.website.replace(/^https?:\/\//, '')}
                   </a>
                 ) : (
-                  <span className="text-gray-300 text-sm">Add your website</span>
+                  <span className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'} text-sm`}>Add your website</span>
                 )}
               </div>
             </div>
             <div>
-              <span className="text-gray-500 text-xs uppercase tracking-wider">Portfolio</span>
+              <span className={`${isDarkMode ? 'text-gray-500' : 'text-gray-600'} text-xs uppercase tracking-wider`}>Portfolio</span>
               <div className="flex items-center gap-2 mt-1">
-                <MdWork size={16} className="text-gray-400" />
+                <MdWork size={16} className={isDarkMode ? 'text-gray-400' : 'text-gray-600'} />
                 {user.portfolio ? (
-                  <a href={user.portfolio} target="_blank" rel="noopener noreferrer" className="text-blue-400 text-sm hover:underline">
+                  <a href={user.portfolio} target="_blank" rel="noopener noreferrer" className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'} text-sm hover:underline`}>
                     {user.portfolio.replace(/^https?:\/\//, '')}
                   </a>
                 ) : (
-                  <span className="text-gray-300 text-sm">Add your portfolio</span>
+                  <span className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'} text-sm`}>Add your portfolio</span>
                 )}
               </div>
             </div>
             <div>
-              <span className="text-gray-500 text-xs uppercase tracking-wider">Email</span>
+              <span className={`${isDarkMode ? 'text-gray-500' : 'text-gray-600'} text-xs uppercase tracking-wider`}>Email</span>
               <div className="flex items-center gap-2 mt-1">
-                <MdEmail size={16} className="text-gray-400" />
-                <a href={`mailto:${user.email}`} className="text-blue-400 text-sm hover:underline">{user.email}</a>
+                <MdEmail size={16} className={isDarkMode ? 'text-gray-400' : 'text-gray-600'} />
+                <a href={`mailto:${user.email}`} className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'} text-sm hover:underline`}>{user.email}</a>
               </div>
             </div>
           </div>
@@ -218,7 +222,7 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile = 
           {!isViewingOther ?  (
             <button
               onClick={handleLogout}
-              className="px-5 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed rounded font-semibold flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer"
+              className={`px-5 py-2 ${isDarkMode ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20' : 'bg-red-100 hover:bg-red-200 text-red-700 border-red-300'} border disabled:opacity-50 disabled:cursor-not-allowed rounded font-semibold flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer`}
             >
               <MdLogout size={20} />
               <span>Logout</span>
