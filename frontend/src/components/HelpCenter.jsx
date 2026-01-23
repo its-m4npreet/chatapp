@@ -12,6 +12,7 @@ const HelpCenter = () => {
       id: "getting-started",
       title: "Getting Started",
       icon: Rocket,
+      color: "text-orange-500",
       faqs: [
         {
           id: "gs-1",
@@ -39,6 +40,7 @@ const HelpCenter = () => {
       id: "messaging",
       title: "Messaging & Chats",
       icon: MessageSquare,
+      color: "text-green-500",
       faqs: [
         {
           id: "msg-1",
@@ -70,6 +72,7 @@ const HelpCenter = () => {
     {
       id: "friends",
       title: "Friends & Connections",
+      color: "text-blue-500",
       icon: Users,
       faqs: [
         {
@@ -97,6 +100,7 @@ const HelpCenter = () => {
     {
       id: "account-security",
       title: "Account & Security",
+      color: "text-red-500",
       icon: Lock,
       faqs: [
         {
@@ -129,6 +133,7 @@ const HelpCenter = () => {
     {
       id: "settings",
       title: "Settings & Customization",
+      color: "text-violet-500",
       icon: SettingsIcon,
       faqs: [
         {
@@ -160,6 +165,7 @@ const HelpCenter = () => {
     },
     {
       id: "profile",
+      color: "text-pink-500",
       title: "Profile & Personal Info",
       icon: User,
       faqs: [
@@ -187,6 +193,7 @@ const HelpCenter = () => {
     },
     {
       id: "troubleshooting",
+      color: "text-cyan-500",
       title: "Troubleshooting",
       icon: Wrench,
       faqs: [
@@ -238,38 +245,26 @@ const HelpCenter = () => {
     setExpandedId((prevId) => (prevId === id ? null : id));
   }, []);
 
+  const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const textDarkMode = isDarkMode ? 'text-white' : 'text-gray-900';
+
   return (
-    <div className="min-h-screen flex flex-col bg-white dark:bg-[#0b0e12] relative">
-      {/* Background Pattern */}
-      <div
-        className="absolute top-0 inset-0 z-0 opacity-10"
-        style={{
-          backgroundImage: `
-            linear-gradient(to right, #d1d5db 1px, transparent 1px),
-            linear-gradient(to bottom, #d1d5db 1px, transparent 1px)
-          `,
-          backgroundSize: "40px 40px",
-          WebkitMaskImage:
-            "radial-gradient(ellipse 100% 50% at 50% 10%, #000 30%, transparent 70%)",
-          maskImage:
-            "radial-gradient(ellipse 100% 50% at 50% 10%, #000 30%, transparent 70%)",
-        }}
-      />
+    <div className={`min-h-screen flex flex-col ${textDarkMode} relative`}>
 
       {/* Header */}
-      <div className="sticky top-0 z-20 backdrop-blur-sm border-b border-gray-200 dark:border-zinc-800 bg-white dark:bg-[#0b0e12]">
+      <div className={`sticky top-0 z-20 backdrop-blur-sm border-b${ isDarkMode ? ' border-zinc-700 bg-zinc-900/70' : ' border-gray-200 bg-white/70' }`}>
         <div className="p-4 flex items-center gap-4">
           <button
             onClick={() => navigate(-1)}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-xl text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all"
+            className={`p-2 rounded-xl ${isDarkMode ? 'hover:bg-gray-100' : 'hover:bg-zinc-800'} transition-all`}
           >
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+            <h2 className={`text-xl font-bold ${ isDarkMode ? 'text-white' : 'text-gray-900' }`}>
               Help Center
             </h2>
-            <p className="text-gray-600 dark:text-gray-500 text-sm">
+            <p className={`text-sm ${ isDarkMode ? 'text-gray-300' : 'text-gray-600' }`}>
               Find answers to your questions
             </p>
           </div>
@@ -291,7 +286,7 @@ const HelpCenter = () => {
                   setSearchQuery(e.target.value);
                   setExpandedId(null);
                 }}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-zinc-600 rounded-lg bg-white dark:bg-zinc-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4f38f7] focus:border-transparent"
+                className={`w-full pl-10 pr-4 py-3 border  rounded-lg   ${isDarkMode ? 'border-zinc-600 bg-zinc-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4f38f7] focus:border-transparent' : 'border-gray-300 bg-white  text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#4f38f7] focus:border-transparent'}`}
               />
             </div>
           </div>
@@ -301,8 +296,8 @@ const HelpCenter = () => {
             {filteredCategories.map((category) => (
               <div key={category.id} className="space-y-3">
                 <div className="flex items-center gap-3 mb-4">
-                  <category.icon className="w-6 h-6 text-[#4f38f7]" />
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  <category.icon className={`w-6 h-6 ${category.color}`} />
+                  <h3 className={`text-lg font-semibold ${textDarkMode}`}>
                     {category.title}
                   </h3>
                 </div>
@@ -311,13 +306,13 @@ const HelpCenter = () => {
                   {category.faqs.map((faq) => (
                     <div
                       key={faq.id}
-                      className="border border-gray-200 dark:border-zinc-700 rounded-lg overflow-hidden bg-white dark:bg-zinc-800/50"
+                      className={`border rounded-lg overflow-hidden ${isDarkMode ? 'border-zinc-700 bg-zinc-800/50' : 'border-gray-200 bg-white'}`}
                     >
                       <button
                         onClick={() => toggleExpanded(faq.id)}
-                        className="w-full px-4 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-zinc-700/30 transition-colors text-left"
+                        className={`w-full px-4 py-4 flex items-center justify-between ${isDarkMode ? 'hover:bg-gray-50 dark:hover:bg-zinc-700/30' : 'hover:bg-gray-50 dark:hover:bg-zinc-700/30'} transition-colors text-left`}
                       >
-                        <span className="font-medium text-gray-900 dark:text-white">
+                        <span className={`font-medium ${textDarkMode}`}>
                           {faq.question}
                         </span>
                         {expandedId === faq.id ? (
@@ -328,8 +323,8 @@ const HelpCenter = () => {
                       </button>
 
                       {expandedId === faq.id && (
-                        <div className="px-4 py-4 border-t border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-900/30">
-                          <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                        <div className={`px-4 py-4 border-t ${isDarkMode ? 'border-zinc-700 bg-zinc-900/30' : 'border-gray-200 bg-gray-50'}`}>
+                          <p className={`leading-relaxed ${textDarkMode}`}>
                             {faq.answer}
                           </p>
                         </div>
@@ -342,11 +337,11 @@ const HelpCenter = () => {
 
             {filteredCategories.length === 0 && (
               <div className="text-center py-12">
-                <HelpCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600 dark:text-gray-400">
+                <HelpCircle className={`w-12 h-12 mx-auto mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-400'}`} />
+                <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   No help articles found for "{searchQuery}"
                 </p>
-                <p className="text-gray-500 dark:text-gray-500 text-sm mt-2">
+                <p className={`text-sm mt-2 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
                   Try searching with different keywords or browse the categories above
                 </p>
               </div>
@@ -355,35 +350,35 @@ const HelpCenter = () => {
 
           {/* Contact Support Section */}
           {filteredCategories.length > 0 && (
-            <div className="mt-12 p-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-300 mb-3">
+            <div className={`mt-12 p-6 ${isDarkMode ? 'bg-blue-900/20 border-blue-800' : 'bg-blue-50 border-blue-200'} border rounded-lg`}>
+              <h3 className={`text-lg font-semibold mb-3 ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
                 Still need help?
               </h3>
-              <p className="text-blue-800 dark:text-blue-400 mb-4">
+              <p className={`mb-4 ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>
                 If you couldn't find the answer to your question, you can:
               </p>
               <div className="grid md:grid-cols-2 gap-4">
                 <button
                   onClick={() => navigate("/report-bug")}
-                  className="flex items-center gap-3 p-4 bg-white dark:bg-zinc-800 rounded-lg hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors text-left border border-blue-200 dark:border-blue-800"
+                  className={`flex items-center gap-3 p-4 ${isDarkMode ? 'bg-zinc-800 border-blue-800 hover:bg-zinc-700' : 'bg-white border-blue-200 hover:bg-gray-50'} rounded-lg transition-colors text-left border`}
                 >
-                  <MessageSquare className="w-5 h-5 text-[#4f38f7]" />
+                  <MessageSquare className="w-5 h-5 text-green-500" />
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">
+                    <p className={`font-medium ${textDarkMode}`}>
                       Report a Bug
                     </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                       Found an issue? Let us know
                     </p>
                   </div>
                 </button>
-                <div className="flex items-center gap-3 p-4 bg-white dark:bg-zinc-800 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <HelpCircle className="w-5 h-5 text-[#4f38f7]" />
+                <div className={`flex items-center gap-3 p-4 rounded-lg border ${isDarkMode ? 'border-blue-800 bg-zinc-800' : 'border-blue-200 bg-white'}`}>
+                  <HelpCircle className="w-5 h-5 text-blue-500" />
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">
+                    <p className={`font-medium ${textDarkMode}`}>
                       Email Support
                     </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                       support@chatapp.com
                     </p>
                   </div>
@@ -395,12 +390,12 @@ const HelpCenter = () => {
           {/* Tips Section */}
           <div className="mt-12 p-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
             <div className="flex items-center gap-3 mb-3">
-              <Lightbulb className="w-5 h-5 text-green-600 dark:text-green-400" />
-              <h3 className="text-lg font-semibold text-green-900 dark:text-green-300">
+              <Lightbulb className="w-5 h-5 text-amber-500" />
+              <h3 className="text-lg font-semibold text-green-700 dark:text-green-300">
                 Tips for a better experience
               </h3>
             </div>
-            <ul className="text-green-800 dark:text-green-400 space-y-2 text-sm">
+            <ul className="text-green-700 dark:text-green-400 space-y-2 text-sm">
               <li>• Enable notifications to stay updated with new messages</li>
               <li>• Use dark mode for a comfortable viewing experience</li>
               <li>• Verify your email for enhanced account security</li>

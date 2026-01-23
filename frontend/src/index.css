@@ -50,8 +50,12 @@ h1 {
 /* Global Dark Mode Overrides for Light Mode */
 /* This converts hardcoded dark colors to light mode when .dark is removed */
 
-html .text-white {
+html .text-white:not(button) {
   color: rgb(17, 24, 39) !important;
+}
+
+html button.text-white {
+  color: rgb(255, 255, 255) !important;
 }
 
 html.dark .text-white {

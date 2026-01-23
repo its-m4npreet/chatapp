@@ -142,7 +142,7 @@ export const Home = () => {
       console.log('Home: Joining socket room with userId:', currentUser._id, 'onlineStatus:', settings.onlineStatus);
       socket.emit('join', { userId: currentUser._id, onlineStatus: settings.onlineStatus });
     }
-  }, [currentUser, socket]); // Include socket in dependency array
+  }, [currentUser, settings.onlineStatus]);
 
   // Update online status when settings change
   useEffect(() => {
@@ -153,7 +153,7 @@ export const Home = () => {
         onlineStatus: settings.onlineStatus
       });
     }
-  }, [settings.onlineStatus, socket, currentUser]);
+  }, [settings.onlineStatus, currentUser]);
 
   // Update activity status periodically to track lastSeen
   useEffect(() => {

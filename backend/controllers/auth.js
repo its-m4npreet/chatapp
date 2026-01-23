@@ -509,6 +509,14 @@ const sendResetPasswordEmail = async (req, res) => {
             return res.status(400).json({ message: "User not found" });
         }
 
+        // Check if user logged in with Gmail but hasn't created a password
+        if (user.googleId && !user.password) {
+            return res.status(400).json({ 
+                message: "You logged in with Gmail and haven't created a password yet. Please set a password in your account settings first.",
+                type: "GMAIL_USER_NO_PASSWORD"
+            });
+        }
+
         // Generate reset token
         const resetToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '15m' });
         
