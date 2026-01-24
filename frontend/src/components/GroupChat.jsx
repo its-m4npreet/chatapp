@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { X, UserPlus, Users, Crown, Shield, Edit, LogOut, Trash2, Calendar, User } from 'lucide-react';
+
 import {
   IoClose,
   IoSend,
@@ -111,10 +113,10 @@ const getGroupMessageThemeClasses = (theme, isOwn, isDarkMode) => {
       otherLight: "bg-gray-400 text-gray-900",
     },
     vibrant: {
-      ownDark: "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg",
-      otherDark: "bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-lg",
-      ownLight: "bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-md",
-      otherLight: "bg-gradient-to-r from-orange-400 to-red-400 text-white shadow-md",
+      ownDark: "bg-linear-to-r from-blue-600 to-blue-500 text-white shadow-lg",
+      otherDark: "bg-linear-to-r from-purple-600 to-pink-500 text-white shadow-lg",
+      ownLight: "bg-linear-to-r from-blue-500 to-cyan-400 text-white shadow-md",
+      otherLight: "bg-linear-to-r from-orange-400 to-red-400 text-white shadow-md",
     },
     pastel: {
       ownDark: "bg-blue-400 text-gray-900 shadow-md",
@@ -153,10 +155,10 @@ const getGroupAudioThemeClasses = (theme, isOwn, isDarkMode) => {
       otherLight: "bg-gray-400",
     },
     vibrant: {
-      ownDark: "bg-gradient-to-r from-blue-600 to-blue-500",
-      otherDark: "bg-gradient-to-r from-purple-600 to-pink-500",
-      ownLight: "bg-gradient-to-r from-blue-500 to-cyan-400",
-      otherLight: "bg-gradient-to-r from-orange-400 to-red-400",
+      ownDark: "bg-linear-to-r from-blue-600 to-blue-500",
+      otherDark: "bg-linear-to-r from-purple-600 to-pink-500",
+      ownLight: "bg-linear-to-r from-blue-500 to-cyan-400",
+      otherLight: "bg-linear-to-r from-orange-400 to-red-400",
     },
     pastel: {
       ownDark: "bg-blue-400",
@@ -907,6 +909,15 @@ const GroupChat = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // State for group profile modal scroll position
+  const [groupProfileScroll, setGroupProfileScroll] = useState(0);
+  const groupProfileScrollRef = useRef(null);
+
+  const handleGroupProfileScroll = useCallback((e) => {
+    const scrollTop = e.target.scrollTop;
+    setGroupProfileScroll(scrollTop);
+  }, []);
+
   if (!group) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400">
@@ -922,35 +933,6 @@ const GroupChat = ({
     <>
       <style>{reactionStyles}</style>
       <div className="flex-1 flex flex-col h-full ">
-      {/* Mobile header with back */}
-      {/* {isMobile && (
-        <div className="flex items-center gap-3 px-3 py-2 border-b border-gray-700">
-          <button
-            onClick={onBack}
-            aria-label="Back to chat list"
-            className="text-gray-300 hover:text-white"
-            title="Back"
-          >
-             Simple back chevron 
-            <span className="inline-block">&larr;</span>
-          </button>
-          <div className="flex items-center gap-2">
-             Show group name if available 
-             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
-            {group.avatar ? (
-              <img
-                src={group.avatar}
-                alt={group.name}
-                className="w-full h-full rounded-full object-cover"
-              />
-            ) : (
-              <TiGroup size={24} className="text-white" />
-            )}
-          </div>
-            <span className="text-white font-medium">{group?.name || 'Group'}</span>
-          </div>
-        </div>
-      )} */}
       {/* Desktop header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 ">
         <div 
@@ -995,15 +977,7 @@ const GroupChat = ({
                   onClick={() => setShowMobileMenu(false)}
                 />
                 <div className="absolute right-0 mt-2 w-48 bg-zinc-800 border border-gray-700 rounded-lg shadow-lg z-50">
-                  {/* <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-                    <span className="text-white font-semibold text-sm">Menu</span>
-                    <button
-                      onClick={() => setShowMobileMenu(false)}
-                      className="p-1 hover:bg-zinc-700 rounded text-gray-400 hover:text-white transition"
-                    >
-                      <IoClose size={18} />
-                    </button>
-                  </div> */}
+
                   {(isCreator || isAdmin) && (
                     <button
                       onClick={() => {
@@ -1583,186 +1557,495 @@ const GroupChat = ({
 
         {/* Group Profile Modal */}
         {showGroupProfile && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center">
-            <div className="bg-zinc-900 w-full sm:w-full sm:max-w-md max-h-[90vh] rounded-t-3xl sm:rounded-lg overflow-y-auto border border-gray-700">
-              {/* Close Button */}
-              <div className="sticky top-0 flex justify-end p-3 bg-zinc-900 border-b border-gray-700">
-                <button
-                  onClick={() => setShowGroupProfile(false)}
-                  className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
+  <div className={`fixed inset-0 backdrop-blur-sm z-9990 flex items-end sm:items-center justify-center animate-in fade-in duration-200 ${
+    settings.darkMode ? 'bg-black/70' : 'bg-white/70'
+  }`}>
+    <div className={`w-full sm:w-full sm:max-w-lg max-h-[95vh] rounded-t-3xl sm:rounded-2xl overflow-hidden border shadow-2xl animate-in slide-in-from-bottom sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 ${
+      settings.darkMode 
+        ? 'bg-linear-to-b from-zinc-900 to-zinc-950 border-gray-700/50' 
+        : 'bg-linear-to-b from-white to-gray-50 border-gray-300/50'
+    }`}>
+
+      {/* === Header with overlapping avatar & cover === */}
+      <div className="relative">
+        {/* Cover with animation */}
+        <div 
+          className={`relative overflow-hidden ${
+            settings.darkMode
+              ? 'bg-linear-to-br from-blue-600 via-indigo-600 to-purple-700'
+              : 'bg-linear-to-br from-blue-400 via-indigo-500 to-purple-600'
+          }`}
+          style={{
+            height: groupProfileScroll > 50 ? '64px' : '128px',
+            transition: 'height 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+            willChange: 'height',
+          }}
+        >
+          {/* <div 
+            className={settings.darkMode ? 'bg-black/20' : 'bg-black/10'}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              transition: 'opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+              opacity: 1,
+              willChange: 'opacity',
+            }}
+          ></div> */}
+          
+          
+          {/* Group name when scrolled */}
+          <div 
+            style={{
+              position: 'absolute',
+              left: '64px',
+              top: '50%',
+              transform: groupProfileScroll > 50 ? 'translateY(-50%)' : 'translateY(-50%) translateX(-20px)',
+              opacity: groupProfileScroll > 50 ? 1 : 0,
+              pointerEvents: groupProfileScroll > 50 ? 'auto' : 'none',
+              transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+              willChange: 'transform, opacity',
+            }}
+          >
+            <h3 className={`font-bold text-lg truncate max-w-50 ${
+              settings.darkMode ? 'text-white' : 'text-gray-900'
+            }`}>
+              {group.name}
+            </h3>
+          </div>
+        </div>
+
+        {/* Close button */}
+        <button
+          onClick={() => setShowGroupProfile(false)}
+          className={`absolute top-3 right-3 p-2 rounded-full hover:scale-110 backdrop-blur-md ${
+            settings.darkMode
+              ? 'bg-black/40 hover:bg-black/60 text-white'
+              : 'bg-white/40 hover:bg-white/60 text-gray-900'
+          }`}
+          style={{
+            transition: 'transform 0.2s ease-out, background-color 0.3s ease-out',
+            willChange: 'transform',
+          }}
+        >
+          <X size={24} />
+        </button>
+
+        {/* Group Avatar - Overlapping / Scrolled State with animation */}
+        <div 
+          style={{
+            position: 'absolute',
+            transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+            willChange: 'transform, width, height, top, left',
+            ...(groupProfileScroll > 50 
+              ? {
+                  top: '12px',
+                  left: '12px',
+                  width: '48px',
+                  height: '48px',
+                  transform: 'scale(1)',
+                }
+              : {
+                  top: 'auto',
+                  bottom: '-64px',
+                  left: '50%',
+                  width: '128px',
+                  height: '128px',
+                  transform: 'translateX(-50%) scale(1)',
+                }
+            ),
+          }}
+        >
+          <div 
+            className={`w-full h-full rounded-full shadow-2xl ${
+              settings.darkMode
+                ? 'bg-linear-to-br from-blue-500 to-purple-600'
+                : 'bg-linear-to-br from-blue-400 to-purple-500'
+            }`}
+            style={{
+              padding: groupProfileScroll > 50 ? '2px' : '6px',
+              transition: 'padding 0.5s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+              boxShadow: groupProfileScroll > 50 ? '0 10px 25px rgba(0, 0, 0, 0.3)' : '0 20px 50px rgba(0, 0, 0, 0.5)',
+              willChange: 'padding, box-shadow',
+            }}
+          >
+            <div 
+              className={`w-full h-full rounded-full flex items-center justify-center overflow-hidden ${
+                settings.darkMode ? 'bg-zinc-900' : 'bg-white'
+              }`}
+              style={{
+                transition: 'background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
+            >
+              {group.avatar ? (
+                <img
+                  src={group.avatar}
+                  alt={group.name}
+                  className="w-full h-full object-cover"
+                  style={{
+                    transition: 'transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                />
+              ) : (
+                <Users 
+                  size={groupProfileScroll > 50 ? 24 : 64} 
+                  className={`transition-all duration-500 ease-out ${
+                    settings.darkMode ? 'text-blue-400' : 'text-blue-600'
+                  }`}
+                  style={{
+                    transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                    willChange: 'width, height',
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* === Scrollable content === */}
+      <div
+        ref={groupProfileScrollRef}
+        onScroll={handleGroupProfileScroll}
+        className="overflow-y-auto"
+        style={{ maxHeight: 'calc(95vh - 128px)' }}
+      >
+        {/* Group name + description */}
+        <div 
+          style={{
+            paddingTop: '80px',
+            paddingBottom: '20px',
+            paddingLeft: '24px',
+            paddingRight: '24px',
+            textAlign: 'center',
+            transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+            opacity: groupProfileScroll > 50 ? 0 : 1,
+            height: groupProfileScroll > 50 ? 0 : 'auto',
+            overflow: groupProfileScroll > 50 ? 'hidden' : 'visible',
+            willChange: 'opacity, height',
+            transform: groupProfileScroll > 50 ? 'scale(0.95)' : 'scale(1)',
+          }}
+        >
+          <h2 className={`text-2xl sm:text-3xl font-bold tracking-tight mb-2 transition-all duration-500 ${
+            settings.darkMode ? 'text-white' : 'text-gray-900'
+          }`}>
+            {group.name}
+          </h2>
+          {group.description && (
+            <p className={`text-sm leading-relaxed max-w-md mx-auto transition-all duration-500 ${
+              settings.darkMode ? 'text-gray-400' : 'text-gray-600'
+            }`}>
+              {group.description}
+            </p>
+          )}
+        </div>
+
+        {/* === Stats cards === */}
+        <div className="px-5 pb-6">
+          <div className="grid grid-cols-2 gap-3">
+            {/* Members Card */}
+            <div>
+              <div className={`flex text-xl font-semibold mb-1 justify-center items-center gap-1 ${
+                settings.darkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>
+                <div className="flex items-center justify-center -space-x-3 mb-1">
+                  {group.members?.slice(0, 4).map((member, index) => (
+                      <div 
+                        key={member._id}
+                        className=" w-8 h-8 rounded-full border-2 border-zinc-900 bg-linear-to-br from-blue-400 to-blue-600 flex items-center justify-center overflow-hidden transition-transform hover:scale-110 hover:z-10"
+                        style={{ zIndex: 4 - index }}
+                      >
+                        {member.profilePicture ? (
+                          <img
+                            src={member.profilePicture}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <User size={14} className="text-white" />
+                        )}
+                      </div>
+                    ))}
+                </div>
+                {group.members?.length || 0}
+              </div>
+              <p className={`text-xs font-medium uppercase tracking-wide text-center ${
+                settings.darkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>Members</p>
+            </div>
+
+            {/* Admins Card */}
+            <div>
+              <div className={`flex text-xl font-semibold mb-1 justify-center items-center gap-1 ${
+                settings.darkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>
+                 <div className="flex items-center justify-center -space-x-3 mb-1">
+                  {group.admins?.slice(0, 4).map((member, index) => (
+                      <div 
+                        key={member._id}
+                        className=" w-8 h-8 rounded-full border-2 border-zinc-900 bg-linear-to-br from-blue-400 to-blue-600 flex items-center justify-center overflow-hidden transition-transform hover:scale-110 hover:z-10"
+                        style={{ zIndex: 4 - index }}
+                      >
+                        {member.profilePicture ? (
+                          <img
+                            src={member.profilePicture}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <User size={14} className="text-white" />
+                        )}
+                      </div>
+                    ))}
+                </div>
+
+                {group.admins?.length || 0}
+              </div>
+              <p className={`text-xs font-medium uppercase tracking-wide text-center ${
+                settings.darkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>Admins</p>
+            </div>
+
+            {/* Created Card */}
+            <div>
+              <div className={`flex justify-center items-center text-xl font-semibold mb-1 ${
+                settings.darkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>
+                <Calendar size={20} className="mr-1" />
+                {new Date(group.createdAt).getFullYear()}
+              </div>
+              <p className={`text-xs font-medium uppercase tracking-wide text-center ${
+                settings.darkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>Created</p>
+            </div>
+          </div>
+        </div>
+
+        {/* === Creator card === */}
+        <div className="px-5 pb-6">
+          <div className={`border rounded-xl p-4  ${
+            settings.darkMode
+              ? 'bg-linear-to-br from-zinc-800 to-zinc-900 border-gray-700/50'
+              : 'bg-linear-to-br from-gray-100 to-gray-50 border-gray-300/50'
+          }`}>
+            <div className="flex items-center gap-4">
+              <div className="relative shrink-0">
+                <div className={`w-14 h-14 rounded-full overflow-hidden p-0.5 ${
+                  settings.darkMode
+                    ? 'bg-linear-to-br from-amber-500 to-orange-600'
+                    : 'bg-linear-to-br from-amber-400 to-orange-500'
+                }`}>
+                  <div className={`w-full h-full rounded-full flex items-center justify-center overflow-hidden ${
+                    settings.darkMode ? 'bg-zinc-900' : 'bg-white'
+                  }`}>
+                    {group.creator?.profilePicture ? (
+                      <img
+                        src={group.creator.profilePicture}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <User size={28} className={settings.darkMode ? 'text-gray-400' : 'text-gray-500'} />
+                    )}
+                  </div>
+                </div>
+                <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                  settings.darkMode
+                    ? 'bg-amber-500 border-zinc-900'
+                    : 'bg-amber-400 border-white'
+                }`}>
+                  <Crown size={12} className={settings.darkMode ? 'text-white' : 'text-white'} />
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className={`font-semibold truncate ${
+                  settings.darkMode ? 'text-white' : 'text-gray-900'
+                }`}>
+                  {group.creator?.name}
+                </p>
+                <p className={`text-xs font-medium ${
+                  settings.darkMode ? 'text-amber-400' : 'text-amber-600'
+                }`}>Group Creator</p>
+              </div>
+
+              <Calendar size={18} className={settings.darkMode ? 'text-gray-500' : 'text-gray-400'} />
+            </div>
+          </div>
+        </div>
+
+        {/* === Members list === */}
+        <div className="px-5 pb-8">
+          <h4 className={`text-lg font-semibold mb-4 px-1 ${
+            settings.darkMode ? 'text-white' : 'text-gray-900'
+          }`}>
+            Members {group.members?.length - 1  + ' +...'}
+          </h4>
+          <div className={`space-y-2 max-h-64 overflow-y-auto pr-1 ${
+            settings.darkMode
+              ? 'scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent'
+              : 'scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent'
+          }`}>
+            {group.members?.map((member, i) => {
+              const isCreator = group.creator?._id === member._id;
+              const isAdmin = group.admins?.some(a => a._id === member._id);
+
+              return (
+                <div
+                  key={member._id}
+                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 group ${
+                    settings.darkMode
+                      ? 'bg-gray-100/40 hover:bg-gray-100 border-transparent hover:border-gray-300/60' 
+                      :'bg-zinc-800/40 hover:bg-zinc-800 border-transparent hover:border-gray-700/60'
+                      
+                  }`}
+                  style={{ animationDelay: `${i * 40}ms`, animation: 'fadeInUp 0.4s forwards' }}
                 >
-                  <IoClose size={24} />
-                </button>
-              </div>
-
-              {/* Group Avatar */}
-              <div className="flex justify-center py-6">
-                <div className="w-32 h-32 rounded-full bg-blue-600 flex items-center justify-center border-4 border-gray-700 overflow-hidden">
-                  {group.avatar ? (
-                    <img
-                      src={group.avatar}
-                      alt={group.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <TiGroup size={64} className="text-white" />
-                  )}
-                </div>
-              </div>
-
-              {/* Group Info */}
-              <div className="px-6 pb-6">
-                <h2 className="text-2xl font-bold text-white text-center mb-2">
-                  {group.name}
-                </h2>
-                {group.description && (
-                  <p className="text-gray-300 text-center text-sm mb-6">
-                    {group.description}
-                  </p>
-                )}
-
-                {/* Group Stats */}
-                <div className="grid grid-cols-3 gap-4 mb-6 py-4 border-y border-gray-700">
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-blue-400">
-                      {group.members?.length || 0}
-                    </p>
-                    <p className="text-xs text-gray-400">Members</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-green-400">
-                      {group.admins?.length || 0}
-                    </p>
-                    <p className="text-xs text-gray-400">Admins</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xl font-bold text-purple-400">
-                      {new Date(group.createdAt).getFullYear()}
-                    </p>
-                    <p className="text-xs text-gray-400">Created</p>
-                  </div>
-                </div>
-
-                {/* Creator Info */}
-                <div className="mb-6 p-3 bg-gray-800 rounded-lg">
-                  <p className="text-xs text-gray-400 mb-2">Group Creator</p>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-700">
-                      {group.creator?.profilePicture ? (
+                  <div className="relative shrink-0">
+                    <div className={`w-11 h-11 rounded-full overflow-hidden ${
+                      settings.darkMode
+                        ? 'bg-linear-to-br from-gray-700 to-gray-800'
+                        : 'bg-linear-to-br from-gray-300 to-gray-400'
+                    }`}>
+                      {member.profilePicture ? (
                         <img
-                          src={group.creator.profilePicture}
+                          src={member.profilePicture}
                           alt=""
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <FaCircleUser size={24} className="text-gray-500" />
+                        <div className="w-full h-full flex items-center justify-center">
+                          <User size={22} className={settings.darkMode ? 'text-gray-500' : 'text-gray-600'} />
+                        </div>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-white text-sm font-medium">
-                        {group.creator?.name}
-                      </p>
-                      <p className="text-xs text-gray-400">Creator</p>
+
+                    {isCreator && (
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full flex items-center justify-center border-2 ${
+                        settings.darkMode
+                          ? 'bg-amber-500 border-zinc-900'
+                          : 'bg-amber-400 border-white'
+                      }`}>
+                        <Crown size={10} className="text-white" />
+                      </div>
+                    )}
+                    {isAdmin && !isCreator && (
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full flex items-center justify-center border-2 ${
+                        settings.darkMode
+                          ? 'bg-green-500 border-zinc-900'
+                          : 'bg-green-400 border-white'
+                      }`}>
+                        <Shield size={10} className="text-white" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className={`font-medium truncate ${
+                      settings.darkMode ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      {member.name}
+                    </p>
+                    <div className="flex gap-1.5 flex-wrap mt-1">
+                      {isCreator && (
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                          settings.darkMode
+                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            : 'bg-amber-100 text-amber-700 border border-amber-300'
+                        }`}>
+                          Creator
+                        </span>
+                      )}
+                      {isAdmin && !isCreator && (
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                          settings.darkMode
+                            ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                            : 'bg-green-100 text-green-700 border border-green-300'
+                        }`}>
+                          Admin
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
-
-                {/* Members List */}
-                <div className="mb-6">
-                  <h4 className="text-white font-semibold mb-3">
-                    Members ({group.members?.length})
-                  </h4>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {group.members?.map((member) => (
-                      <div
-                        key={member._id}
-                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-zinc-700 transition"
-                      >
-                        <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-700 shrink-0">
-                          {member.profilePicture ? (
-                            <img
-                              src={member.profilePicture}
-                              alt=""
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <FaCircleUser size={16} className="text-gray-500" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-white text-sm truncate">
-                            {member.name}
-                          </p>
-                          <div className="flex gap-1 flex-wrap">
-                            {group.creator?._id === member._id && (
-                              <span className="text-[10px] text-blue-400 font-medium bg-blue-400/10 px-1.5 py-0.5 rounded">
-                                Creator
-                              </span>
-                            )}
-                            {group.admins?.some((a) => a._id === member._id) &&
-                              group.creator?._id !== member._id && (
-                                <span className="text-[10px] text-green-400 font-medium bg-green-400/10 px-1.5 py-0.5 rounded">
-                                  Admin
-                                </span>
-                              )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="space-y-2">
-                  {(isCreator || isAdmin) && (
-                    <button
-                      onClick={() => {
-                        setShowEditGroup(true);
-                        setShowGroupProfile(false);
-                      }}
-                      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
-                    >
-                      <MdEdit size={18} />
-                      Edit Group
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      onOpenInvite && onOpenInvite(group);
-                      setShowGroupProfile(false);
-                    }}
-                    className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
-                  >
-                    <IoPersonAddOutline size={18} />
-                    Add Members
-                  </button>
-                  {group.creator?._id === currentUser?._id ? (
-                    <button
-                      onClick={() => {
-                        handleDeleteGroup();
-                        setShowGroupProfile(false);
-                      }}
-                      className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition"
-                    >
-                      Delete Group
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        handleLeaveGroup();
-                        setShowGroupProfile(false);
-                      }}
-                      className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition"
-                    >
-                      Leave Group
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+              );
+            })}
           </div>
+        </div>
+      </div>
+
+      {/* === Fixed bottom action buttons === */}
+      <div className={`border-t p-4 space-y-3 shrink-0 ${
+        settings.darkMode
+          ? 'border-gray-800/70 bg-linear-to-t from-zinc-950 to-zinc-900'
+          : 'border-gray-300/70 bg-linear-to-t from-gray-100 to-white'
+      }`}>
+        {(isCreator || isAdmin) && (
+          <button
+            onClick={() => {
+              setShowEditGroup(true);
+              setShowGroupProfile(false);
+            }}
+            className={`w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] ${
+              settings.darkMode
+                ? 'bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white hover:shadow-blue-500/30'
+                : 'bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white hover:shadow-blue-400/30'
+            }`}
+          >
+            <Edit size={18} />
+            Edit Group
+          </button>
+        )}
+
+        <button
+          onClick={() => {
+            onOpenInvite?.(group);
+            setShowGroupProfile(false);
+          }}
+          className={`w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] ${
+            settings.darkMode
+              ? 'bg-linear-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white hover:shadow-green-500/30'
+              : 'bg-linear-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white hover:shadow-green-400/30'
+          }`}
+        >
+          <UserPlus size={18} />
+          Add Members
+        </button>
+
+        {isCreator ? (
+          <button
+            onClick={() => {
+              handleDeleteGroup();
+              setShowGroupProfile(false);
+            }}
+            className={`w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] ${
+              settings.darkMode
+                ? 'bg-linear-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white hover:shadow-red-500/30'
+                : 'bg-linear-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white hover:shadow-red-400/30'
+            }`}
+          >
+            <Trash2 size={18} />
+            Delete Group
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              handleLeaveGroup();
+              setShowGroupProfile(false);
+            }}
+            className={`w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] ${
+              settings.darkMode
+                ? 'bg-linear-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white hover:shadow-red-500/30'
+                : 'bg-linear-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white hover:shadow-red-400/30'
+            }`}
+          >
+            <LogOut size={18} />
+            Leave Group
+          </button>
         )}
       </div>
+    </div>
+  </div>
+)}
 
       {/* Edit Group Modal */}
       <EditGroupModal
@@ -1775,6 +2058,7 @@ const GroupChat = ({
           setShowEditGroup(false);
         }}
       />  
+    </div>
     </div>
     </>
   );

@@ -76,13 +76,13 @@ const InviteToGroupModal = ({ isOpen, onClose, group }) => {
   if (!isOpen || !group) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="w-full max-w-md bg-zinc-800 rounded-xl shadow-2xl border border-gray-700 overflow-hidden">
+    <div className="fixed inset-0 z-99990 flex items-center justify-center bg-black/75 p-4">
+      <div className="w-full max-w-md h-auto max-h-[90vh] bg-zinc-900 rounded-xl shadow-2xl border border-gray-700 overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-          <div>
-            <h3 className="text-white font-semibold text-lg">Invite to Group</h3>
-            <p className="text-gray-400 text-sm">{group.name}</p>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 shrink-0">
+          <div className="min-w-0">
+            <h3 className="text-white font-semibold  md:text-lg text-base">Invite to Group</h3>
+            <p className="text-gray-400 text-xs md:text-sm truncate">{group.name}</p>
           </div>
           <button
             onClick={handleClose}
@@ -93,7 +93,7 @@ const InviteToGroupModal = ({ isOpen, onClose, group }) => {
         </div>
 
         {/* Content */}
-        <div className="p-4 space-y-4">
+        <div className="p-3 md:p-4 space-y-4 flex-1 overflow-y-auto">
           {/* Search */}
           <div className="relative">
             <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -102,7 +102,7 @@ const InviteToGroupModal = ({ isOpen, onClose, group }) => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search friends..."
-              className="w-full bg-zinc-700 text-white pl-10 pr-4 py-2 rounded-lg outline-none border border-gray-600 focus:border-blue-500"
+              className="w-full bg-zinc-700 text-white pl-10 pr-4 py-2 rounded-lg text-sm md:text-base outline-none border border-gray-600 focus:border-blue-500"
             />
           </div>
 
@@ -113,7 +113,7 @@ const InviteToGroupModal = ({ isOpen, onClose, group }) => {
                 <span
                   key={user._id}
                   onClick={() => toggleUser(user)}
-                  className="inline-flex items-center gap-1 px-2 py-1 bg-blue-600 text-white text-sm rounded-full cursor-pointer hover:bg-blue-700"
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-blue-600 text-white text-xs md:text-sm rounded-full cursor-pointer hover:bg-blue-700"
                 >
                   {user.name}
                   <IoClose size={14} />
@@ -123,11 +123,11 @@ const InviteToGroupModal = ({ isOpen, onClose, group }) => {
           )}
 
           {/* Friends List */}
-          <div className="max-h-60 overflow-y-auto space-y-2">
+          <div className="space-y-2">
             {loading ? (
               <ContentLoading text="Loading friends..." />
             ) : filteredFriends.length === 0 ? (
-              <div className="text-center text-gray-400 py-4">
+              <div className="text-center text-gray-400 py-4 text-sm md:text-base">
                 {friends.length === 0
                   ? 'All your friends are already in this group'
                   : 'No friends found'}
@@ -145,7 +145,7 @@ const InviteToGroupModal = ({ isOpen, onClose, group }) => {
                         : 'hover:bg-zinc-700 border border-transparent'
                     }`}
                   >
-                    <div className="w-10 h-10 rounded-full overflow-hidden">
+                    <div className="w-10 h-10 rounded-full overflow-hidden shrink-0">
                       {friend.profilePicture ? (
                         <img
                           src={friend.profilePicture}
@@ -159,11 +159,11 @@ const InviteToGroupModal = ({ isOpen, onClose, group }) => {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-white text-sm font-medium truncate">{friend.name}</p>
+                      <p className="text-white text-xs md:text-sm font-medium truncate">{friend.name}</p>
                       <p className="text-gray-400 text-xs truncate">{friend.email}</p>
                     </div>
                     <div
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
                         isSelected ? 'border-blue-500 bg-blue-500' : 'border-gray-500'
                       }`}
                     >
@@ -174,12 +174,14 @@ const InviteToGroupModal = ({ isOpen, onClose, group }) => {
               })
             )}
           </div>
+        </div>
 
-          {/* Invite Button */}
+        {/* Invite Button */}
+        <div className="px-3 md:px-4 py-3 border-t border-gray-700 shrink-0">
           <button
             onClick={handleInvite}
             disabled={selectedUsers.length === 0 || inviting}
-            className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition"
+            className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm md:text-base rounded-lg transition"
           >
             {inviting
               ? 'Inviting...'

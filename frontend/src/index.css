@@ -84,7 +84,7 @@ html.dark .text-gray-900 {
   color: rgb(255, 255, 255) !important;
 }
 
-html .bg-black,
+/* html .bg-black,
 html .bg-\[\#0b0e12\],
 html .bg-\[\#141417\],
 html .bg-black\/80,
@@ -93,7 +93,7 @@ html [class*="bg-gray-9"],
 html .bg-zinc-800\/50 {
   background-color: white !important;
   border-color: rgb(229, 231, 235) !important;
-}
+} */
 
 html.dark .bg-black,
 html.dark .bg-\[\#0b0e12\],
