@@ -2062,6 +2062,7 @@ const GroupChat = ({
           if (onGroupUpdated) onGroupUpdated();
           setShowEditGroup(false);
         }}
+        className="z-10000"
       />  
     </div>
     </div>
