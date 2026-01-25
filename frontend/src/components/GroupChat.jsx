@@ -36,6 +36,7 @@ import {
   formatHighlight,
 } from "../lib/markdownParser";
 import { IoIosArrowBack } from "react-icons/io";
+// import { useNavigate } from "react-router-dom";
 
 // Support underline and highlight formatting just like ChatPage
 const underlineExtension = {
@@ -918,6 +919,18 @@ const GroupChat = ({
     setGroupProfileScroll(scrollTop);
   }, []);
 
+//   const navigate = useNavigate();
+
+// const handleGroupProfileRedirect = () => {
+//   navigate(`/group/${group._id}`, {
+//     state: {
+//       from: "chat",
+//       scrollPosition: groupProfileScroll
+//     }
+//   });
+// };
+
+
   if (!group) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400">
@@ -936,8 +949,9 @@ const GroupChat = ({
       {/* Desktop header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 ">
         <div 
-          className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition"
-          onClick={() => setShowGroupProfile(true)}
+          className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition "
+          // onClick={() => handleGroupProfileRedirect()}
+          onClick={setShowGroupProfile}
         >
           <IoIosArrowBack onClick={(e) => {
             e.stopPropagation();
@@ -1580,18 +1594,7 @@ const GroupChat = ({
             transition: 'height 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
             willChange: 'height',
           }}
-        >
-          {/* <div 
-            className={settings.darkMode ? 'bg-black/20' : 'bg-black/10'}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              transition: 'opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
-              opacity: 1,
-              willChange: 'opacity',
-            }}
-          ></div> */}
-          
+        >          
           
           {/* Group name when scrolled */}
           <div 
@@ -1602,7 +1605,7 @@ const GroupChat = ({
               transform: groupProfileScroll > 50 ? 'translateY(-50%)' : 'translateY(-50%) translateX(-20px)',
               opacity: groupProfileScroll > 50 ? 1 : 0,
               pointerEvents: groupProfileScroll > 50 ? 'auto' : 'none',
-              transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+              transition: 'all 0.55s cubic-bezier(0.32, 0.72, 0.0, 0.98)',
               willChange: 'transform, opacity',
             }}
           >
@@ -1615,20 +1618,22 @@ const GroupChat = ({
         </div>
 
         {/* Close button */}
-        <button
-          onClick={() => setShowGroupProfile(false)}
-          className={`absolute top-3 right-3 p-2 rounded-full hover:scale-110 backdrop-blur-md ${
-            settings.darkMode
-              ? 'bg-black/40 hover:bg-black/60 text-white'
-              : 'bg-white/40 hover:bg-white/60 text-gray-900'
-          }`}
-          style={{
-            transition: 'transform 0.2s ease-out, background-color 0.3s ease-out',
-            willChange: 'transform',
-          }}
-        >
-          <X size={24} />
-        </button>
+<button
+  onClick={() => setShowGroupProfile(false)}
+  className={`
+    absolute top-4 right-4 z-10
+    p-2.5 rounded-full
+    backdrop-blur-lg
+    transition-all duration-200
+    ${settings.darkMode 
+      ? 'bg-black/50 text-white/90 hover:bg-black/70 hover:text-white'
+      : 'bg-white/60 text-gray-800 hover:bg-white/80 hover:text-black'
+    }
+  `}
+  aria-label="Close"
+>
+  <X size={22} strokeWidth={2.5} />
+</button>
 
         {/* Group Avatar - Overlapping / Scrolled State with animation */}
         <div 
@@ -1810,12 +1815,12 @@ const GroupChat = ({
               <div className={`flex justify-center items-center text-xl font-semibold mb-1 ${
                 settings.darkMode ? 'text-gray-400' : 'text-gray-600'
               }`}>
-                <Calendar size={20} className="mr-1" />
-                {new Date(group.createdAt).getFullYear()}
-              </div>
-              <p className={`text-xs font-medium uppercase tracking-wide text-center ${
+                <p className={`text-xs font-medium uppercase tracking-wide text-center ${
                 settings.darkMode ? 'text-gray-400' : 'text-gray-600'
               }`}>Created</p>
+                {new Date(group.createdAt).getFullYear()}
+              </div>
+              
             </div>
           </div>
         </div>
@@ -1894,8 +1899,8 @@ const GroupChat = ({
                   key={member._id}
                   className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 group ${
                     settings.darkMode
-                      ? 'bg-gray-100/40 hover:bg-gray-100 border-transparent hover:border-gray-300/60' 
-                      :'bg-zinc-800/40 hover:bg-zinc-800 border-transparent hover:border-gray-700/60'
+                      ? ' bg-zinc-800/40 border-transparent hover:border-gray-300/60' 
+                      :'bg-zinc-800/40  border-transparent hover:border-gray-700/60'
                       
                   }`}
                   style={{ animationDelay: `${i * 40}ms`, animation: 'fadeInUp 0.4s forwards' }}

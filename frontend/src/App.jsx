@@ -14,7 +14,9 @@ import BugReport from './components/BugReport';
 import HelpCenter from './components/HelpCenter';
 import { useState, useEffect } from 'react';
 import { SettingsProvider } from './context/SettingsContext';
+import GroupProfilePage from './components/groupViewPage';
 import axios from './lib/axios';
+
 
 // Component to view another user's profile
 function ViewUserProfile({ currentUser }) {
@@ -100,6 +102,7 @@ function AppRoutes({ currentUser, setCurrentUser }) {
       <Route path='/forgot-password' element={<ForgotPassword />} />
       <Route path='/report-bug' element={<BugReport />} />
       <Route path='/help-center' element={<HelpCenter />} />
+      <Route path='/group/:groupId' element={<GroupProfilePage />} />
     </Routes>
   );
 }
