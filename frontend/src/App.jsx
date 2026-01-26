@@ -102,7 +102,7 @@ function AppRoutes({ currentUser, setCurrentUser }) {
       <Route path='/forgot-password' element={<ForgotPassword />} />
       <Route path='/report-bug' element={<BugReport />} />
       <Route path='/help-center' element={<HelpCenter />} />
-      <Route path='/group/:groupId' element={<GroupProfilePage />} />
+      <Route path='/group/:groupId' element={<GroupProfilePage currentUser={currentUser} />} />
     </Routes>
   );
 }

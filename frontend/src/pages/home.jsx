@@ -1,29 +1,38 @@
-import React, { useState, useEffect } from 'react';
-import { IoEllipsisVertical, IoSearch, IoNotifications, IoChatbubbles, IoPeople, IoPersonAdd, IoSettings } from 'react-icons/io5';
-import { Link, useNavigate } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
-import ChatView from '../components/ChatView';
-import Profile from '../components/Profile';
-import EditProfile from '../components/EditProfile';
-import Settings from '../components/Settings';
-import AddUser from '../components/addUser';
-import GroupChat from '../components/GroupChat';
-import NotificationPage from '../components/notification';
-import CreateGroupModal from '../components/CreateGroupModal';
-import InviteToGroupModal from '../components/InviteToGroupModal';
-import socket from '../lib/socket';
-import axios from '../lib/axios';
-import { useSettings } from '../context/useSettings';
+import React, { useState, useEffect } from "react";
+import {
+  IoEllipsisVertical,
+  IoSearch,
+  IoNotifications,
+  IoChatbubbles,
+  IoPeople,
+  IoPersonAdd,
+  IoSettings,
+} from "react-icons/io5";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import Sidebar from "../components/Sidebar";
+import ChatView from "../components/ChatView";
+import Profile from "../components/Profile";
+import EditProfile from "../components/EditProfile";
+import Settings from "../components/Settings";
+import AddUser from "../components/addUser";
+import GroupChat from "../components/GroupChat";
+import NotificationPage from "../components/notification";
+import CreateGroupModal from "../components/CreateGroupModal";
+import InviteToGroupModal from "../components/InviteToGroupModal";
+import socket from "../lib/socket";
+import axios from "../lib/axios";
+import { useSettings } from "../context/useSettings";
 
 export const Home = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { settings } = useSettings();
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [unreadCounts, setUnreadCounts] = useState(() => {
     // Initialize from localStorage
     try {
-      const saved = localStorage.getItem('unreadCounts');
+      const saved = localStorage.getItem("unreadCounts");
       return saved ? JSON.parse(saved) : {};
     } catch {
       return {};
@@ -37,7 +46,7 @@ export const Home = () => {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState({});
   const [refreshFriends, setRefreshFriends] = useState(0);
-  
+
   // Group states
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState(null);
@@ -45,112 +54,126 @@ export const Home = () => {
   const [showInviteToGroup, setShowInviteToGroup] = useState(false);
   const [inviteGroup, setInviteGroup] = useState(null);
   const [refreshGroups, setRefreshGroups] = useState(0);
-  
+
   // Notification states
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [showNotificationsPage, setShowNotificationsPage] = useState(false);
 
   // Sidebar tab state
-  const [sidebarActiveTab, setSidebarActiveTab] = useState('chats');
-  const [prevActiveTab, setPrevActiveTab] = useState('chats');
+  const [sidebarActiveTab, setSidebarActiveTab] = useState("chats");
+  const [prevActiveTab, setPrevActiveTab] = useState("chats");
 
   // New: responsive + mobile sidebar visibility
   const [isMobile, setIsMobile] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
-  const [mobileSearchQuery, setMobileSearchQuery] = useState('');
+  const [mobileSearchQuery, setMobileSearchQuery] = useState("");
 
   useEffect(() => {
-    const mql = window.matchMedia('(max-width: 767px)');
+    const mql = window.matchMedia("(max-width: 767px)");
     const handler = (e) => setIsMobile(e.matches);
-    mql.addEventListener('change', handler);
+    mql.addEventListener("change", handler);
     // Set initial state based on media query
     handler(mql);
-    return () => mql.removeEventListener('change', handler);
+    return () => mql.removeEventListener("change", handler);
   }, []);
 
   // Fetch current user info on mount and when localStorage changes
   useEffect(() => {
     const updateUser = () => {
-      const user = JSON.parse(localStorage.getItem('user'));
-      const token = localStorage.getItem('jwt_token');
-      
+      const user = JSON.parse(localStorage.getItem("user"));
+      const token = localStorage.getItem("jwt_token");
+
       // Redirect to signin if no user or token
       if (!user || !token) {
-        navigate('/signin');
+        navigate("/signin");
         return;
       }
-      
+
       // Normalize id to _id for compatibility
       const normalizedUser = {
         ...user,
         _id: user._id || user.id,
       };
-      if (normalizedUser._id && (!currentUser || currentUser._id !== normalizedUser._id)) {
+      if (
+        normalizedUser._id &&
+        (!currentUser || currentUser._id !== normalizedUser._id)
+      ) {
         setCurrentUser(normalizedUser);
       }
     };
     updateUser();
-    window.addEventListener('focus', updateUser);
-    window.addEventListener('storage', updateUser);
+    window.addEventListener("focus", updateUser);
+    window.addEventListener("storage", updateUser);
     return () => {
-      window.removeEventListener('focus', updateUser);
-      window.removeEventListener('storage', updateUser);
+      window.removeEventListener("focus", updateUser);
+      window.removeEventListener("storage", updateUser);
     };
   }, [currentUser, navigate]);
 
   // Connect socket once on mount
   useEffect(() => {
     if (!socket.connected) {
-      console.log('Home: Connecting socket...');
+      console.log("Home: Connecting socket...");
       socket.connect();
     }
-    
+
     // Listen for connection events
     const handleConnect = () => {
-      console.log('Home: Socket connected successfully', socket.id);
+      console.log("Home: Socket connected successfully", socket.id);
     };
-    
+
     const handleDisconnect = () => {
-      console.log('Home: Socket disconnected');
+      console.log("Home: Socket disconnected");
     };
-    
+
     const handleConnectError = (error) => {
-      console.error('Home: Socket connection error:', error);
+      console.error("Home: Socket connection error:", error);
     };
-    
-    socket.on('connect', handleConnect);
-    socket.on('disconnect', handleDisconnect);
-    socket.on('connect_error', handleConnectError);
-    
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("connect_error", handleConnectError);
+
     return () => {
-      socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
-      socket.off('connect_error', handleConnectError);
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("connect_error", handleConnectError);
       // Don't disconnect socket - it's a singleton used across pages
     };
   }, []);
 
   // Persist unread counts to localStorage
   useEffect(() => {
-    localStorage.setItem('unreadCounts', JSON.stringify(unreadCounts));
+    localStorage.setItem("unreadCounts", JSON.stringify(unreadCounts));
   }, [unreadCounts]);
 
   // Join socket room when currentUser is available
   useEffect(() => {
     if (socket && currentUser && currentUser._id) {
-      console.log('Home: Joining socket room with userId:', currentUser._id, 'onlineStatus:', settings.onlineStatus);
-      socket.emit('join', { userId: currentUser._id, onlineStatus: settings.onlineStatus });
+      console.log(
+        "Home: Joining socket room with userId:",
+        currentUser._id,
+        "onlineStatus:",
+        settings.onlineStatus,
+      );
+      socket.emit("join", {
+        userId: currentUser._id,
+        onlineStatus: settings.onlineStatus,
+      });
     }
   }, [currentUser, settings.onlineStatus]);
 
   // Update online status when settings change
   useEffect(() => {
     if (socket && currentUser && currentUser._id) {
-      console.log('Home: Updating online status:', { userId: currentUser._id, onlineStatus: settings.onlineStatus });
-      socket.emit('updateOnlineStatus', {
+      console.log("Home: Updating online status:", {
         userId: currentUser._id,
-        onlineStatus: settings.onlineStatus
+        onlineStatus: settings.onlineStatus,
+      });
+      socket.emit("updateOnlineStatus", {
+        userId: currentUser._id,
+        onlineStatus: settings.onlineStatus,
       });
     }
   }, [settings.onlineStatus, currentUser]);
@@ -161,24 +184,24 @@ export const Home = () => {
 
     // Send activity update every 30 seconds
     const activityInterval = setInterval(() => {
-      socket.emit('updateActivity', currentUser._id);
+      socket.emit("updateActivity", currentUser._id);
     }, 30000);
 
     // Also send activity update on user interactions
     const handleUserActivity = () => {
-      socket.emit('updateActivity', currentUser._id);
+      socket.emit("updateActivity", currentUser._id);
     };
 
     // Listen to various user interactions
-    window.addEventListener('mousemove', handleUserActivity);
-    window.addEventListener('keypress', handleUserActivity);
-    window.addEventListener('click', handleUserActivity);
+    window.addEventListener("mousemove", handleUserActivity);
+    window.addEventListener("keypress", handleUserActivity);
+    window.addEventListener("click", handleUserActivity);
 
     return () => {
       clearInterval(activityInterval);
-      window.removeEventListener('mousemove', handleUserActivity);
-      window.removeEventListener('keypress', handleUserActivity);
-      window.removeEventListener('click', handleUserActivity);
+      window.removeEventListener("mousemove", handleUserActivity);
+      window.removeEventListener("keypress", handleUserActivity);
+      window.removeEventListener("click", handleUserActivity);
     };
   }, [currentUser]);
 
@@ -190,9 +213,9 @@ export const Home = () => {
       setOnlineUsers(users);
     };
 
-    socket.on('onlineUsers', handleOnlineUsers);
+    socket.on("onlineUsers", handleOnlineUsers);
     return () => {
-      socket.off('onlineUsers', handleOnlineUsers);
+      socket.off("onlineUsers", handleOnlineUsers);
     };
   }, []);
 
@@ -212,11 +235,11 @@ export const Home = () => {
       });
     };
 
-    socket.on('userTyping', handleUserTyping);
-    socket.on('userStopTyping', handleUserStopTyping);
+    socket.on("userTyping", handleUserTyping);
+    socket.on("userStopTyping", handleUserStopTyping);
     return () => {
-      socket.off('userTyping', handleUserTyping);
-      socket.off('userStopTyping', handleUserStopTyping);
+      socket.off("userTyping", handleUserTyping);
+      socket.off("userStopTyping", handleUserStopTyping);
     };
   }, []);
 
@@ -226,54 +249,57 @@ export const Home = () => {
 
     const handleFriendAdded = () => {
       // Trigger sidebar to refresh friends list
-      setRefreshFriends(prev => prev + 1);
+      setRefreshFriends((prev) => prev + 1);
     };
 
     const handleFriendRemoved = () => {
       // Trigger sidebar to refresh friends list
-      setRefreshFriends(prev => prev + 1);
+      setRefreshFriends((prev) => prev + 1);
     };
 
-    socket.on('friendAdded', handleFriendAdded);
-    socket.on('friendRemoved', handleFriendRemoved);
+    socket.on("friendAdded", handleFriendAdded);
+    socket.on("friendRemoved", handleFriendRemoved);
     return () => {
-      socket.off('friendAdded', handleFriendAdded);
-      socket.off('friendRemoved', handleFriendRemoved);
+      socket.off("friendAdded", handleFriendAdded);
+      socket.off("friendRemoved", handleFriendRemoved);
     };
   }, []);
 
   // Fetch groups
   const fetchGroups = async () => {
     try {
-      const res = await axios.get('/groups/my-groups');
+      const res = await axios.get("/groups/my-groups");
       setGroups(res.data.groups || []);
     } catch (error) {
-      console.error('Failed to fetch groups:', error);
+      console.error("Failed to fetch groups:", error);
     }
   };
 
   // Fetch unread notification count
   const fetchUnreadNotifications = async () => {
     try {
-      const res = await axios.get('/notifications/unread-count');
+      const res = await axios.get("/notifications/unread-count");
       setUnreadNotifications(res.data.unreadCount || 0);
     } catch (error) {
-      console.error('Failed to fetch notification count:', error);
+      console.error("Failed to fetch notification count:", error);
     }
   };
 
   useEffect(() => {
     (async () => {
       // Only fetch if user and token are available
-      const user = localStorage.getItem('user');
-      const token = localStorage.getItem('jwt_token');
-      
+      const user = localStorage.getItem("user");
+      const token = localStorage.getItem("jwt_token");
+
       if (!user || !token) {
-        console.log('No user or token, skipping fetch');
+        console.log("No user or token, skipping fetch");
         return;
       }
-      
-      console.log('Fetching groups and notifications with token:', token ? 'present' : 'missing');
+
+      console.log(
+        "Fetching groups and notifications with token:",
+        token ? "present" : "missing",
+      );
       await fetchGroups();
       await fetchUnreadNotifications();
     })();
@@ -284,7 +310,7 @@ export const Home = () => {
     if (!socket) return;
 
     const handleNewNotification = () => {
-      setUnreadNotifications(prev => prev + 1);
+      setUnreadNotifications((prev) => prev + 1);
     };
 
     const handleGroupMemberJoined = () => {
@@ -292,39 +318,39 @@ export const Home = () => {
     };
 
     const handleGroupDeleted = ({ groupId }) => {
-      setGroups(prev => prev.filter(g => g._id !== groupId));
+      setGroups((prev) => prev.filter((g) => g._id !== groupId));
       if (selectedGroup?._id === groupId) {
         setSelectedGroup(null);
       }
     };
 
     const handleGroupUpdated = ({ group }) => {
-      setGroups(prev => prev.map(g => g._id === group._id ? group : g));
+      setGroups((prev) => prev.map((g) => (g._id === group._id ? group : g)));
       if (selectedGroup?._id === group._id) {
         setSelectedGroup(group);
       }
     };
 
     const handleRemovedFromGroup = ({ groupId, groupName }) => {
-      setGroups(prev => prev.filter(g => g._id !== groupId));
+      setGroups((prev) => prev.filter((g) => g._id !== groupId));
       if (selectedGroup?._id === groupId) {
         setSelectedGroup(null);
         alert(`You have been removed from the group "${groupName}"`);
       }
     };
 
-    socket.on('newNotification', handleNewNotification);
-    socket.on('groupMemberJoined', handleGroupMemberJoined);
-    socket.on('groupDeleted', handleGroupDeleted);
-    socket.on('groupUpdated', handleGroupUpdated);
-    socket.on('removedFromGroup', handleRemovedFromGroup);
+    socket.on("newNotification", handleNewNotification);
+    socket.on("groupMemberJoined", handleGroupMemberJoined);
+    socket.on("groupDeleted", handleGroupDeleted);
+    socket.on("groupUpdated", handleGroupUpdated);
+    socket.on("removedFromGroup", handleRemovedFromGroup);
 
     return () => {
-      socket.off('newNotification', handleNewNotification);
-      socket.off('groupMemberJoined', handleGroupMemberJoined);
-      socket.off('groupDeleted', handleGroupDeleted);
-      socket.off('groupUpdated', handleGroupUpdated);
-      socket.off('removedFromGroup', handleRemovedFromGroup);
+      socket.off("newNotification", handleNewNotification);
+      socket.off("groupMemberJoined", handleGroupMemberJoined);
+      socket.off("groupDeleted", handleGroupDeleted);
+      socket.off("groupUpdated", handleGroupUpdated);
+      socket.off("removedFromGroup", handleRemovedFromGroup);
     };
   }, [selectedGroup]);
 
@@ -333,9 +359,13 @@ export const Home = () => {
     if (!socket || !currentUser) return;
 
     const handleNewMessage = (msg) => {
-      const senderId = typeof msg.sender === 'object' ? msg.sender._id : msg.sender;
+      const senderId =
+        typeof msg.sender === "object" ? msg.sender._id : msg.sender;
       // Only increment unread if message is from someone else and not the selected user
-      if (senderId !== currentUser._id && (!selectedUser || senderId !== selectedUser._id)) {
+      if (
+        senderId !== currentUser._id &&
+        (!selectedUser || senderId !== selectedUser._id)
+      ) {
         setUnreadCounts((prev) => ({
           ...prev,
           [senderId]: (prev[senderId] || 0) + 1,
@@ -343,9 +373,9 @@ export const Home = () => {
       }
     };
 
-    socket.on('newMessage', handleNewMessage);
+    socket.on("newMessage", handleNewMessage);
     return () => {
-      socket.off('newMessage', handleNewMessage);
+      socket.off("newMessage", handleNewMessage);
     };
   }, [currentUser, selectedUser]);
 
@@ -362,11 +392,24 @@ export const Home = () => {
       });
     };
 
-    socket.on('messagesMarkedRead', handleMessagesMarkedRead);
+    socket.on("messagesMarkedRead", handleMessagesMarkedRead);
     return () => {
-      socket.off('messagesMarkedRead', handleMessagesMarkedRead);
+      socket.off("messagesMarkedRead", handleMessagesMarkedRead);
     };
   }, [currentUser]);
+
+  // Handle opening a group chat from another page
+  useEffect(() => {
+    const groupIdToOpen = location.state?.openGroupId;
+    if (groupIdToOpen && groups.length > 0) {
+      const groupToSelect = groups.find((g) => g._id === groupIdToOpen);
+      if (groupToSelect) {
+        handleSelectGroup(groupToSelect);
+        // Clear state to prevent re-opening on refresh
+        navigate(".", { replace: true, state: {} });
+      }
+    }
+  }, [location.state, groups, navigate]);
 
   // Clear unread count when selecting a user
   const handleSelectUser = (user) => {
@@ -376,7 +419,7 @@ export const Home = () => {
     setShowSettings(false);
     setShowAddUser(false);
     setViewingUserProfile(null);
-    setSidebarActiveTab('chats'); 
+    setSidebarActiveTab("chats");
     if (user && user._id) {
       setUnreadCounts((prev) => {
         const updated = { ...prev };
@@ -391,16 +434,18 @@ export const Home = () => {
   const handleSelectGroup = async (group) => {
     try {
       const res = await axios.get(`/groups/${group._id}`);
-      setSelectedGroup(res.data.group);
+      // API returns { group: {...} } - extract the group object
+      setSelectedGroup(res.data.group || res.data);
       setSelectedUser(null);
       setShowProfile(false);
       setShowSettings(false);
       setShowAddUser(false);
-      setSidebarActiveTab('groups');
+      setSidebarActiveTab("groups");
     } catch (error) {
-      console.error('Failed to fetch group details:', error);
-      setSelectedGroup(group);
-      setSidebarActiveTab('groups');
+      console.error("Failed to fetch group details:", error);
+      // Fallback to the group object passed in (from sidebar list)
+      setSelectedGroup(group.group || group);
+      setSidebarActiveTab("groups");
     }
     // New: hide sidebar on mobile when opening a group
     if (isMobile) setShowSidebar(false);
@@ -416,7 +461,7 @@ export const Home = () => {
 
   const handleProfileClick = () => {
     if (isMobile) {
-      navigate('/profile');
+      navigate("/profile");
     } else {
       // Desktop: show in chat area
       setShowProfile(true);
@@ -438,7 +483,7 @@ export const Home = () => {
 
   const handleEditProfile = () => {
     if (isMobile) {
-      navigate('/edit-profile');
+      navigate("/edit-profile");
     } else {
       setShowEditProfile(true);
       setShowProfile(false);
@@ -453,13 +498,13 @@ export const Home = () => {
   const handleProfileSaved = (updatedUser) => {
     // Update current user state
     setCurrentUser(updatedUser);
-    
+
     // Also update localStorage to ensure persistence
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-    
+    localStorage.setItem("user", JSON.stringify(updatedUser));
+
     // Close edit profile view
     setShowEditProfile(false);
-    
+
     // If we were viewing the profile, refresh it
     if (showProfile && viewingUserProfile?._id === updatedUser._id) {
       setViewingUserProfile(updatedUser);
@@ -481,7 +526,7 @@ export const Home = () => {
       setSelectedUser(null);
       setSelectedGroup(null);
       setShowNotificationsPage(false);
-      setSidebarActiveTab('settings');
+      setSidebarActiveTab("settings");
       setShowSidebar(false);
     } else {
       // Desktop: show in chat area
@@ -495,7 +540,7 @@ export const Home = () => {
 
   const handleCloseSettings = () => {
     setShowSettings(false);
-    setSidebarActiveTab('chats');
+    setSidebarActiveTab("chats");
     if (isMobile) {
       setShowSidebar(true);
     }
@@ -506,25 +551,25 @@ export const Home = () => {
     setShowProfile(false);
     setShowSettings(false);
     setShowNotificationsPage(false);
-    if (tab === 'adduser') {
+    if (tab === "adduser") {
       setShowAddUser(true);
       setSelectedUser(null);
       setSelectedGroup(null);
-      setSidebarActiveTab('adduser');
+      setSidebarActiveTab("adduser");
       // Hide sidebar on mobile when showing AddUser
       if (isMobile) setShowSidebar(false);
-    } else if (tab === 'chats') {
+    } else if (tab === "chats") {
       setShowAddUser(false);
-      setSidebarActiveTab('chats');
+      setSidebarActiveTab("chats");
       if (isMobile) setShowSidebar(true);
-    } else if (tab === 'groups') {
+    } else if (tab === "groups") {
       setShowAddUser(false);
-      setSidebarActiveTab('groups');
+      setSidebarActiveTab("groups");
       if (isMobile) setShowSidebar(true);
-    } else if (tab === 'notifications') {
+    } else if (tab === "notifications") {
       setShowAddUser(false);
       setShowNotificationsPage(true);
-      setSidebarActiveTab('notifications');
+      setSidebarActiveTab("notifications");
       if (isMobile) setShowSidebar(false);
     } else {
       setShowAddUser(false);
@@ -539,19 +584,19 @@ export const Home = () => {
 
   const handleFriendAdded = () => {
     // Trigger sidebar to refresh friends list
-    setRefreshFriends(prev => prev + 1);
+    setRefreshFriends((prev) => prev + 1);
   };
 
   const handleNotificationClick = () => {
     setShowNotificationsPage(true);
-    setSidebarActiveTab('notifications');
+    setSidebarActiveTab("notifications");
     setShowSidebar(false);
   };
 
   const handleNotificationAction = (action) => {
-    if (action === 'accepted') {
+    if (action === "accepted") {
       // Refresh groups after accepting invite
-      setRefreshGroups(prev => prev + 1);
+      setRefreshGroups((prev) => prev + 1);
     }
     fetchUnreadNotifications();
   };
@@ -561,7 +606,7 @@ export const Home = () => {
   };
 
   const handleGroupCreated = (newGroup) => {
-    setGroups(prev => [newGroup, ...prev]);
+    setGroups((prev) => [newGroup, ...prev]);
     setSelectedGroup(newGroup);
     setSelectedUser(null);
   };
@@ -580,22 +625,28 @@ export const Home = () => {
     { id: "chats", icon: IoChatbubbles, label: "Chats" },
     { id: "groups", icon: IoPeople, label: "Groups" },
     { id: "adduser", icon: IoPersonAdd, label: "Add Friend" },
-    {id: "notifications", icon: IoNotifications, label: "Notifications" },
+    { id: "notifications", icon: IoNotifications, label: "Notifications" },
     { id: "settings", icon: IoSettings, label: "Settings" },
   ];
 
   // Helper function to determine animation class based on page transition
   const getAnimationClass = () => {
-    const tabOrder = ['chats', 'groups', 'adduser', 'notifications', 'settings'];
+    const tabOrder = [
+      "chats",
+      "groups",
+      "adduser",
+      "notifications",
+      "settings",
+    ];
     const prevIndex = tabOrder.indexOf(prevActiveTab);
     const currIndex = tabOrder.indexOf(sidebarActiveTab);
-    
+
     if (currIndex > prevIndex) {
-      return 'content-transition'; // Moving right/forward
+      return "content-transition"; // Moving right/forward
     } else if (currIndex < prevIndex) {
-      return 'content-transition-left'; // Moving left/backward
+      return "content-transition-left"; // Moving left/backward
     }
-    return 'content-transition';
+    return "content-transition";
   };
 
   return (
@@ -611,7 +662,7 @@ export const Home = () => {
             transform: translateX(0);
           }
         }
-        
+
         @keyframes slideInLeft {
           from {
             opacity: 0;
@@ -622,7 +673,7 @@ export const Home = () => {
             transform: translateX(0);
           }
         }
-        
+
         @keyframes slideInUp {
           from {
             opacity: 0;
@@ -633,7 +684,7 @@ export const Home = () => {
             transform: translateY(0);
           }
         }
-        
+
         @keyframes slideInDown {
           from {
             opacity: 0;
@@ -644,7 +695,7 @@ export const Home = () => {
             transform: translateY(0);
           }
         }
-        
+
         @keyframes fadeIn {
           from {
             opacity: 0;
@@ -653,7 +704,7 @@ export const Home = () => {
             opacity: 1;
           }
         }
-        
+
         @keyframes scaleIn {
           from {
             opacity: 0;
@@ -664,287 +715,309 @@ export const Home = () => {
             transform: scale(1);
           }
         }
-        
+
         .content-transition {
           animation: slideInRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        
+
         .content-transition-left {
           animation: slideInLeft 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        
+
         .content-transition-up {
           animation: slideInUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        
+
         .content-transition-scale {
           animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        
+
         .nav-btn-active {
           animation: slideInUp 0.3s ease-out;
         }
-        
+
         .page-exit {
           animation: slideInLeft 0.3s ease-out reverse;
         }
       `}</style>
       <div className="relative w-screen h-screen overflow-hidden flex flex-col bg-black/80 dark:bg-black/80">
-      {/* Mobile Header */}
-      {isMobile && showSidebar && !showEditProfile && !showProfile && !showSettings && !showNotificationsPage && ( 
-        <div className=" border-b border-gray-700 px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 flex-1">
-            {showMobileSearch ? (
+        {/* Mobile Header */}
+        {isMobile &&
+          showSidebar &&
+          !showEditProfile &&
+          !showProfile &&
+          !showSettings &&
+          !showNotificationsPage && (
+            <div className=" border-b border-gray-700 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-2 flex-1">
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  value={mobileSearchQuery}
-                  onChange={(e) => setMobileSearchQuery(e.target.value)}
-                  className="flex-1 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-blue-500 outline-none"
-                  autoFocus
-                />
-                <button
-                  onClick={() => {
-                    setShowMobileSearch(false);
-                    setMobileSearchQuery('');
-                  }}
-                  className="p-2 rounded-lg text-gray-400 hover:text-white transition"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : (
-              <h2 className="text-white font-semibold text-lg">ChatApp</h2>
-            )}
-          </div>
-          {!showMobileSearch && (
-            <div className="flex items-center gap-3">
-             
-
-              {/* Search Button */}
-              <button
-                onClick={() => setShowMobileSearch(true)}
-                className="p-2  rounded-lg text-gray-400 hover:text-white transition"
-              >
-                <IoSearch size={20} />
-              </button>            
-
-              <button
-                onClick={handleProfileClick}
-                className="p-2 hover:bg-zinc-700 rounded-full text-gray-400 hover:text-white transition"
-                title="Profile"
-              >
-                {currentUser?.profilePicture ? (
-                  <img 
-                    src={currentUser.profilePicture} 
-                    alt="Profile" 
-                    className="w-7 h-7 rounded-full object-cover"
-                  />
+                {showMobileSearch ? (
+                  <div className="flex items-center gap-2 flex-1">
+                    <input
+                      type="text"
+                      placeholder="Search..."
+                      value={mobileSearchQuery}
+                      onChange={(e) => setMobileSearchQuery(e.target.value)}
+                      className="flex-1 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-blue-500 outline-none"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => {
+                        setShowMobileSearch(false);
+                        setMobileSearchQuery("");
+                      }}
+                      className="p-2 rounded-lg text-gray-400 hover:text-white transition"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 ) : (
-                  <FaCircleUser size={20} />
+                  <h2 className="text-white font-semibold text-lg">ChatApp</h2>
                 )}
-              </button>
+              </div>
+              {!showMobileSearch && (
+                <div className="flex items-center gap-3">
+                  {/* Search Button */}
+                  <button
+                    onClick={() => setShowMobileSearch(true)}
+                    className="p-2  rounded-lg text-gray-400 hover:text-white transition"
+                  >
+                    <IoSearch size={20} />
+                  </button>
+
+                  <button
+                    onClick={handleProfileClick}
+                    className="p-2 hover:bg-zinc-700 rounded-full text-gray-400 hover:text-white transition"
+                    title="Profile"
+                  >
+                    {currentUser?.profilePicture ? (
+                      <img
+                        src={currentUser.profilePicture}
+                        alt="Profile"
+                        className="w-7 h-7 rounded-full object-cover"
+                      />
+                    ) : (
+                      <FaCircleUser size={20} />
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           )}
-        </div>
-        )
-       }
 
-       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar hidden on mobile when a chat/group is open OR when viewing profile/settings/edit */}
-        {(!isMobile || (showSidebar && !showEditProfile && !showProfile && !showSettings)) && (
-          <Sidebar 
-            onSelectUser={handleSelectUser} 
-            selectedUser={selectedUser} 
-            unreadCounts={unreadCounts} 
-            onProfileClick={handleProfileClick}
-            showProfile={showProfile}
-            onSettingsClick={handleSettingsClick}
-            showSettings={showSettings}
-            onTabChange={handleTabChange}
-            viewingUserProfile={viewingUserProfile}
-            onlineUsers={onlineUsers}
-            refreshFriends={refreshFriends}
-            onNotificationClick={handleNotificationClick}
-            unreadNotifications={unreadNotifications}
-            groups={groups}
-            selectedGroup={selectedGroup}
-            onSelectGroup={handleSelectGroup}
-            onCreateGroup={handleCreateGroup}
-            refreshGroups={refreshGroups}
-            externalActiveTab={sidebarActiveTab}
-            isMobile={isMobile}
-            mobileSearchQuery={mobileSearchQuery}
-          />
-        )}
-        <div className="flex-1 h-full overflow-hidden relative">
-        {showEditProfile ? (
-          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}>
-            <EditProfile 
-              currentUser={currentUser} 
-              onClose={handleCloseEditProfile}
-              onSave={handleProfileSaved}
-              isMobile={isMobile}
-            />
-          </div>
-        ) : showProfile ? (
-          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}>
-            <Profile 
-              currentUser={currentUser} 
-              viewingUser={viewingUserProfile} 
-              onClose={handleCloseProfile}
-              onEditProfile={handleEditProfile}
-              isMobile={isMobile}
-            />
-          </div>
-        ) : showSettings ? (
-          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto ${isMobile ? 'pb-20' : ''}`}>
-            <Settings 
-              onClose={handleCloseSettings}
-              isMobile={isMobile}
-            />
-          </div>
-        ) : showAddUser ? (
-          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto ${isMobile ? 'pb-20' : ''}`}>
-            <AddUser 
-              onClose={handleCloseAddUser}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Sidebar hidden on mobile when a chat/group is open OR when viewing profile/settings/edit */}
+          {(!isMobile ||
+            (showSidebar &&
+              !showEditProfile &&
+              !showProfile &&
+              !showSettings)) && (
+            <Sidebar
               onSelectUser={handleSelectUser}
-              currentUser={currentUser}
-              onFriendAdded={handleFriendAdded}
-            />
-          </div>
-        ) : showNotificationsPage ? (
-          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto ${isMobile ? 'pb-20' : ''}`}>
-            <NotificationPage
-              onClose={() => {
-                setShowNotificationsPage(false);
-                setSidebarActiveTab('chats');
-                setShowSidebar(true);
-              }}
-              socket={socket}
-              onNotificationAction={handleNotificationAction}
+              selectedUser={selectedUser}
+              unreadCounts={unreadCounts}
+              onProfileClick={handleProfileClick}
+              showProfile={showProfile}
+              onSettingsClick={handleSettingsClick}
+              showSettings={showSettings}
+              onTabChange={handleTabChange}
+              viewingUserProfile={viewingUserProfile}
+              onlineUsers={onlineUsers}
+              refreshFriends={refreshFriends}
+              onNotificationClick={handleNotificationClick}
+              unreadNotifications={unreadNotifications}
+              groups={groups}
+              selectedGroup={selectedGroup}
+              onSelectGroup={handleSelectGroup}
+              onCreateGroup={handleCreateGroup}
+              refreshGroups={refreshGroups}
+              externalActiveTab={sidebarActiveTab}
               isMobile={isMobile}
+              mobileSearchQuery={mobileSearchQuery}
             />
+          )}
+          <div className="flex-1 h-full overflow-hidden relative">
+            {showEditProfile ? (
+              <div
+                className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}
+              >
+                <EditProfile
+                  currentUser={currentUser}
+                  onClose={handleCloseEditProfile}
+                  onSave={handleProfileSaved}
+                  isMobile={isMobile}
+                />
+              </div>
+            ) : showProfile ? (
+              <div
+                className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}
+              >
+                <Profile
+                  currentUser={currentUser}
+                  viewingUser={viewingUserProfile}
+                  onClose={handleCloseProfile}
+                  onEditProfile={handleEditProfile}
+                  isMobile={isMobile}
+                />
+              </div>
+            ) : showSettings ? (
+              <div
+                className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto ${isMobile ? "pb-20" : ""}`}
+              >
+                <Settings onClose={handleCloseSettings} isMobile={isMobile} />
+              </div>
+            ) : showAddUser ? (
+              <div
+                className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto ${isMobile ? "pb-20" : ""}`}
+              >
+                <AddUser
+                  onClose={handleCloseAddUser}
+                  onSelectUser={handleSelectUser}
+                  currentUser={currentUser}
+                  onFriendAdded={handleFriendAdded}
+                />
+              </div>
+            ) : showNotificationsPage ? (
+              <div
+                className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto ${isMobile ? "pb-20" : ""}`}
+              >
+                <NotificationPage
+                  onClose={() => {
+                    setShowNotificationsPage(false);
+                    setSidebarActiveTab("chats");
+                    setShowSidebar(true);
+                  }}
+                  socket={socket}
+                  onNotificationAction={handleNotificationAction}
+                  isMobile={isMobile}
+                />
+              </div>
+            ) : selectedGroup ? (
+              <div
+                className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}
+              >
+                <GroupChat
+                  group={selectedGroup}
+                  socket={socket}
+                  currentUser={currentUser}
+                  onClose={() => setSelectedGroup(null)}
+                  onOpenInvite={handleOpenInvite}
+                  onGroupUpdated={handleGroupUpdated}
+                  isMobile={isMobile}
+                  onBack={handleBackToList}
+                />
+              </div>
+            ) : isMobile && !selectedUser ? null : (
+              <div
+                className={`absolute inset-0 ${getAnimationClass()} overflow-hidden`}
+              >
+                <ChatView
+                  user={selectedUser}
+                  socket={socket}
+                  currentUser={currentUser}
+                  onViewProfile={handleViewUserProfile}
+                  isUserOnline={
+                    selectedUser && onlineUsers.includes(selectedUser._id)
+                  }
+                  isUserTyping={selectedUser && typingUsers[selectedUser._id]}
+                  isMobile={isMobile}
+                  onBack={handleBackToList}
+                />
+              </div>
+            )}
           </div>
-        ) : selectedGroup ? (
-          <div className={`absolute inset-0 ${getAnimationClass()} overflow-y-auto`}>
-            <GroupChat
-              group={selectedGroup}
-              socket={socket}
-              currentUser={currentUser}
-              onClose={() => setSelectedGroup(null)}
-              onOpenInvite={handleOpenInvite}
-              onGroupUpdated={handleGroupUpdated}
-              isMobile={isMobile}
-              onBack={handleBackToList}
-            />
-          </div>
-        ) : (
-          isMobile && !selectedUser ? null : (
-            <div className={`absolute inset-0 ${getAnimationClass()} overflow-hidden`}>
-              <ChatView 
-                user={selectedUser} 
-                socket={socket} 
-                currentUser={currentUser} 
-                onViewProfile={handleViewUserProfile}
-                isUserOnline={selectedUser && onlineUsers.includes(selectedUser._id)}
-                isUserTyping={selectedUser && typingUsers[selectedUser._id]}
-                isMobile={isMobile}
-                onBack={handleBackToList}
-              />
-            </div>
-          )
-        )}
         </div>
-      </div>
 
+        {/* Tab Navigation for Mobile - Bottom Icon Navigation */}
+        {isMobile &&
+          (showSidebar ||
+            showSettings ||
+            showNotificationsPage ||
+            showAddUser) && (
+            <nav className="fixed bottom-0 left-0 right-0 bg-black rounded-t-xl shadow-2xl px-3 py-3 safe-area-bottom z-100">
+              <div className="flex justify-around items-center max-w-md mx-auto">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = sidebarActiveTab === item.id;
+                  const hasUnread =
+                    item.id === "notifications" && unreadNotifications > 0;
 
-      {/* Tab Navigation for Mobile - Bottom Icon Navigation */}
-      {isMobile && (showSidebar || showSettings || showNotificationsPage || showAddUser) && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-black rounded-t-xl shadow-2xl px-3 py-3 safe-area-bottom z-100">
-          <div className="flex justify-around items-center max-w-md mx-auto">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = sidebarActiveTab === item.id;
-              const hasUnread = item.id === "notifications" && unreadNotifications > 0;
+                  const handleItemClick = () => {
+                    if (item.id === "settings") {
+                      handleSettingsClick();
+                    } else {
+                      handleTabChange(item.id);
+                    }
+                  };
 
-              const handleItemClick = () => {
-                if (item.id === "settings") {
-                  handleSettingsClick();
-                } else {
-                  handleTabChange(item.id);
-                }
-              };
-
-              return (
-                <button
-                  key={item.id}
-                  onClick={handleItemClick}
-                  className={`flex flex-col items-center gap-1 min-w-15 py-2 transition-all duration-300 active:scale-95 ${
-                    isActive ? 'nav-btn-active' : ''
-                  }`}
-                >
-                  <div
-                    className={`
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={handleItemClick}
+                      className={`flex flex-col items-center gap-1 min-w-15 py-2 transition-all duration-300 active:scale-95 ${
+                        isActive ? "nav-btn-active" : ""
+                      }`}
+                    >
+                      <div
+                        className={`
                       w-12 h-12 rounded-full flex items-center justify-center
                       transition-all duration-300 relative
                       ${isActive ? "bg-[#4f38f7] shadow-lg shadow-purple-600/40 scale-110" : "bg-transparent hover:bg-gray-800/50 hover:scale-105"}
                     `}
-                  >
-                    {isActive && (
-                      <div className="absolute inset-0 bg-[#4f38f7] rounded-full blur-md opacity-30 animate-pulse" />
-                    )}
-                    <Icon
-                      size={22}
-                      className={`
+                      >
+                        {isActive && (
+                          <div className="absolute inset-0 bg-[#4f38f7] rounded-full blur-md opacity-30 animate-pulse" />
+                        )}
+                        <Icon
+                          size={22}
+                          className={`
                         transition-all duration-300 relative z-10
                         ${isActive ? "text-white scale-110" : "text-gray-400 hover:text-gray-200"}
                       `}
-                      strokeWidth={2}
-                    />
-                    {hasUnread && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-semibold animate-bounce">
-                        {unreadNotifications > 9 ? '9+' : unreadNotifications}
-                      </span>
-                    )}
-                  </div>
-                  <span
-                    className={`
+                          strokeWidth={2}
+                        />
+                        {hasUnread && (
+                          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-semibold animate-bounce">
+                            {unreadNotifications > 9
+                              ? "9+"
+                              : unreadNotifications}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={`
                       text-[10px] font-medium transition-all duration-300
                       ${isActive ? "text-[#4f38f7]" : "text-gray-400"}
                     `}
-                  >
-                    {item.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-      )}
+                      >
+                        {item.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </nav>
+          )}
 
-      
-      {/* Notification Popup - Removed, using full page instead */}
+        {/* Notification Popup - Removed, using full page instead */}
 
-      {/* Create Group Modal */}
-      <CreateGroupModal
-        isOpen={showCreateGroup}
-        onClose={() => setShowCreateGroup(false)}
-        onGroupCreated={handleGroupCreated}
-        currentUser={currentUser}
-      />
+        {/* Create Group Modal */}
+        <CreateGroupModal
+          isOpen={showCreateGroup}
+          onClose={() => setShowCreateGroup(false)}
+          onGroupCreated={handleGroupCreated}
+          currentUser={currentUser}
+        />
 
-      {/* Invite to Group Modal */}
-      <InviteToGroupModal
-        isOpen={showInviteToGroup}
-        onClose={() => {
-          setShowInviteToGroup(false);
-          setInviteGroup(null);
-        }}
-        group={inviteGroup}
-        currentUser={currentUser}
-      />
+        {/* Invite to Group Modal */}
+        <InviteToGroupModal
+          isOpen={showInviteToGroup}
+          onClose={() => {
+            setShowInviteToGroup(false);
+            setInviteGroup(null);
+          }}
+          group={inviteGroup}
+          currentUser={currentUser}
+        />
       </div>
     </>
   );
