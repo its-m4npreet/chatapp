@@ -13,6 +13,7 @@ import {
   Crown,
   User,
   ChevronLeft,
+  LogOut,
 } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../lib/axios";
@@ -33,11 +34,17 @@ const GroupProfilePage = ({ currentUser }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [messageResults, setMessageResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const [showAllMembers, setShowAllMembers] = useState(false);
 
   const scrollRef = useRef(null);
   const searchInputRef = useRef(null);
   const rafRef = useRef(null);
   const lastY = useRef(0);
+  const dropdownRef = useRef(null);
 
   // Note: These are mocks. In a real app, they'd come from context/auth.
   const settings = mockSettings;
@@ -69,6 +76,38 @@ const GroupProfilePage = ({ currentUser }) => {
     };
   }, [groupId]);
 
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setMessageResults([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    const delayDebounceFn = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const { data } = await axios.get(
+          `/groups/${groupId}/messages?search=${searchQuery}`,
+          { signal },
+        );
+        setMessageResults(data.messages);
+      } catch (error) {
+        if (error.name !== "CanceledError") {
+          console.error("Failed to search messages", error);
+        }
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500);
+
+    return () => {
+      clearTimeout(delayDebounceFn);
+      controller.abort();
+    };
+  }, [searchQuery, groupId]);
+
   // Smooth scroll tracking
   useEffect(() => {
     const el = scrollRef.current;
@@ -91,6 +130,30 @@ const GroupProfilePage = ({ currentUser }) => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [dropdownRef]);
+
+  const handleLeaveGroup = async () => {
+    if (!window.confirm("Are you sure you want to leave this group?")) {
+      return;
+    }
+    try {
+      await axios.post(`/groups/${group._id}/leave`);
+      navigate("/"); // Go back to home
+    } catch (err) {
+      console.error("Failed to leave group", err);
+    }
+  };
 
   const handleBack = () => {
     navigate(-1);
@@ -116,22 +179,21 @@ const GroupProfilePage = ({ currentUser }) => {
 
   const isScrolled = scrollY > 60;
   const coverHeight = isScrolled ? 64 : 200;
-  const avatarSize = isScrolled ? 48 : 112;
+  const avatarSize = 112;
 
   const avatarStyle = {
     width: `${avatarSize}px`,
     height: `${avatarSize}px`,
-    top: isScrolled ? "8px" : "200px",
-    left: isScrolled ? "60px" : "50%",
-    transform: isScrolled
-      ? "translateY(0)"
-      : "translateY(-50%) translateX(-50%)",
+    top: "200px",
+    left: "50%",
+    transform: "translateY(-50%) translateX(-50%)",
   };
 
-  const filteredMembers =
-    group?.members?.filter((m) =>
-      m.name?.toLowerCase().includes(searchQuery.toLowerCase()),
-    ) ?? [];
+  const filteredMembers = group?.members ?? [];
+
+  const membersToShow = showAllMembers
+    ? filteredMembers
+    : filteredMembers.slice(0, 6);
 
   if (loading || !currentUser) {
     return (
@@ -157,16 +219,14 @@ const GroupProfilePage = ({ currentUser }) => {
         {/* ── Sticky Header ── */}
         <header
           className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${
-            isScrolled
-              ? settings.darkMode
-                ? "bg-zinc-900/90 backdrop-blur-xl border-b border-zinc-800/60 shadow-lg"
-                : "bg-white/90 backdrop-blur-xl border-b border-gray-200/60 shadow-lg"
-              : "bg-transparent"
+            settings.darkMode
+              ? "bg-zinc-900 backdrop-blur-xl border-b border-zinc-800/60 shadow-lg"
+              : "bg-white backdrop-blur-xl border-b border-gray-200/60 shadow-lg"
           }`}
         >
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
             <div className="flex items-center justify-between h-16">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button
                   className={`p-2 rounded-full ${settings.darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-gray-100 text-gray-700"}`}
                   onClick={handleBack}
@@ -174,10 +234,25 @@ const GroupProfilePage = ({ currentUser }) => {
                   <ChevronLeft size={22} />
                 </button>
                 <div
-                  className={`flex items-center gap-3 transition-all duration-300 ${isScrolled ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none"}`}
+                  className={`flex items-center gap-2 transition-opacity duration-300 ${isScrolled ? "opacity-100" : "opacity-0 pointer-events-none"}`}
                 >
-                  {/* Scrolled avatar is part of the animated div now */}
-                  <div style={{ width: "48px" }} />
+                  <div
+                    className={`w-12 h-12 rounded-full overflow-hidden shrink-0 ${settings.darkMode ? "bg-zinc-800" : "bg-gray-200"}`}
+                  >
+                    {group.avatar ? (
+                      <img
+                        src={group.avatar}
+                        alt={group.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div
+                        className={`w-full h-full flex items-center justify-center ${settings.darkMode ? "bg-linear-to-br from-blue-600 to-purple-700" : "bg-linear-to-br from-blue-500 to-purple-600"}`}
+                      >
+                        <Users size={28} className="text-white" />
+                      </div>
+                    )}
+                  </div>
 
                   <h1
                     className={`font-semibold text-lg truncate ${settings.darkMode ? "text-white" : "text-gray-900"}`}
@@ -194,18 +269,74 @@ const GroupProfilePage = ({ currentUser }) => {
                 >
                   <Search size={20} />
                 </button>
-                {/* <button
-                  onClick={() => setShowNotifications(true)}
-                  className={`p-2.5 rounded-xl ${settings.darkMode ? "hover:bg-zinc-800" : "hover:bg-gray-100"}`}
-                >
-                  <Bell size={20} />
-                </button>*/}
-                <button
-                  onClick={() => setShowEditGroupModal(true)}
-                  className={`p-2.5 rounded-xl ${settings.darkMode ? "hover:bg-zinc-800" : "hover:bg-gray-100"}`}
-                >
-                  <MoreVertical size={20} />
-                </button>
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    onClick={() => setShowDropdown((prev) => !prev)}
+                    className={`p-2.5 rounded-xl ${
+                      settings.darkMode
+                        ? "hover:bg-zinc-800"
+                        : "hover:bg-gray-100"
+                    }`}
+                  >
+                    <MoreVertical size={20} />
+                  </button>
+                  {showDropdown && (
+                    <div
+                      className={`absolute top-14 right-5 w-56 rounded-xl shadow-lg z-50 p-2 ${
+                        settings.darkMode
+                          ? "bg-zinc-800 border border-zinc-700"
+                          : "bg-white border border-gray-200"
+                      }`}
+                    >
+                      <button
+                        onClick={() => {
+                          setShowInviteModal(true);
+                          setShowDropdown(false);
+                        }}
+                        className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                          settings.darkMode
+                            ? "hover:bg-zinc-700 text-zinc-200"
+                            : "hover:bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        <UserPlus size={16} />
+                        <span>Add Members</span>
+                      </button>
+                      {(isCreator || isAdmin) && (
+                        <button
+                          onClick={() => {
+                            setShowEditGroupModal(true);
+                            setShowDropdown(false);
+                          }}
+                          className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                            settings.darkMode
+                              ? "hover:bg-zinc-700 text-zinc-200"
+                              : "hover:bg-gray-100 text-gray-800"
+                          }`}
+                        >
+                          <Edit size={16} />
+                          <span>Edit Group</span>
+                        </button>
+                      )}
+                      <div
+                        className={`my-1 h-0.5 ${
+                          settings.darkMode ? "bg-zinc-700" : "bg-gray-200"
+                        }`}
+                      />
+                      <button
+                        onClick={handleLeaveGroup}
+                        className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                          settings.darkMode
+                            ? "text-red-400 hover:bg-red-500/10"
+                            : "text-red-600 hover:bg-red-50"
+                        }`}
+                      >
+                        <LogOut size={16} />
+                        <span>Leave Group</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -228,7 +359,7 @@ const GroupProfilePage = ({ currentUser }) => {
               </div>
 
               <div
-                className="absolute transition-all duration-500 ease-out"
+                className={`absolute transition-all duration-500 ease-out z-10 ${isScrolled ? "opacity-0 pointer-events-none" : "opacity-100"}`}
                 style={avatarStyle}
               >
                 <div
@@ -250,10 +381,7 @@ const GroupProfilePage = ({ currentUser }) => {
                           : "bg-linear-to-br from-blue-500 to-purple-600"
                       }`}
                     >
-                      <Users
-                        size={isScrolled ? 28 : 56}
-                        className="text-white"
-                      />
+                      <Users size={56} className="text-white" />
                     </div>
                   )}
                 </div>
@@ -281,7 +409,7 @@ const GroupProfilePage = ({ currentUser }) => {
               </div>
 
               {/* Quick stats */}
-              <div className="grid grid-cols-3 gap-4 mb-8 text-center">
+              <div className="grid grid-cols-2 gap-4 mb-8 text-center">
                 <div>
                   <div
                     className={`text-xl sm:text-2xl font-bold ${settings.darkMode ? "text-white" : "text-gray-900"}`}
@@ -294,7 +422,7 @@ const GroupProfilePage = ({ currentUser }) => {
                     Members
                   </div>
                 </div>
-                <div>
+                {/* <div>
                   <div
                     className={`text-xl sm:text-2xl font-bold ${settings.darkMode ? "text-white" : "text-gray-900"}`}
                   >
@@ -305,7 +433,7 @@ const GroupProfilePage = ({ currentUser }) => {
                   >
                     Messages
                   </div>
-                </div>
+                </div>*/}
                 <div>
                   <div
                     className={`text-xl sm:text-2xl font-bold ${settings.darkMode ? "text-white" : "text-gray-900"}`}
@@ -535,7 +663,7 @@ const GroupProfilePage = ({ currentUser }) => {
                           ref={searchInputRef}
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="Search members..."
+                          placeholder="Search messages..."
                           className={`w-full pl-11 pr-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition ${
                             settings.darkMode
                               ? "bg-zinc-800 border-zinc-700 text-white placeholder-zinc-500"
@@ -546,8 +674,55 @@ const GroupProfilePage = ({ currentUser }) => {
                     </div>
 
                     <div className="p-5 max-h-96 overflow-y-auto">
+                      {isSearching && (
+                        <div className="text-center py-4">
+                          Searching messages...
+                        </div>
+                      )}
+                      {messageResults.length > 0 && (
+                        <div className="space-y-3 mb-5">
+                          <h4 className="font-semibold text-sm">
+                            Message Results
+                          </h4>
+                          {messageResults.map((msg) => (
+                            <div
+                              key={msg._id}
+                              className={`p-2 rounded-lg ${settings.darkMode ? "bg-zinc-800" : "bg-gray-100"}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <img
+                                  src={msg.sender.profilePicture}
+                                  className="w-6 h-6 rounded-full"
+                                />
+                                <span
+                                  className={`text-sm font-medium ${settings.darkMode ? "text-white" : "text-gray-900"}`}
+                                >
+                                  {msg.sender.name}
+                                </span>
+                              </div>
+                              <p
+                                className={`text-sm mt-1 ${settings.darkMode ? "text-gray-300" : "text-gray-700"}`}
+                              >
+                                {msg.content}
+                              </p>
+                              <p
+                                className={`text-xs text-right mt-1 ${settings.darkMode ? "text-gray-500" : "text-gray-400"}`}
+                              >
+                                {new Date(msg.createdAt).toLocaleString()}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {searchQuery &&
+                        !isSearching &&
+                        messageResults.length === 0 && (
+                          <div className="text-center py-4">
+                            No messages found.
+                          </div>
+                        )}
                       <div className="grid sm:grid-cols-2 gap-3">
-                        {filteredMembers.map((member) => {
+                        {membersToShow.map((member) => {
                           const isC = group.creator?._id === member._id;
                           const isA = group.admins?.some(
                             (a) => a._id === member._id,
@@ -652,6 +827,20 @@ const GroupProfilePage = ({ currentUser }) => {
                           );
                         })}
                       </div>
+                      {!showAllMembers && filteredMembers.length > 6 && (
+                        <div className="mt-4">
+                          <button
+                            onClick={() => setShowAllMembers(true)}
+                            className={`w-full py-2.5 rounded-xl font-semibold transition ${
+                              settings.darkMode
+                                ? "bg-zinc-800 hover:bg-zinc-700 text-white"
+                                : "bg-gray-100 hover:bg-gray-200 text-gray-800"
+                            }`}
+                          >
+                            Show All {filteredMembers.length} Members
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
