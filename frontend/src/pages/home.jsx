@@ -8,7 +8,7 @@ import {
   IoPersonAdd,
   IoSettings,
 } from "react-icons/io5";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import ChatView from "../components/ChatView";
 import Profile from "../components/Profile";
@@ -26,6 +26,7 @@ import { useSettings } from "../context/useSettings";
 export const Home = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { groupId } = useParams(); // Get groupId from URL params for /group/:groupId route
   const { settings } = useSettings();
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
@@ -398,19 +399,6 @@ export const Home = () => {
     };
   }, [currentUser]);
 
-  // Handle opening a group chat from another page
-  useEffect(() => {
-    const groupIdToOpen = location.state?.openGroupId;
-    if (groupIdToOpen && groups.length > 0) {
-      const groupToSelect = groups.find((g) => g._id === groupIdToOpen);
-      if (groupToSelect) {
-        handleSelectGroup(groupToSelect);
-        // Clear state to prevent re-opening on refresh
-        navigate(".", { replace: true, state: {} });
-      }
-    }
-  }, [location.state, groups, navigate]);
-
   // Clear unread count when selecting a user
   const handleSelectUser = (user) => {
     setSelectedUser(user);
@@ -451,12 +439,26 @@ export const Home = () => {
     if (isMobile) setShowSidebar(false);
   };
 
+  // Handle opening a group chat from another page or direct URL access
+  // Only run when groupId is available (i.e., on /group/:groupId route)
+  useEffect(() => {
+    if (!groupId || groups.length === 0) return;
+    
+    const groupIdToOpen = location.state?.openGroupId || groupId;
+    if (groupIdToOpen) {
+      const groupToSelect = groups.find((g) => g._id === groupIdToOpen);
+      if (groupToSelect) {
+        setTimeout(() => {
+          handleSelectGroup(groupToSelect);
+        }, 0);
+      }
+    }
+    // eslint-disable-next-line
+  }, [groupId, groups]); // Add dependencies
+
   // New: back to list (mobile)
   const handleBackToList = () => {
-    setShowSidebar(true);
-    // keep selection if you prefer; clearing selection provides a clean list view:
-    setSelectedUser(null);
-    setSelectedGroup(null);
+    navigate(-1);
   };
 
   const handleProfileClick = () => {
