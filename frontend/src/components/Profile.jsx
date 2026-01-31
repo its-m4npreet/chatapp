@@ -14,11 +14,10 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile })
   const navigate = useNavigate();
 
   const handleBack = () => {
-    if (isMobile) {
+    if (isMobile || !onClose) {
       navigate(-1);
-      // navigate('/');
     } else {
-      onClose && onClose();
+      onClose();
     }
   };
 
@@ -65,14 +64,12 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile })
         </div>
 
         {/* Back Button */}
-        {isMobile && (
-          <button
+        <button
           onClick={handleBack}
-          className={`absolute top-4 left-4 p-2 ${isDarkMode ? 'bg-black/50 hover:bg-black/70 text-white' : 'bg-white/50 hover:bg-white/70 text-black'} rounded-full  backdrop-blur-sm transition-all`}
+          className={`absolute top-4 left-4 p-2 z-50 md:hidden ${isDarkMode ? 'bg-black/50 hover:bg-black/70 text-white' : 'bg-white/50 hover:bg-white/70 text-black'} rounded-full  backdrop-blur-sm transition-all`}
         >
           <IoArrowBack size={20} />
         </button>
-        )}
 
         {/* Profile Picture */}
         <div className="absolute -bottom-16 left-6 md:left-10">

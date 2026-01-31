@@ -21,6 +21,8 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
   const fileInputRef = useRef(null);
   const bannerInputRef = useRef(null);
 
+  const isDarkMode = localStorage.getItem('chatAppSettings') ? JSON.parse(localStorage.getItem('chatAppSettings')).darkMode : true;
+
   // Max length constants
   const MAX_LENGTHS = {
     name: 50,
@@ -162,19 +164,19 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
   };
 
   return (
-    <div className={`flex flex-col overflow-y-auto scrollbar-hide bg-[#0f1419] ${isMobile ? 'min-h-screen w-full' : 'h-full w-full relative'}`} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+    <div className={`flex flex-col overflow-y-auto scrollbar-hide ${isDarkMode ? 'bg-[#0f1419]' : 'bg-white'} ${isMobile ? 'min-h-screen w-full' : 'h-full w-full relative'}`} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
       {/* Header */}
-      <div className="sticky top-0 z-40 bg-[#0f1419] backdrop-blur-sm border-b border-gray-800">
+      <div className={`sticky top-0 z-40 ${isDarkMode ? 'bg-[#0f1419] border-gray-800' : 'bg-white border-gray-200'} backdrop-blur-sm border-b`}>
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4">
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-800 rounded-full text-white transition-all"
+              className={`p-2 ${isDarkMode ? 'hover:bg-gray-800 text-white' : 'hover:bg-gray-100 text-gray-900'} rounded-full transition-all`}
             >
               <IoArrowBack size={20} />
             </button>
             <div>
-              <h2 className="text-xl font-semibold text-white">Edit Profile</h2>
+              <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Edit Profile</h2>
               <p className="text-gray-500 text-sm">Update your information</p>
             </div>
           </div>
@@ -195,7 +197,7 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
 
       {/* Error Message */}
       {error && (
-        <div className="mx-4 mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+        <div className={`mx-4 mt-4 p-3 rounded-xl text-sm border ${isDarkMode ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-red-50 border-red-200 text-red-600'}`}>
           {error}
         </div>
       )}
@@ -208,7 +210,7 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
             <img 
               src={previewBanner || banner} 
               alt="Banner" 
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover block"
             />
           ) : (
             <div className="w-full h-full bg-linear-to-br from-blue-600 via-purple-600 to-pink-500"></div>
@@ -218,7 +220,7 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
           {/* Banner edit button */}
           <button 
             onClick={() => bannerInputRef.current?.click()}
-            className="absolute bottom-3 right-3 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 cursor-pointer flex items-center gap-2"
+            className={`absolute bottom-3 right-3 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white backdrop-blur-sm transition-all ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} cursor-pointer flex items-center gap-2`}
           >
             <FaImage size={16} />
             <span className="text-sm">Change Banner</span>
@@ -240,18 +242,18 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
               <img
                 src={previewImage || profilePicture}
                 alt="Profile"
-                className="w-28 h-28 md:w-32 md:h-32 rounded-full object-cover border-4 border-[#0f1419] shadow-xl"
+                className={`w-28 h-28 md:w-32 md:h-32 rounded-full object-cover border-4 ${isDarkMode ? 'border-[#0f1419]' : 'border-gray-200'} shadow-xl`}
               />
             ) : (
-              <div className="w-28 h-28 md:w-32 md:h-32 rounded-full bg-gray-800 flex items-center justify-center border-4 border-[#0f1419] shadow-xl">
-                <FaCircleUser size={80} className="text-gray-600" />
+              <div className={`w-28 h-28 md:w-32 md:h-32 rounded-full ${isDarkMode ? 'bg-gray-800 border-[#0f1419]' : 'bg-gray-200 border-gray-200'} flex items-center justify-center border-4 shadow-xl`}>
+                <FaCircleUser size={80} className={isDarkMode ? "text-gray-600" : "text-gray-400"} />
               </div>
             )}
             
             {/* Camera overlay */}
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              className={`absolute inset-0 flex items-center justify-center bg-black/50 rounded-full ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity cursor-pointer`}
             >
               <FaCamera size={24} className="text-white" />
             </button>
@@ -272,22 +274,22 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
         <div className="max-w-2xl space-y-6">
           {/* Name Field */}
           <div>
-            <label className="block text-gray-400 text-sm font-medium mb-2">Name *</label>
+            <label className={`block ${isDarkMode ? 'text-gray-400' : 'text-gray-700'} text-sm font-medium mb-2`}>Name *</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className={`w-full p-4 rounded-xl bg-[#131315] border ${
+              className={`w-full p-4 rounded-xl ${isDarkMode ? 'bg-[#131315]' : 'bg-gray-50'} border ${
                 name.length > MAX_LENGTHS.name 
                   ? 'border-red-500 focus:border-red-500' 
-                  : 'border-[#29292e]   focus:border-blue-500'
+                  : (isDarkMode ? 'border-[#29292e] focus:border-blue-500' : 'border-gray-300 focus:border-blue-500')
               } ${
-                name.length > MAX_LENGTHS.name ? 'text-red-400' : 'text-white'
-              } outline-none transition-all placeholder:text-gray-600`}
+                name.length > MAX_LENGTHS.name ? 'text-red-400' : (isDarkMode ? 'text-white' : 'text-gray-900')
+              } outline-none transition-all ${isDarkMode ? 'placeholder:text-gray-500' : 'placeholder:text-gray-400'}`}
               placeholder="Your full name"
             />
             <p className={`text-xs mt-1 text-right ${
-              name.length > MAX_LENGTHS.name ? 'text-red-500' : 'text-gray-600'
+              name.length > MAX_LENGTHS.name ? 'text-red-500' : (isDarkMode ? 'text-gray-400' : 'text-gray-600')
             }`}>
               {name.length}/{MAX_LENGTHS.name}
             </p>
@@ -295,22 +297,22 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
 
           {/* Bio Field */}
           <div>
-            <label className="block text-gray-400 text-sm font-medium mb-2">Bio</label>
+            <label className={`block ${isDarkMode ? 'text-gray-400' : 'text-gray-700'} text-sm font-medium mb-2`}>Bio</label>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              className={`w-full p-4 rounded-xl bg-[#131315] border ${
+              className={`w-full p-4 rounded-xl ${isDarkMode ? 'bg-[#131315]' : 'bg-gray-50'} border ${
                 bio.length > MAX_LENGTHS.bio 
                   ? 'border-red-500 focus:border-red-500' 
-                  : 'border-[#29292e]   focus:border-blue-500'
+                  : (isDarkMode ? 'border-[#29292e] focus:border-blue-500' : 'border-gray-300 focus:border-blue-500')
               } ${
-                bio.length > MAX_LENGTHS.bio ? 'text-red-400' : 'text-white'
-              } outline-none resize-none transition-all placeholder:text-gray-600`}
+                bio.length > MAX_LENGTHS.bio ? 'text-red-400' : (isDarkMode ? 'text-white' : 'text-gray-900')
+              } outline-none resize-none transition-all ${isDarkMode ? 'placeholder:text-gray-500' : 'placeholder:text-gray-400'}`}
               placeholder="Tell people about yourself..."
               rows={2}
             />
             <p className={`text-xs mt-1 text-right ${
-              bio.length > MAX_LENGTHS.bio ? 'text-red-500' : 'text-gray-600'
+              bio.length > MAX_LENGTHS.bio ? 'text-red-500' : (isDarkMode ? 'text-gray-400' : 'text-gray-600')
             }`}>
               {bio.length}/{MAX_LENGTHS.bio}
             </p>
@@ -318,22 +320,22 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
 
           {/* About Me Field */}
           <div>
-            <label className="block text-gray-400 text-sm font-medium mb-2">About Me</label>
+            <label className={`block ${isDarkMode ? 'text-gray-400' : 'text-gray-700'} text-sm font-medium mb-2`}>About Me</label>
             <textarea
               value={about}
               onChange={(e) => setAbout(e.target.value)}
-              className={`w-full p-4 rounded-xl bg-[#131315] border ${
+              className={`w-full p-4 rounded-xl ${isDarkMode ? 'bg-[#131315]' : 'bg-gray-50'} border ${
                 about.length > MAX_LENGTHS.about 
                   ? 'border-red-500 focus:border-red-500' 
-                  : 'border-[#29292e]   focus:border-blue-500'
+                  : (isDarkMode ? 'border-[#29292e] focus:border-blue-500' : 'border-gray-300 focus:border-blue-500')
               } ${
-                about.length > MAX_LENGTHS.about ? 'text-red-400' : 'text-white'
-              } outline-none resize-none transition-all placeholder:text-gray-600`}
+                about.length > MAX_LENGTHS.about ? 'text-red-400' : (isDarkMode ? 'text-white' : 'text-gray-900')
+              } outline-none resize-none transition-all ${isDarkMode ? 'placeholder:text-gray-500' : 'placeholder:text-gray-400'}`}
               placeholder="Tell people about yourself, your experience, skills, and interests..."
               rows={4}
             />
             <p className={`text-xs mt-1 text-right ${
-              about.length > MAX_LENGTHS.about ? 'text-red-500' : 'text-gray-600'
+              about.length > MAX_LENGTHS.about ? 'text-red-500' : (isDarkMode ? 'text-gray-400' : 'text-gray-600')
             }`}>
               {about.length}/{MAX_LENGTHS.about}
             </p>
@@ -341,22 +343,22 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
 
           {/* Location Field */}
           <div>
-            <label className="block text-gray-400 text-sm font-medium mb-2">Location</label>
+            <label className={`block ${isDarkMode ? 'text-gray-400' : 'text-gray-700'} text-sm font-medium mb-2`}>Location</label>
             <input
               type="text"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              className={`w-full p-4 rounded-xl bg-[#131315] border ${
+              className={`w-full p-4 rounded-xl ${isDarkMode ? 'bg-[#131315]' : 'bg-gray-50'} border ${
                 location.length > MAX_LENGTHS.location 
                   ? 'border-red-500 focus:border-red-500' 
-                  : 'border-[#29292e]   focus:border-blue-500'
+                  : (isDarkMode ? 'border-[#29292e] focus:border-blue-500' : 'border-gray-300 focus:border-blue-500')
               } ${
-                location.length > MAX_LENGTHS.location ? 'text-red-400' : 'text-white'
-              } outline-none transition-all placeholder:text-gray-600`}
+                location.length > MAX_LENGTHS.location ? 'text-red-400' : (isDarkMode ? 'text-white' : 'text-gray-900')
+              } outline-none transition-all ${isDarkMode ? 'placeholder:text-gray-500' : 'placeholder:text-gray-400'}`}
               placeholder="e.g. Melbourne, AU"
             />
             <p className={`text-xs mt-1 text-right ${
-              location.length > MAX_LENGTHS.location ? 'text-red-500' : 'text-gray-600'
+              location.length > MAX_LENGTHS.location ? 'text-red-500' : (isDarkMode ? 'text-gray-400' : 'text-gray-600')
             }`}>
               {location.length}/{MAX_LENGTHS.location}
             </p>
@@ -364,24 +366,24 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
 
           {/* Website Field */}
           <div>
-            <label className="block text-gray-400 text-sm font-medium mb-2">Website</label>
+            <label className={`block ${isDarkMode ? 'text-gray-400' : 'text-gray-700'} text-sm font-medium mb-2`}>Website</label>
             <input
               type="url"
               value={website}
               onChange={(e) => setWebsite(e.target.value)}
-              className="w-full p-4 rounded-xl bg-[#131315] border border-[#29292e]  text-white outline-none focus:border-blue-500 transition-all placeholder:text-gray-600"
+              className={`w-full p-4 rounded-xl ${isDarkMode ? 'bg-[#131315] border-[#29292e] text-white' : 'bg-gray-50 border-gray-300 text-gray-900'} border outline-none focus:border-blue-500 transition-all ${isDarkMode ? 'placeholder:text-gray-500' : 'placeholder:text-gray-400'}`}
               placeholder="https://yourwebsite.com"
             />
           </div>
 
           {/* Portfolio Field */}
           <div>
-            <label className="block text-gray-400 text-sm font-medium mb-2">Portfolio</label>
+            <label className={`block ${isDarkMode ? 'text-gray-400' : 'text-gray-700'} text-sm font-medium mb-2`}>Portfolio</label>
             <input
               type="url"
               value={portfolio}
               onChange={(e) => setPortfolio(e.target.value)}
-              className="w-full p-4 rounded-xl bg-[#131315] border border-[#29292e]  text-white outline-none focus:border-blue-500 transition-all placeholder:text-gray-600"
+              className={`w-full p-4 rounded-xl ${isDarkMode ? 'bg-[#131315] border-[#29292e] text-white' : 'bg-gray-50 border-gray-300 text-gray-900'} border outline-none focus:border-blue-500 transition-all ${isDarkMode ? 'placeholder:text-gray-500' : 'placeholder:text-gray-400'}`}
               placeholder="https://yourportfolio.com"
             />
           </div>
@@ -402,7 +404,7 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
           </button>
             <button
               onClick={onClose}
-              className="flex-1 py-3 bg-[#131315] hover:bg-[#29292e] text-white rounded-xl font-medium transition-all cursor-pointer flex items-center justify-center"
+              className={`flex-1 py-3 ${isDarkMode ? 'bg-[#131315] hover:bg-[#29292e] text-white' : 'bg-gray-800 hover:bg-gray-700 text-white'} rounded-xl font-medium transition-all cursor-pointer flex items-center justify-center`}
             >
               Cancel
             </button>
