@@ -500,9 +500,10 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
           <div className="sidebar-section md:mt-0">
             {!isMobile && (
               <div className="section-title">Groups</div>
-              )}
-            
-            {groups.length === 0 ? (
+            )}
+            {loading ? (
+              <GroupsSkeletonLoader count={3} />
+            ) : groups.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-gray-500">
                 <TiGroup size={48} className="mb-3 text-gray-600" />
                 <p className="text-sm">No groups yet</p>
