@@ -446,7 +446,7 @@ html:not(.dark) .bg-black\/80 {
 }
 
 html:not(.dark) .bg-black,
-html:not(.dark) [class*="bg-black"],
+/* html:not(.dark) [class*="bg-black"], */
 html:not(.dark) [class*="bg-zinc"],
 html:not(.dark) [class*="bg-gray-9"] {
     background-color: white !important;

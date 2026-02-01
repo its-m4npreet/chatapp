@@ -25,7 +25,7 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
 
   // Max length constants
   const MAX_LENGTHS = {
-    name: 50,
+    name: 20,
     bio: 160,
     about: 500,
     location: 100
@@ -164,9 +164,9 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
   };
 
   return (
-    <div className={`flex flex-col overflow-y-auto scrollbar-hide ${isDarkMode ? 'bg-[#0f1419]' : 'bg-white'} ${isMobile ? 'min-h-screen w-full' : 'h-full w-full relative'}`} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+    <div className={`flex flex-col overflow-y-auto scrollbar-hide ${isDarkMode ? 'bg-black/50' : 'bg-white'} ${isMobile ? 'min-h-screen w-full' : 'h-full w-full relative'}`} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
       {/* Header */}
-      <div className={`sticky top-0 z-40 ${isDarkMode ? 'bg-[#0f1419] border-gray-800' : 'bg-white border-gray-200'} backdrop-blur-sm border-b`}>
+      <div className={`sticky top-0 z-40 ${isDarkMode ? 'bg-black/50 border-gray-800' : 'bg-white border-gray-200'} backdrop-blur-sm border-b`}>
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4">
             <button
@@ -210,17 +210,18 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
             <img 
               src={previewBanner || banner} 
               alt="Banner" 
-              className="w-full h-full object-cover block"
+              className={`w-full h-full object-cover block ${!isDarkMode ? 'bg-gray-200' : ''}`}
+              // style={!isDarkMode ? { backgroundColor: '#e5e7eb' } : {}}
             />
           ) : (
-            <div className="w-full h-full bg-linear-to-br from-blue-600 via-purple-600 to-pink-500"></div>
+            <div className={`w-full h-full ${isDarkMode ? 'bg-linear-to-br from-blue-600 via-purple-600 to-pink-500' : 'bg-gray-200'}`}></div>
           )}
           <div className="absolute inset-0 bg-black/20"></div>
           
           {/* Banner edit button */}
           <button 
             onClick={() => bannerInputRef.current?.click()}
-            className={`absolute bottom-3 right-3 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white backdrop-blur-sm transition-all ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} cursor-pointer flex items-center gap-2`}
+            className={`absolute bottom-3 right-3 p-2 bg-black/50 hover:bg-black/70 rounded-lg text-white backdrop-blur-sm transition-all ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} cursor-pointer flex items-center gap-2`}
           >
             <FaImage size={16} />
             <span className="text-sm">Change Banner</span>
@@ -242,10 +243,11 @@ const EditProfile = ({ currentUser, onClose, onSave, isMobile = false }) => {
               <img
                 src={previewImage || profilePicture}
                 alt="Profile"
-                className={`w-28 h-28 md:w-32 md:h-32 rounded-full object-cover border-4 ${isDarkMode ? 'border-[#0f1419]' : 'border-gray-200'} shadow-xl`}
+                className={`w-28 h-28 md:w-32 md:h-32 rounded-full object-cover border-4 shadow-xl ${isDarkMode ? 'border-[#0f1419]' : 'border-gray-300 bg-gray-200'}`}
+                // style={!isDarkMode ? { backgroundColor: '#e5e7eb' } : {}}
               />
             ) : (
-              <div className={`w-28 h-28 md:w-32 md:h-32 rounded-full ${isDarkMode ? 'bg-gray-800 border-[#0f1419]' : 'bg-gray-200 border-gray-200'} flex items-center justify-center border-4 shadow-xl`}>
+              <div className={`w-28 h-28 md:w-32 md:h-32 rounded-full flex items-center justify-center border-4 shadow-xl ${isDarkMode ? 'bg-gray-800 border-[#0f1419]' : 'bg-gray-200 border-gray-300'}`}>
                 <FaCircleUser size={80} className={isDarkMode ? "text-gray-600" : "text-gray-400"} />
               </div>
             )}

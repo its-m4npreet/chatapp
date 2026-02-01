@@ -34,13 +34,13 @@ const userSchema = new mongoose.Schema({
     },
     bio: {
         type: String,
-        default: '',
+        default: 'Hey there! Let’s chat',
         maxlength: 160,
         trim: true,
     },
     aboutMe: {
         type: String,
-        default: '',
+        default: 'Open to chatting and meeting new people.',
         maxlength: 500,
         trim: true,
     },

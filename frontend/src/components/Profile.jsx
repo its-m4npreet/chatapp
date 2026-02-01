@@ -109,19 +109,27 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile })
       <div className="mt-20 px-6 md:px-10">
         {/* Name and Title */}
         <div className="flex items-center gap-2 mb-1">
-          <h1 className={`text-2xl md:text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{user.name}</h1>
-          {/* <div className='flex justify-center items-center mt-4'>
-                      <MdVerified size={22} className="text-[#EAB308] flex justify-center items-center" />
-
-          </div> */}
+          <h2
+            className={`text-2xl md:text-3xl font-bold max-w-xs md:max-w-md truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}
+            title={user.name}
+            style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              display: 'block',
+              maxWidth: '20ch'
+            }}
+          >
+            {user.name}
+          </h2>
         </div>
-        <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'} text-sm md:text-base`}>{user.email}</p>
+        <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'} text-sm md:text-base`}>@{user.username}</p>
 
         {/* Experience/Bio Section */}
         <div className="mt-6">
           <h3 className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'} text-sm font-medium mb-2`}>Bio</h3>
           <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'} text-sm leading-relaxed`}>
-            {user.bio || 'Hii'}
+            {user.bio || 'Hey there! Let’s chat'}
           </p>
         </div>
 
@@ -131,7 +139,7 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile })
           <div>
             <h3 className={`${isDarkMode ? 'text-white' : 'text-gray-900'} font-semibold mb-3`}>About me</h3>
             <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'} text-sm leading-relaxed`}>
-              {user.aboutMe || 'Tell people about yourself. Share your interests, what you\'re working on, or anything else you\'d like others to know.'}
+              {user.aboutMe || 'Open to chatting and meeting new people.'}
             </p>
           </div>
 

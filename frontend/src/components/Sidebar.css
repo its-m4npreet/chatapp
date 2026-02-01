@@ -105,15 +105,16 @@ html.dark .story-name {
   color: #b0b3b8;
 }
 .sidebar-section {
+          margin-top: 20px;
   padding: 0 24px;
-  margin-bottom: 18px;
+  margin-bottom: 30px;
 }
 
 /* Add spacing for mobile */
 @media (max-width: 767px) {
   .sidebar-section {
     padding: 0 12px;
-    margin-bottom: 8px;
+    margin-bottom:  120px;
   }
 }
 .section-title {
