@@ -5,6 +5,7 @@ import { IoArrowBack } from 'react-icons/io5';
 import axios from '../lib/axios';
 import { useNavigate } from 'react-router-dom';
 import { ContentLoading } from './Loading';
+import indexedDBService from '../lib/indexedDB';
 
 const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile }) => {
   // If viewingUser is provided, show their profile (read-only), otherwise show currentUser's profile (editable)
@@ -24,13 +25,19 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile })
   const handleLogout = async () => {
     try {
       await axios.post('/logout');
+      // Clear IndexedDB on logout
+      await indexedDBService.clearAll();
       localStorage.removeItem('user');
       localStorage.removeItem('jwt_token');
+      localStorage.removeItem('unreadCounts');
       navigate('/signin');
     } catch (error) {
       console.error('Logout failed:', error);
+      // Still clear local data even if server logout fails
+      indexedDBService.clearAll().catch(console.error);
       localStorage.removeItem('user');
       localStorage.removeItem('jwt_token');
+      localStorage.removeItem('unreadCounts');
       navigate('/signin');
     }
   };

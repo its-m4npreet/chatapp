@@ -179,30 +179,20 @@ export const Home = () => {
     }
   }, [settings.onlineStatus, currentUser]);
 
-  // Update activity status periodically to track lastSeen
+  // Send heartbeat to keep presence TTL alive in Redis
   useEffect(() => {
     if (!socket || !currentUser || !currentUser._id) return;
 
-    // Send activity update every 30 seconds
-    const activityInterval = setInterval(() => {
-      socket.emit("updateActivity", currentUser._id);
+    // Send heartbeat every 30 seconds to refresh Redis TTL (60s TTL)
+    const heartbeatInterval = setInterval(() => {
+      socket.emit("heartbeat");
     }, 30000);
 
-    // Also send activity update on user interactions
-    const handleUserActivity = () => {
-      socket.emit("updateActivity", currentUser._id);
-    };
-
-    // Listen to various user interactions
-    window.addEventListener("mousemove", handleUserActivity);
-    window.addEventListener("keypress", handleUserActivity);
-    window.addEventListener("click", handleUserActivity);
+    // Send initial heartbeat
+    socket.emit("heartbeat");
 
     return () => {
-      clearInterval(activityInterval);
-      window.removeEventListener("mousemove", handleUserActivity);
-      window.removeEventListener("keypress", handleUserActivity);
-      window.removeEventListener("click", handleUserActivity);
+      clearInterval(heartbeatInterval);
     };
   }, [currentUser]);
 

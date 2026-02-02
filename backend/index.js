@@ -84,7 +84,8 @@ server.listen(PORT, () => {
     console.log(`Server is running on  http://localhost:${PORT}`);
 
     // Initialize Redis and Cache Persistence Worker
-    const cachePersistenceWorker = new CachePersistenceWorker(1000); // Check every 1 second
+    const cachePersistenceWorker = new CachePersistenceWorker(3000); // Check every 3 seconds
+    cachePersistenceWorker.setSocketIO(io); // Pass Socket.IO for status updates
     cachePersistenceWorker.start();
 
     // Graceful shutdown
@@ -106,70 +107,51 @@ const Message = require('./model/message');
 const User = require('./model/user');
 const cacheService = require('./services/cacheService');
 
-// Track online users: Map { userId: { socketId, onlineStatus } }
-// Track online users: Map { userId: { socketId, onlineStatus } }
-const onlineUsers = new Map();
-// Track user online status preferences
-const userOnlineStatusPreferences = new Map();
+// In-memory socket tracking (for disconnect handling)
+const socketToUser = new Map(); // socketId → userId
+const userToSocket = new Map(); // userId → socketId
 
-// Helper function to get visible online users
-const getVisibleOnlineUsers = () => {
-  const visible = Array.from(onlineUsers.entries())
-    .filter(([_, data]) => {
-      console.log('Backend: Filtering user:', { userId: _, onlineStatus: data.onlineStatus, isVisible: data.onlineStatus === true });
-      return data.onlineStatus === true;
-    })
-    .map(([userId, _]) => userId);
-  console.log('Backend: Visible online users after filtering:', visible);
-  return visible;
+// Helper function to broadcast online users from Redis
+const broadcastOnlineUsers = async () => {
+  try {
+    const onlineUsers = await cacheService.getOnlineUsers();
+    io.emit('onlineUsers', onlineUsers);
+  } catch (error) {
+    console.error('Error broadcasting online users:', error.message);
+  }
 };
 
 io.on('connection', (socket) => {
-  console.log('Backend: New socket connection:', socket.id);
-  
   // Join room by userId for bi-directional messaging
-  socket.on('join', ({ userId, onlineStatus }) => {
-    console.log('Backend: Join event received:', { userId, socketId: socket.id, onlineStatus, typeOfOnlineStatus: typeof onlineStatus });
+  socket.on('join', async ({ userId, onlineStatus }) => {
     socket.join(userId);
     socket.userId = userId;
-    const normalizedStatus = onlineStatus === true;
-    console.log('Backend: Normalized onlineStatus:', { userId, original: onlineStatus, normalized: normalizedStatus });
-    onlineUsers.set(userId, { socketId: socket.id, onlineStatus: normalizedStatus });
-    userOnlineStatusPreferences.set(userId, normalizedStatus);
-    console.log('Backend: User joined room:', { userId, socketId: socket.id, onlineStatus: normalizedStatus });
-    console.log('Backend: All online users in map:', Array.from(onlineUsers.entries()).map(([id, data]) => ({ id, onlineStatus: data.onlineStatus })));
-    // Broadcast only users with onlineStatus enabled
-    const visibleOnlineUsers = getVisibleOnlineUsers();
-    console.log('Backend: Broadcasting visible online users:', visibleOnlineUsers);
-    io.emit('onlineUsers', visibleOnlineUsers);
+    socketToUser.set(socket.id, userId);
+    userToSocket.set(userId, socket.id);
+    
+    const showOnline = onlineStatus === true;
+    
+    // Store in Redis with TTL (60s - requires heartbeat)
+    await cacheService.userOnline(userId, socket.id, showOnline);
+    
+    // Broadcast updated online users
+    await broadcastOnlineUsers();
   });
 
-  // Update lastSeen when user is actively using the app
-  socket.on('updateActivity', async (userId) => {
-    try {
-      await User.findByIdAndUpdate(userId, { lastSeen: new Date() });
-      console.log('Backend: Updated activity/lastSeen for user:', userId);
-    } catch (error) {
-      console.error('Error updating activity:', error);
+  // Heartbeat to refresh presence TTL (called every 30s from client)
+  socket.on('heartbeat', async () => {
+    const userId = socket.userId || socketToUser.get(socket.id);
+    if (userId) {
+      await cacheService.refreshPresence(userId);
     }
   });
 
   // Update online status setting
-  socket.on('updateOnlineStatus', ({ userId, onlineStatus }) => {
-    console.log('Backend: updateOnlineStatus:', { userId, newStatus: onlineStatus });
-    if (onlineUsers.has(userId)) {
-      const userData = onlineUsers.get(userId);
-      const oldStatus = userData.onlineStatus;
-      userData.onlineStatus = onlineStatus === true;
-      userOnlineStatusPreferences.set(userId, onlineStatus === true);
-      console.log('Backend: Online status updated:', { userId, oldStatus, newStatus: userData.onlineStatus });
-      // Broadcast updated online users (only those with onlineStatus enabled)
-      const visibleOnlineUsers = getVisibleOnlineUsers();
-      console.log('Backend: Broadcasting updated visible online users:', visibleOnlineUsers);
-      io.emit('onlineUsers', visibleOnlineUsers);
-    } else {
-      console.log('Backend: User not found in onlineUsers:', userId);
-    }
+  socket.on('updateOnlineStatus', async ({ userId, onlineStatus }) => {
+    const showOnline = onlineStatus === true;
+    const socketId = userToSocket.get(userId) || socket.id;
+    await cacheService.updateOnlineStatus(userId, socketId, showOnline);
+    await broadcastOnlineUsers();
   });
 
   // Handle typing events
@@ -183,36 +165,33 @@ io.on('connection', (socket) => {
 
   // Handle disconnection
   socket.on('disconnect', async () => {
-    if (socket.userId) {
-      console.log('Backend: User disconnected:', { userId: socket.userId, socketId: socket.id });
-      onlineUsers.delete(socket.userId);
-      userOnlineStatusPreferences.delete(socket.userId);
+    const userId = socket.userId || socketToUser.get(socket.id);
+    
+    if (userId) {
+      socketToUser.delete(socket.id);
+      userToSocket.delete(userId);
+      
+      // Remove from Redis presence
+      await cacheService.userOffline(userId);
 
-      // Update last seen timestamp
+      // Update last seen timestamp in MongoDB
       try {
-        await User.findByIdAndUpdate(socket.userId, { lastSeen: new Date() });
-        console.log('Backend: Updated last seen for user:', socket.userId);
+        await User.findByIdAndUpdate(userId, { lastSeen: new Date() });
       } catch (error) {
-        console.error('Error updating last seen on disconnect:', error);
+        console.error('Error updating last seen on disconnect:', error.message);
       }
 
-      // Broadcast updated online users (only those with onlineStatus enabled)
-      const visibleOnlineUsers = getVisibleOnlineUsers();
-      console.log('Backend: Broadcasting visible online users after disconnect:', visibleOnlineUsers);
-      io.emit('onlineUsers', visibleOnlineUsers);
+      // Broadcast updated online users
+      await broadcastOnlineUsers();
     }
   });
 
-  // Real-time message sending
+  // Real-time message sending (Redis-first, write-behind pattern)
   socket.on('sendMessage', async (msg) => {
     try {
       const { sender, receiver, content, image, audio, tempId, replyTo } = msg;
-      console.log('Backend: Received sendMessage:', { tempId, sender, receiver, hasContent: !!content, senderSocketId: socket.id, replyTo });
-      console.log('Backend: Online users:', Array.from(onlineUsers.keys()));
-      console.log('Backend: Is receiver online?', onlineUsers.has(receiver));
       
       if (!receiver || (!content?.trim() && !image && !audio)) {
-        console.warn('Backend: Invalid message - missing receiver or content');
         return;
       }
 
@@ -221,81 +200,101 @@ io.on('connection', (socket) => {
       else if (image) messageType = 'image';
       else if (audio) messageType = 'audio';
 
-      const newMessage = new Message({
+      // Prepare message data
+      const messageData = {
         sender,
         receiver,
         content: content?.trim() || '',
         image: image ? { url: image, public_id: '' } : null,
         audio: audio ? { url: audio, public_id: '' } : null,
         messageType,
-        status: 'sent',
+        tempId,
         replyTo: replyTo || null
-      });
-      await newMessage.save();
-      await newMessage.populate('sender', 'name profilePicture');
+      };
+
+      // Store in Redis first (fast write) - Worker will persist to MongoDB
+      const cachedMessage = await cacheService.storeMessage(messageData);
       
-      // Populate replyTo if it exists
-      if (newMessage.replyTo) {
-        await newMessage.populate({
-          path: 'replyTo',
-          select: 'content messageType sender',
-          populate: {
-            path: 'sender',
-            select: 'name profilePicture'
-          }
+      // If Redis is unavailable, fall back to direct MongoDB write
+      if (cachedMessage._redisSkipped) {
+        // Fallback: Direct MongoDB write
+        const newMessage = new Message({
+          sender,
+          receiver,
+          content: content?.trim() || '',
+          image: image ? { url: image, public_id: '' } : null,
+          audio: audio ? { url: audio, public_id: '' } : null,
+          messageType,
+          status: 'sent',
+          replyTo: replyTo || null
         });
+        await newMessage.save();
+        await newMessage.populate('sender', 'name profilePicture');
+        
+        if (newMessage.replyTo) {
+          await newMessage.populate({
+            path: 'replyTo',
+            select: 'content messageType sender',
+            populate: { path: 'sender', select: 'name profilePicture' }
+          });
+        }
+
+        const messageToEmit = newMessage.toObject();
+        if (tempId) messageToEmit.tempId = tempId;
+
+        // Cache for sidebar preview
+        cacheService.cacheLastMessage(sender, receiver, newMessage);
+
+        // Emit to both parties
+        io.to(receiver).emit('newMessage', messageToEmit);
+        io.to(sender).emit('newMessage', messageToEmit);
+
+        // Check if receiver is online
+        const isReceiverOnline = await cacheService.isUserOnline(receiver);
+        if (isReceiverOnline) {
+          newMessage.status = 'delivered';
+          await newMessage.save();
+          io.to(sender).emit('messageStatusUpdate', {
+            messageId: newMessage._id,
+            status: 'delivered'
+          });
+        } else {
+          await cacheService.incrementUnread(receiver, sender);
+        }
+        return;
       }
 
-      // Convert to plain object and attach tempId for client-side optimistic update reconciliation
-      const messageToEmit = newMessage.toObject();
-      if (tempId) messageToEmit.tempId = tempId;
-
-      // Cache the message with 5-second TTL
-      const cacheKey = `message:${newMessage._id}`;
-      await cacheService.setCache(cacheKey, newMessage, 5);
-
-      console.log('Backend: Emitting newMessage to rooms:', { 
-        messageId: messageToEmit._id,
-        tempId: messageToEmit.tempId,
-        sender,
-        receiver,
-        status: messageToEmit.status,
-        receiverSocketId: onlineUsers.get(receiver)
-      });
-
-      // Emit to both sender and receiver rooms
-      console.log(`Backend: io.to('${receiver}').emit('newMessage', ...)`);
-      io.to(receiver).emit('newMessage', messageToEmit);
+      // Redis write successful - emit immediately for instant delivery
+      // Fetch sender info from DB for the emit (cached in practice)
+      const senderUser = await User.findById(sender).select('name profilePicture').lean();
       
-      console.log(`Backend: io.to('${sender}').emit('newMessage', ...)`);
+      const messageToEmit = {
+        ...cachedMessage,
+        sender: senderUser || { _id: sender },
+        status: 'pending' // Will update to 'sent' after MongoDB persistence
+      };
+
+      // Emit immediately (before MongoDB persistence)
+      io.to(receiver).emit('newMessage', messageToEmit);
       io.to(sender).emit('newMessage', messageToEmit);
 
-      // Update status to delivered if receiver is online
-      if (onlineUsers.has(receiver)) {
-        newMessage.status = 'delivered';
-        await newMessage.save();
-        console.log('Backend: Receiver online, updating status to delivered for message:', newMessage._id);
-        io.to(sender).emit('messageStatusUpdate', {
-          messageId: newMessage._id,
-          status: 'delivered'
-        });
-      }
+      // Cache last message for sidebar preview
+      cacheService.cacheLastMessage(sender, receiver, cachedMessage);
+
     } catch (error) {
-      console.error('Socket sendMessage error:', error);
+      console.error('Socket sendMessage error:', error.message);
     }
   });
 
   // Mark message as read
   socket.on('markMessageRead', async ({ messageId, userId }) => {
     try {
-      console.log('Backend: Marking message as read:', { messageId, userId });
       const message = await Message.findById(messageId);
       if (message && message.receiver.toString() === userId) {
         message.status = 'read';
         message.readAt = new Date();
         await message.save();
         
-        console.log('Backend: Emitting messageStatusUpdate (read) to sender:', message.sender.toString());
         // Notify sender about read status
         io.to(message.sender.toString()).emit('messageStatusUpdate', {
           messageId: message._id,
@@ -303,7 +302,7 @@ io.on('connection', (socket) => {
         });
       }
     } catch (error) {
-      console.error('markMessageRead error:', error);
+      console.error('markMessageRead error:', error.message);
     }
   });
 
@@ -315,11 +314,14 @@ io.on('connection', (socket) => {
         { status: 'read', readAt: new Date() }
       );
       
+      // Clear unread count in Redis
+      await cacheService.clearUnread(receiverId, senderId);
+      
       if (result.modifiedCount > 0) {
         io.to(senderId).emit('messagesMarkedRead', { receiverId });
       }
     } catch (error) {
-      console.error('markAllMessagesRead error:', error);
+      console.error('markAllMessagesRead error:', error.message);
     }
   });
 

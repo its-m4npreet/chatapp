@@ -11,6 +11,7 @@ import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
 import { useSettings } from "../context/useSettings";
 import { IoIosArrowBack } from "react-icons/io";
+import indexedDBService from "../lib/indexedDB";
 
 import {
   formatBold,
@@ -370,11 +371,23 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
               tempId: undefined,
               status: msg.status || 'sent'
             };
+            
+            // Reconcile in IndexedDB too
+            if (cu?._id && msg.tempId) {
+              indexedDBService.reconcileMessage(msg.tempId, msg).catch(console.error);
+            }
+            
             return updated;
           }
         }
         
         console.log('ChatView: Adding new message to chat:', msg._id);
+        
+        // Persist new incoming message to IndexedDB
+        if (cu?._id) {
+          indexedDBService.saveMessage(msg, cu._id).catch(console.error);
+        }
+        
         return [...prev, msg];
       });
 
@@ -512,6 +525,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   };
 
   // Load older messages (cursor-based pagination)
+  // Also persists to IndexedDB
   const loadOlderMessages = useCallback(async () => {
     if (!user || !user._id || isLoadingOlderRef.current || !hasMore || !cursor) {
       return;
@@ -519,6 +533,10 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
 
     isLoadingOlderRef.current = true;
     setIsLoadingOlder(true);
+
+    // Get current user for IndexedDB
+    const currentUserData = JSON.parse(localStorage.getItem("user"));
+    const currentUserId = currentUserData?._id || currentUserData?.id;
 
     try {
       // Store current scroll height to maintain scroll position
@@ -543,6 +561,11 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
         setMessages((prev) => [...olderMessages, ...prev]);
         setCursor(newCursor);
         setHasMore(newHasMore);
+        
+        // Persist older messages to IndexedDB
+        if (currentUserId) {
+          indexedDBService.saveMessages(olderMessages, currentUserId).catch(console.error);
+        }
 
         // Maintain scroll position after prepending messages
         setTimeout(() => {
@@ -564,6 +587,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   }, [user, hasMore, cursor]);
 
   // Fetch messages when user changes - Load latest 20 messages initially
+  // 3-Tier: IndexedDB (instant) → Server API (Redis/MongoDB)
   useEffect(() => {
     if (!user || !user._id) {
       setMessages([]);
@@ -574,21 +598,58 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
 
     const fetchMessages = async () => {
       setIsLoadingMessages(true);
+      
+      // Get current user for IndexedDB operations
+      const currentUserData = JSON.parse(localStorage.getItem("user"));
+      const currentUserId = currentUserData?._id || currentUserData?.id;
+      
       try {
+        // TIER 1: Load from IndexedDB first (instant display)
+        if (currentUserId) {
+          try {
+            const cachedMessages = await indexedDBService.getMessages(
+              currentUserId,
+              user._id,
+              20
+            );
+            
+            if (cachedMessages.length > 0) {
+              console.log(`ChatView: Loaded ${cachedMessages.length} messages from IndexedDB`);
+              setMessages(cachedMessages);
+              
+              // Set cursor to oldest message for pagination
+              setCursor(cachedMessages[0].createdAt);
+              setHasMore(cachedMessages.length >= 20);
+              
+              // Scroll to bottom immediately
+              setTimeout(scrollToBottom, 50);
+            }
+          } catch (idbError) {
+            console.warn('IndexedDB read failed:', idbError);
+          }
+        }
+        
+        // TIER 2 & 3: Fetch from server (Redis → MongoDB) in background
         const { default: axios } = await import("../lib/axios");
-        // Get latest 20 messages (no cursor for initial load)
         const res = await axios.get(`/messages/${user._id}`, {
           params: { limit: 20 }
         });
         
-        // Handle different response structures
         const fetchedMessages = res.data.data || res.data.messages || [];
+        
+        // Update state with server data (source of truth)
         setMessages(fetchedMessages);
         
         // Set cursor to oldest message createdAt for pagination
         if (fetchedMessages.length > 0) {
           setCursor(fetchedMessages[0].createdAt);
           setHasMore(res.data.hasMore ?? true);
+          
+          // TIER 1: Persist to IndexedDB for next load
+          if (currentUserId) {
+            indexedDBService.saveMessages(fetchedMessages, currentUserId).catch(console.error);
+            indexedDBService.updateSyncTimestamp(currentUserId, user._id).catch(console.error);
+          }
         } else {
           setHasMore(false);
         }
@@ -598,6 +659,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       } catch (error) {
         console.error("Failed to fetch messages:", error);
         console.error("Error details:", error.response?.data);
+        // If server fails, IndexedDB data is still displayed (offline support)
       } finally {
         setIsLoadingMessages(false);
       }
@@ -1046,6 +1108,11 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       replyTo: replyingTo || null,
     };
     setMessages((prev) => [...prev, optimisticMessage]);
+    
+    // Persist optimistic message to IndexedDB (for offline/refresh recovery)
+    if (currentUser?._id) {
+      indexedDBService.saveMessage(optimisticMessage, currentUser._id).catch(console.error);
+    }
 
     console.log("ChatView: Emitting sendMessage:", { 
       tempId, 

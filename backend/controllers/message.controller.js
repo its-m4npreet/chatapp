@@ -156,16 +156,6 @@ const createMessageController = (io) => {
                 await newMessage.populate('replyTo', 'content messageType sender');
             }
 
-            // Cache the message with 5-second TTL
-            const cacheKey = `message:${newMessage._id}`;
-            await cacheService.setCache(cacheKey, newMessage, 5);
-
-            // Also cache for quick retrieval by conversation
-            const conversationKey = `messages:${Math.min(senderId, receiverId)}:${Math.max(senderId, receiverId)}`;
-            const cachedConversation = await cacheService.getCache(conversationKey) || [];
-            cachedConversation.push(newMessage);
-            await cacheService.setCache(conversationKey, cachedConversation, 5);
-
             // Emit to both sender and receiver rooms for full duplex communication
             io.to(receiverId).emit('newMessage', newMessage);
             io.to(senderId).emit('newMessage', newMessage);
@@ -181,7 +171,7 @@ const createMessageController = (io) => {
     };
 
     // Get messages between authenticated user and receiverId with cursor-based pagination
-    // Latest 20 messages initially, older messages when scrolling up
+    // Redis-first: Check Redis cache for recent messages, then MongoDB for older
     const getMessages = async (req, res) => {
         const receiverId = req.params.receiverId;
         const userId = req.userId;
@@ -192,6 +182,35 @@ const createMessageController = (io) => {
         }
 
         try {
+            const parsedLimit = parseInt(limit);
+            
+            // If no cursor (first load), try Redis first for recent messages
+            if (!cursor) {
+                const cachedMessages = await cacheService.getRecentMessages(userId, receiverId, parsedLimit + 1);
+                
+                if (cachedMessages.length > 0) {
+                    // Check if we have enough cached messages
+                    const hasMore = cachedMessages.length > parsedLimit;
+                    const messagesToSend = hasMore ? cachedMessages.slice(0, -1) : cachedMessages;
+                    
+                    // Reverse to get chronological order (oldest to newest)
+                    messagesToSend.reverse();
+                    
+                    // If we have enough messages from cache, return them
+                    // But also fetch from MongoDB in background to ensure consistency
+                    if (cachedMessages.length >= parsedLimit) {
+                        return res.status(200).json({
+                            message: "Messages fetched successfully (from cache)",
+                            data: messagesToSend,
+                            hasMore,
+                            cursor: messagesToSend.length > 0 ? messagesToSend[0].createdAt : null,
+                            source: 'redis'
+                        });
+                    }
+                }
+            }
+
+            // Fetch from MongoDB (for older messages or if cache miss)
             const query = {
                 $or: [
                     { sender: userId, receiver: receiverId },
@@ -206,7 +225,7 @@ const createMessageController = (io) => {
 
             const messages = await Message.find(query)
                 .sort({ createdAt: -1 }) // Newest first for pagination
-                .limit(parseInt(limit) + 1) // +1 to check if there are more messages
+                .limit(parsedLimit + 1) // +1 to check if there are more messages
                 .populate('sender', 'name profilePicture')
                 .populate('receiver', 'name profilePicture')
                 .populate({
@@ -219,11 +238,19 @@ const createMessageController = (io) => {
                 });
 
             // Check if there are more messages
-            const hasMore = messages.length > parseInt(limit);
+            const hasMore = messages.length > parsedLimit;
             const messagesToSend = hasMore ? messages.slice(0, -1) : messages;
 
             // Return in chronological order (oldest to newest) for display
             messagesToSend.reverse();
+            
+            // Cache these messages in Redis for future requests (background, non-blocking)
+            if (!cursor && messagesToSend.length > 0) {
+                // Only cache on initial load (no cursor)
+                for (const msg of messagesToSend) {
+                    cacheService.addToRecentCache(msg);
+                }
+            }
 
             res.status(200).json({
                 message: "Messages fetched successfully",

@@ -1,25 +1,54 @@
 import { create } from 'zustand';
+import indexedDBService from '../lib/indexedDB';
 
 /**
  * Zustand store for chat state management
  * Organized by feature areas to minimize re-renders
+ * 
+ * 3-Tier Caching Integration:
+ * 1. Zustand (in-memory) - fastest, current session
+ * 2. IndexedDB (client) - persistent local cache
+ * 3. Server (Redis/MongoDB) - source of truth
  */
 
+// Initialize IndexedDB when store loads
+indexedDBService.init().catch(console.error);
+
 export const useChatStore = create((set, get) => ({
+  // ============ CURRENT USER (for IndexedDB operations) ============
+  currentUserId: null,
+  setCurrentUserId: (userId) => set({ currentUserId: userId }),
+
   // ============ MESSAGE CACHE (per chat) ============
-  // messageCache: { userId -> { messages: [], cursor, hasMore } }
+  // messageCache: { userId -> { messages: [], cursor, hasMore, loadedFromIDB } }
   messageCache: {},
   
-  setMessageCache: (userId, messages, cursor, hasMore) =>
+  setMessageCache: (userId, messages, cursor, hasMore) => {
+    const currentUserId = get().currentUserId;
+    
+    // Persist to IndexedDB in background
+    if (currentUserId && messages.length > 0) {
+      indexedDBService.saveMessages(messages, currentUserId).catch(console.error);
+      indexedDBService.updateSyncTimestamp(currentUserId, userId).catch(console.error);
+    }
+
     set((state) => ({
       messageCache: {
         ...state.messageCache,
-        [userId]: { messages, cursor, hasMore },
+        [userId]: { messages, cursor, hasMore, loadedFromIDB: true },
       },
-    })),
+    }));
+  },
 
   // Add single message to cache with automatic deduplication
-  addMessageToCache: (userId, message) =>
+  addMessageToCache: (userId, message) => {
+    const currentUserId = get().currentUserId;
+    
+    // Persist to IndexedDB
+    if (currentUserId) {
+      indexedDBService.saveMessage(message, currentUserId).catch(console.error);
+    }
+
     set((state) => {
       const cache = state.messageCache[userId];
       if (!cache) return state;
@@ -44,7 +73,8 @@ export const useChatStore = create((set, get) => ({
           },
         },
       };
-    }),
+    });
+  },
 
   // Prepend older messages (pagination)
   prependMessagesToCache: (userId, olderMessages, newCursor, newHasMore) =>
@@ -85,7 +115,14 @@ export const useChatStore = create((set, get) => ({
     }),
 
   // Reconcile optimistic message (ONLY match by tempId, NO fuzzy matching)
-  reconcileOptimisticMessage: (userId, incomingMessage) =>
+  reconcileOptimisticMessage: (userId, incomingMessage) => {
+    const currentUserId = get().currentUserId;
+    
+    // Reconcile in IndexedDB
+    if (currentUserId && incomingMessage.tempId) {
+      indexedDBService.reconcileMessage(incomingMessage.tempId, incomingMessage).catch(console.error);
+    }
+
     set((state) => {
       const cache = state.messageCache[userId];
       if (!cache) return state;
@@ -119,7 +156,8 @@ export const useChatStore = create((set, get) => ({
           [userId]: { ...cache, messages: finalMessages },
         },
       };
-    }),
+    });
+  },
 
   // Add reaction to message
   addReactionToMessage: (userId, messageId, reaction, reactingUserId) =>
@@ -157,6 +195,49 @@ export const useChatStore = create((set, get) => ({
       const { [userId]: _, ...rest } = state.messageCache;
       return { messageCache: rest };
     }),
+
+  // Load messages from IndexedDB (called when opening a chat)
+  loadMessagesFromIndexedDB: async (userId) => {
+    const currentUserId = get().currentUserId;
+    if (!currentUserId) return [];
+
+    try {
+      const cachedMessages = await indexedDBService.getMessages(currentUserId, userId, 50);
+      
+      if (cachedMessages.length > 0) {
+        set((state) => ({
+          messageCache: {
+            ...state.messageCache,
+            [userId]: {
+              messages: cachedMessages,
+              cursor: cachedMessages[0]?.createdAt || null,
+              hasMore: cachedMessages.length >= 50, // Assume more if we hit limit
+              loadedFromIDB: true,
+            },
+          },
+        }));
+      }
+
+      return cachedMessages;
+    } catch (error) {
+      console.error('Failed to load messages from IndexedDB:', error);
+      return [];
+    }
+  },
+
+  // Clear all local data (for logout)
+  clearAllLocalData: async () => {
+    try {
+      await indexedDBService.clearAll();
+      set({
+        messageCache: {},
+        paginationState: {},
+        currentUserId: null,
+      });
+    } catch (error) {
+      console.error('Failed to clear local data:', error);
+    }
+  },
 
   // Aggressively remove duplicate messages
   removeDuplicateMessages: (userId) =>
@@ -212,6 +293,83 @@ export const useChatStore = create((set, get) => ({
   replyingTo: null, // Message being replied to or null
   setReplyingTo: (message) => set({ replyingTo: message }),
 
+  // ============ UNREAD COUNTS (with IndexedDB backing) ============
+  unreadCounts: {}, // { chatId: count }
+  
+  setUnreadCount: async (otherUserId, count) => {
+    const currentUserId = get().currentUserId;
+    
+    // Persist to IndexedDB
+    if (currentUserId) {
+      await indexedDBService.setUnreadCount(currentUserId, otherUserId, count);
+    }
+
+    set((state) => ({
+      unreadCounts: {
+        ...state.unreadCounts,
+        [otherUserId]: count,
+      },
+    }));
+  },
+
+  incrementUnreadCount: async (otherUserId) => {
+    const currentUserId = get().currentUserId;
+    
+    if (currentUserId) {
+      const newCount = await indexedDBService.incrementUnreadCount(currentUserId, otherUserId);
+      set((state) => ({
+        unreadCounts: {
+          ...state.unreadCounts,
+          [otherUserId]: newCount,
+        },
+      }));
+      return newCount;
+    }
+    
+    // Fallback if no currentUserId
+    set((state) => ({
+      unreadCounts: {
+        ...state.unreadCounts,
+        [otherUserId]: (state.unreadCounts[otherUserId] || 0) + 1,
+      },
+    }));
+  },
+
+  clearUnreadCount: async (otherUserId) => {
+    const currentUserId = get().currentUserId;
+    
+    if (currentUserId) {
+      await indexedDBService.clearUnreadCount(currentUserId, otherUserId);
+    }
+
+    set((state) => ({
+      unreadCounts: {
+        ...state.unreadCounts,
+        [otherUserId]: 0,
+      },
+    }));
+  },
+
+  loadUnreadCountsFromIndexedDB: async () => {
+    try {
+      const counts = await indexedDBService.getAllUnreadCounts();
+      
+      // Convert chatId format to userId format
+      const userCounts = {};
+      const currentUserId = get().currentUserId;
+      
+      for (const [chatId, count] of Object.entries(counts)) {
+        const [user1, user2] = chatId.split(':');
+        const otherUserId = user1 === currentUserId ? user2 : user1;
+        userCounts[otherUserId] = count;
+      }
+      
+      set({ unreadCounts: userCounts });
+    } catch (error) {
+      console.error('Failed to load unread counts from IndexedDB:', error);
+    }
+  },
+
   // ============ HELPER SELECTORS ============
   // Get messages for a specific user (memoized selector)
   getMessagesForUser: (userId) => {
@@ -221,13 +379,47 @@ export const useChatStore = create((set, get) => ({
 
   getCacheForUser: (userId) => {
     const state = get();
-    return state.messageCache[userId] || { messages: [], cursor: null, hasMore: true };
+    return state.messageCache[userId] || { messages: [], cursor: null, hasMore: true, loadedFromIDB: false };
   },
 
   getPaginationForUser: (userId) => {
     const state = get();
     return state.paginationState[userId] || { cursor: null, hasMore: true, isLoading: false };
   },
+
+  // ============ PENDING MESSAGES (Offline Support) ============
+  pendingMessages: [], // Messages waiting to be sent
+  
+  addPendingMessage: async (message) => {
+    const pending = await indexedDBService.savePendingMessage(message);
+    if (pending) {
+      set((state) => ({
+        pendingMessages: [...state.pendingMessages, pending],
+      }));
+    }
+    return pending;
+  },
+
+  removePendingMessage: async (tempId) => {
+    await indexedDBService.removePendingMessage(tempId);
+    set((state) => ({
+      pendingMessages: state.pendingMessages.filter(m => m.tempId !== tempId),
+    }));
+  },
+
+  loadPendingMessages: async () => {
+    try {
+      const pending = await indexedDBService.getPendingMessages();
+      set({ pendingMessages: pending });
+      return pending;
+    } catch (error) {
+      console.error('Failed to load pending messages:', error);
+      return [];
+    }
+  },
+
+  // Get IndexedDB service reference (for advanced operations)
+  getIndexedDBService: () => indexedDBService,
 }));
 
 /**
@@ -256,3 +448,17 @@ export const useShowReactionPicker = () =>
 
 export const useShowEmojiPicker = () =>
   useChatStore((state) => state.showEmojiPicker);
+
+// Unread counts
+export const useUnreadCounts = () =>
+  useChatStore((state) => state.unreadCounts);
+
+export const useUnreadCountForUser = (userId) =>
+  useChatStore((state) => state.unreadCounts[userId] || 0);
+
+// Pending messages
+export const usePendingMessages = () =>
+  useChatStore((state) => state.pendingMessages);
+
+// Export IndexedDB service for direct access if needed
+export { indexedDBService };

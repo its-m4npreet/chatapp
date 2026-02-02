@@ -42,7 +42,7 @@ client.on('error', (err) => {
 client.on('connect', () => {
   connectionAttempts = 0;
   console.log('Connected to Redis');
-  isConnected = true;
+  
   // Start keep-alive ping
   startKeepAlive();
 });
@@ -59,6 +59,7 @@ client.on('ready', () => {
   console.log('Redis client ready');
   isConnected = true;
 });
+
 
 // Keep-alive mechanism to prevent idle timeout
 function startKeepAlive() {
@@ -80,8 +81,15 @@ client.connect().catch((err) => {
   console.error('Failed to connect to Redis:', err.message);
 });
 
-// Export helper to check connection status
-client.isReady = () => isConnected && client.isOpen;
+// Export helper to check connection status (use native properties)
+// Note: node-redis v4+ has `isReady` and `isOpen` as getters
+const getRedisStatus = () => ({
+  isReady: client.isReady,
+  isOpen: client.isOpen
+});
+
+module.exports.getRedisStatus = getRedisStatus;
+
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {

@@ -3,16 +3,34 @@ const Message = require('../model/message');
 
 /**
  * Cache Persistence Worker
- * This worker monitors Redis cache and persists data to MongoDB
- * before the TTL expires, then cleans up the cache
+ * 
+ * This worker implements write-behind caching:
+ * 1. Messages are first stored in Redis (fast writes)
+ * 2. Worker periodically fetches messages from Redis queue
+ * 3. Batch inserts messages into MongoDB
+ * 4. Updates Redis cache with MongoDB IDs
+ * 
+ * Benefits:
+ * - Fast message sending (Redis write vs MongoDB write)
+ * - Batch inserts reduce MongoDB load
+ * - Messages available immediately from Redis
  */
 
 class CachePersistenceWorker {
-  constructor(checkInterval = 3000) {
-    this.checkInterval = checkInterval; // Check every 3 seconds by default (reduced frequency)
+  constructor(checkInterval = 3000) { // Check every 3 seconds
+    this.checkInterval = checkInterval;
     this.isRunning = false;
-    this.failureCount = 0;
-    this.maxFailures = 5;
+    this.intervalId = null;
+    this.batchSize = 50; // Process up to 50 messages per batch
+    this.io = null; // Socket.IO instance for status updates
+  }
+
+  /**
+   * Set Socket.IO instance for real-time status updates
+   * @param {object} io - Socket.IO server instance
+   */
+  setSocketIO(io) {
+    this.io = io;
   }
 
   /**
@@ -20,16 +38,17 @@ class CachePersistenceWorker {
    */
   start() {
     if (this.isRunning) {
-      console.log('Cache persistence worker is already running');
       return;
     }
 
     this.isRunning = true;
-    console.log('Cache persistence worker started');
+    console.log('Cache persistence worker started (interval: ' + this.checkInterval + 'ms)');
 
-    // Run the persistence check periodically
+    // Run persistence immediately, then periodically
+    this.persistMessages();
+    
     this.intervalId = setInterval(() => {
-      this.persistCachedData();
+      this.persistMessages();
     }, this.checkInterval);
   }
 
@@ -39,95 +58,132 @@ class CachePersistenceWorker {
   stop() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
+      this.intervalId = null;
       this.isRunning = false;
       console.log('Cache persistence worker stopped');
     }
   }
 
   /**
-   * Persist all cached messages to MongoDB
+   * Persist messages from Redis queue to MongoDB
    */
-  async persistCachedData() {
+  async persistMessages() {
+    if (!cacheService.isRedisReady()) {
+      return;
+    }
+
     try {
-      // Skip if Redis is not ready
-      if (!cacheService.isRedisReady()) {
-        this.failureCount++;
-        if (this.failureCount === 1) {
-          console.log('Skipping cache persistence - Redis not ready');
-        }
+      // Get messages from queue
+      const messages = await cacheService.getMessagesForPersistence(this.batchSize);
+      
+      if (messages.length === 0) {
         return;
       }
 
-      // Reset failure count when Redis is back
-      if (this.failureCount > 0) {
-        console.log('Redis reconnected, resuming cache persistence');
-        this.failureCount = 0;
-      }
+      // Process each message
+      const persistedMessages = [];
+      const errors = [];
 
-      // Get all message cache keys
-      const messageKeys = await cacheService.getKeysByPattern('message:*');
+      for (const msg of messages) {
+        try {
+          // Check if already persisted (deduplication)
+          if (msg._persisted) {
+            continue;
+          }
 
-      if (messageKeys.length === 0) {
-        return; // No messages to persist
-      }
+          // Create MongoDB document
+          const messageDoc = new Message({
+            sender: msg.sender,
+            receiver: msg.receiver,
+            content: msg.content || '',
+            image: msg.image,
+            audio: msg.audio,
+            messageType: msg.messageType || 'text',
+            status: 'sent',
+            replyTo: msg.replyTo || null,
+            createdAt: msg.createdAt ? new Date(msg.createdAt) : new Date()
+          });
 
-      for (const key of messageKeys) {
-        const cachedMessage = await cacheService.getCache(key);
+          // Save to MongoDB
+          await messageDoc.save();
 
-        if (cachedMessage) {
-          try {
-            // Check if message already exists in DB (it should)
-            const existingMessage = await Message.findById(cachedMessage._id);
+          // Populate sender info for the response
+          await messageDoc.populate('sender', 'name profilePicture');
 
-            if (existingMessage) {
-              console.log(`Message ${cachedMessage._id} persisted. Cleaning cache...`);
-              // Message already saved, remove from cache
-              await cacheService.deleteCache(key);
+          // Update Redis cache with real MongoDB ID
+          await cacheService.updatePersistedMessage(msg.tempId || msg._id, messageDoc);
+
+          // Update last message cache
+          await cacheService.cacheLastMessage(
+            msg.sender.toString(),
+            msg.receiver.toString(),
+            messageDoc
+          );
+
+          persistedMessages.push({
+            tempId: msg.tempId,
+            realId: messageDoc._id.toString(),
+            sender: msg.sender,
+            receiver: msg.receiver
+          });
+
+          // Emit status update to sender if Socket.IO is available
+          if (this.io && msg.sender) {
+            this.io.to(msg.sender.toString()).emit('messageStatusUpdate', {
+              tempId: msg.tempId,
+              messageId: messageDoc._id,
+              status: 'sent'
+            });
+
+            // Check if receiver is online and mark as delivered
+            const isReceiverOnline = await cacheService.isUserOnline(msg.receiver);
+            if (isReceiverOnline) {
+              messageDoc.status = 'delivered';
+              await messageDoc.save();
+              
+              this.io.to(msg.sender.toString()).emit('messageStatusUpdate', {
+                messageId: messageDoc._id,
+                status: 'delivered'
+              });
+            } else {
+              // Increment unread for offline user
+              await cacheService.incrementUnread(msg.receiver, msg.sender);
             }
-          } catch (error) {
-            console.error(`Error persisting message ${key}:`, error.message);
+          }
+
+        } catch (error) {
+          errors.push({ tempId: msg.tempId, error: error.message });
+          
+          // If it's a critical error, log it
+          if (!error.message.includes('duplicate')) {
+            console.error('Error persisting message:', error.message);
           }
         }
       }
 
-      // Clean up conversation caches after 5 seconds
-      const conversationKeys = await cacheService.getKeysByPattern('messages:*');
-      for (const key of conversationKeys) {
-        // These are cleaned automatically by Redis TTL
-        console.log(`Conversation cache will expire: ${key}`);
+      // Log batch result if there were messages
+      if (persistedMessages.length > 0 || errors.length > 0) {
+        const queueLength = await cacheService.getQueueLength();
+        console.log(`Persisted ${persistedMessages.length} messages, ${errors.length} errors, ${queueLength} remaining in queue`);
       }
+
     } catch (error) {
-      this.failureCount++;
-      if (this.failureCount <= 2) {
-        console.error('Cache persistence error:', error.message);
-      }
-      // Don't rethrow - let the worker continue running even if Redis is temporarily unavailable
+      console.error('Cache persistence error:', error.message);
     }
   }
 
   /**
-   * Force clean expired cache entries
-   * This is called automatically, but can be manually triggered
+   * Get current queue status
+   * @returns {Promise<object>}
    */
-  async forceCleanExpiredCache() {
-    try {
-      if (!cacheService.isRedisReady()) {
-        console.warn('Redis not ready for cache cleanup');
-        return;
-      }
-
-      console.log('Force cleaning expired cache entries...');
-      const allKeys = await cacheService.getKeysByPattern('*');
-
-      for (const key of allKeys) {
-        const exists = await cacheService.getCache(key);
-        if (!exists) {
-          console.log(`Cache entry expired: ${key}`);
-        }
-      }
-    } catch (error) {
-      console.error('Force clean error:', error.message);
-    }
+  async getStatus() {
+    const queueLength = await cacheService.getQueueLength();
+    return {
+      isRunning: this.isRunning,
+      queueLength,
+      batchSize: this.batchSize,
+      checkInterval: this.checkInterval
+    };
   }
 }
 
