@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { IoMdSend } from "react-icons/io";
 import { FaRegSmile } from "react-icons/fa";
-import { IoImageOutline, IoClose, IoAddCircleOutline, IoMicOutline, IoStopCircleOutline } from "react-icons/io5";
+import { IoImageOutline, IoClose, IoAddCircleOutline, IoMicOutline, IoStopCircleOutline, IoEllipsisHorizontal, IoArrowUndo, IoArrowRedo, IoCopyOutline, IoSearch} from "react-icons/io5";
 import { IoCheckmark, IoCheckmarkDone } from "react-icons/io5";
+import { MdOutlineAddReaction } from "react-icons/md";
 import EmojiPicker from "emoji-picker-react";
 import { ButtonLoading, ContentLoading, MessageSkeletonLoader } from "./Loading";
 import { marked } from "marked";
@@ -12,6 +13,7 @@ import "highlight.js/styles/github-dark.css";
 import { useSettings } from "../context/useSettings";
 import { IoIosArrowBack } from "react-icons/io";
 import indexedDBService from "../lib/indexedDB";
+import axios from "../lib/axios";
 
 import {
   formatBold,
@@ -242,8 +244,15 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   const [audioPreview, setAudioPreview] = useState(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const [showReactionPicker, setShowReactionPicker] = useState(null); // Track which message's reaction picker is open
+  const [showQuickReactions, setShowQuickReactions] = useState(null); // Track which message's quick reactions popup is open
   const [replyingTo, setReplyingTo] = useState(null); // Message being replied to
   const [showLongPressReactions, setShowLongPressReactions] = useState(null); // {messageId, x, y}
+  const [showMessageMenu, setShowMessageMenu] = useState(null); // Track which message's three-dot menu is open
+  const [showForwardModal, setShowForwardModal] = useState(false); // Forward modal visibility
+  const [messageToForward, setMessageToForward] = useState(null); // Message being forwarded
+  const [forwardFriends, setForwardFriends] = useState([]); // Friends list for forwarding
+  const [forwardSearchQuery, setForwardSearchQuery] = useState(""); // Search query in forward modal
+  const [isForwarding, setIsForwarding] = useState(false); // Loading state for forwarding
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const reactionPickerRef = useRef(null);
@@ -967,6 +976,93 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     longPressStartRef.current = null;
   };
 
+  // Handle message menu actions
+  const handleReply = (message) => {
+    setReplyingTo(message);
+    setShowMessageMenu(null);
+    inputRef.current?.focus();
+  };
+
+  const handleForward = async (message) => {
+    setShowMessageMenu(null);
+    setMessageToForward(message);
+    setForwardSearchQuery("");
+    
+    // Fetch friends list for forwarding
+    try {
+      const res = await axios.get('/friends');
+      const friendsList = res.data.friends || [];
+      // Filter out the current chat user
+      setForwardFriends(friendsList.filter(f => f._id !== user._id));
+      setShowForwardModal(true);
+    } catch (err) {
+      console.error('Failed to fetch friends:', err);
+      alert('Failed to load contacts. Please try again.');
+    }
+  };
+
+  const handleForwardToUser = async (recipient) => {
+    if (!messageToForward || isForwarding) return;
+    
+    setIsForwarding(true);
+    
+    try {
+      const tempId = `temp-${Date.now()}-${Math.random()}`;
+      
+      const forwardedMsg = {
+        content: messageToForward.content || "",
+        image: messageToForward.image?.url || messageToForward.image || null,
+        audio: messageToForward.audio?.url || messageToForward.audio || null,
+        receiver: recipient._id,
+        sender: currentUser._id,
+        createdAt: new Date().toISOString(),
+        tempId,
+        isForwarded: true,
+      };
+
+      // Send the forwarded message via socket
+      socket.emit("sendMessage", forwardedMsg);
+      
+      setShowForwardModal(false);
+      setMessageToForward(null);
+      setForwardFriends([]);
+      
+      // Optional: Show success feedback
+      // You can add a toast notification here
+    } catch (err) {
+      console.error('Failed to forward message:', err);
+      alert('Failed to forward message. Please try again.');
+    } finally {
+      setIsForwarding(false);
+    }
+  };
+
+  const closeForwardModal = () => {
+    setShowForwardModal(false);
+    setMessageToForward(null);
+    setForwardSearchQuery("");
+    setForwardFriends([]);
+  };
+
+  const filteredForwardFriends = forwardFriends.filter(friend =>
+    friend.name?.toLowerCase().includes(forwardSearchQuery.toLowerCase()) ||
+    friend.email?.toLowerCase().includes(forwardSearchQuery.toLowerCase())
+  );
+
+  const handleCopy = async (message) => {
+    setShowMessageMenu(null);
+    const textToCopy = message.content || 
+      (message.messageType === 'image' ? message.image?.url || '[Image]' : 
+       message.messageType === 'audio' ? '[Voice Message]' : '');
+    
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      // Optional: show a brief toast/notification that copy was successful
+    } catch (err) {
+      console.error('Failed to copy message:', err);
+    }
+  };
+
   // Compress image before upload
   const compressImage = (file, maxWidth = 1024, quality = 0.8) => {
     return new Promise((resolve) => {
@@ -1497,13 +1593,20 @@ const formatLastSeen = (lastSeenDate) => {
                 }`}
               >
                 <div 
-                  className="relative"
+                  className="relative "
                   onDoubleClick={() => handleMessageDoubleTap(msg._id)}
                   onTouchStart={(e) => handleTouchStart(e, msg._id)}
                   onTouchMove={handleTouchMove}
                   onTouchEnd={(e) => handleTouchEnd(e, msg._id)}
                 >
                   <div className={bubbleClass}>
+                    {/* Forwarded label */}
+                    {msg.isForwarded && (
+                      <div className={`flex items-center gap-1 text-xs mb-1 ${isCurrentUser ? "text-blue-200" : "text-gray-400"}`}>
+                        <IoArrowRedo size={12} />
+                        <span className="italic">Forwarded</span>
+                      </div>
+                    )}
                     {msg.replyTo && (
                       <div className={`mb-2 pb-2 border-l-2 ${isCurrentUser ? "border-blue-400" : "border-gray-600"} pl-2 text-xs`}>
                         <div className={`font-semibold ${isCurrentUser ? "text-blue-200" : "text-gray-300"}`}>
@@ -1550,8 +1653,129 @@ const formatLastSeen = (lastSeenDate) => {
                       ))}
                   </div>
 
+                  {/* Three-dot menu and React button - Shows on hover */}
+                  <div
+                    className={`absolute ${
+                      isCurrentUser ? "-left-20" : "-right-20"
+                    } top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-100 flex items-center gap-1`}
+                  >
+                    {/* React button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowQuickReactions(showQuickReactions === msg._id ? null : msg._id);
+                      }}
+                      className="p-1.5 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                      title="Add reaction"
+                    >
+                      <MdOutlineAddReaction size={18} />
+                    </button>
+
+                    {/* Quick Reactions Popup */}
+                    {showQuickReactions === msg._id && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setShowQuickReactions(null)}
+                        />
+                        <div
+                          className={`absolute z-50 ${
+                            isCurrentUser ? "right-0" : "left-0"
+                          } bottom-full mb-2 bg-gray-800/95 backdrop-blur-sm rounded-full px-2 py-1.5 shadow-lg border border-gray-700 flex items-center gap-1`}
+                        >
+                          {REACTIONS.map((symbol) => {
+                            const mine = msg.reactions?.some(
+                              (r) =>
+                                getId(r.user) === currentUser?._id &&
+                                r.reaction === symbol
+                            );
+                            return (
+                              <button
+                                key={symbol}
+                                type="button"
+                                className={`text-lg p-1.5 rounded-full transition-all hover:scale-125 cursor-pointer `}
+                                onClick={() => {
+                                  handleReaction(msg, symbol);
+                                  setShowQuickReactions(null);
+                                }}
+                                title={mine ? "Remove reaction" : "Add reaction"}
+                              >
+                                {symbol}
+                              </button>
+                            );
+                          })}
+                          <div className="w-px h-4 bg-gray-600 mx-1"></div>
+                    <button
+                      type="button"
+                      data-reaction-button="true"
+                      className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-gray-700 transition-all"
+                      onClick={() => setShowReactionPicker(msg._id)}
+                      title="More reactions"
+                    >
+                      <IoAddCircleOutline size={18} />
+                    </button>
+                        </div>
+                      </>
+                    )}
+
+                    {/* More options button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowMessageMenu(showMessageMenu === msg._id ? null : msg._id);
+                      }}
+                      className="p-1.5 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                      title="More options"
+                    >
+                      <IoEllipsisHorizontal size={18} />
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {showMessageMenu === msg._id && (
+                      <>
+                        {/* Backdrop to close menu */}
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setShowMessageMenu(null)}
+                        />
+                        <div
+                          className={`absolute z-50 ${
+                            isCurrentUser ? "left-0" : "right-0"
+                          } top-full mt-1 bg-gray-800 rounded-lg shadow-lg border border-gray-700 py-1 min-w-30`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleReply(msg)}
+                            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                          >
+                            <IoArrowUndo size={16} />
+                            Reply
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleForward(msg)}
+                            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                          >
+                            <IoArrowRedo size={16} />
+                            Forward
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(msg)}
+                            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                          >
+                            <IoCopyOutline size={16} />
+                            Copy
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
                   {/* Quick Reactions Bar - Shows on hover */}
-                  {!isMobile &&
+                  {/* {!isMobile &&
                   <div
                     className={`absolute ${
                       isCurrentUser ? "right-0" : "left-0"
@@ -1620,10 +1844,26 @@ const formatLastSeen = (lastSeenDate) => {
                       <IoAddCircleOutline size={18} />
                     </button>
                   </div>
-                  }
+                  } */}
                 </div>
 
-                {/* Reaction Summary and Timestamp */}
+                {/* Display reaction counts - at bottom of message */}
+                {Object.keys(reactionCounts).length > 0 && (
+                  <div className={`flex ${isCurrentUser ? "justify-end" : "justify-start"} -mt-3 mb-1 z-10`}>
+                    <div className="flex items-center gap-1 bg-gray-800/80 px-2 py-1 rounded-full border border-gray-700">
+                      {Object.entries(reactionCounts).map(([emoji, count]) => (
+                        <span key={emoji} className={`flex items-center${count>1 ? ' gap-0.5' : ''}`}>
+                          <span className="text-sm">{emoji}</span>
+                          <span className="text-[10px] text-gray-400">
+                            {count>1 ? count : null}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Timestamp */}
                 <div className="mt-1 flex items-center gap-2 text-xs text-gray-400">
                   <span>
                     {new Date(msg.createdAt).toLocaleTimeString([], {
@@ -1662,19 +1902,7 @@ const formatLastSeen = (lastSeenDate) => {
                     </span>
                   )}
 
-                  {/* Display reaction counts */}
-                  {Object.keys(reactionCounts).length > 0 && (
-                    <div className="flex items-center gap-1 bg-gray-800/80 px-2 py-1 rounded-full border border-gray-700">
-                      {Object.entries(reactionCounts).map(([emoji, count]) => (
-                        <span key={emoji} className="flex items-center gap-1">
-                          <span className="text-sm">{emoji}</span>
-                          <span className="text-[10px] text-gray-400">
-                            {count}
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  
                 </div>
 
                 {/* Long Press Reaction Popup (Mobile Only) */}
@@ -2008,6 +2236,94 @@ const formatLastSeen = (lastSeenDate) => {
           )}
         </button>
       </div>
+
+      {/* Forward Message Modal */}
+      {showForwardModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-gray-800 rounded-xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col shadow-2xl border border-gray-700">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <h3 className="text-lg font-semibold text-white">Forward Message</h3>
+              <button
+                type="button"
+                onClick={closeForwardModal}
+                className="p-1 hover:bg-gray-700 rounded-full transition-colors text-gray-400 hover:text-white"
+              >
+                <IoClose size={24} />
+              </button>
+            </div>
+
+            {/* Message Preview */}
+            {messageToForward && (
+              <div className="p-3 mx-4 mt-3 bg-gray-700/50 rounded-lg border border-gray-600">
+                <p className="text-xs text-gray-400 mb-1">Message to forward:</p>
+                <p className="text-sm text-white truncate">
+                  {messageToForward.content || 
+                   (messageToForward.messageType === 'image' ? '📷 Image' : 
+                    messageToForward.messageType === 'audio' ? '🎙️ Voice message' : '')}
+                </p>
+              </div>
+            )}
+
+            {/* Search Bar */}
+            <div className="p-4">
+              <div className="relative">
+                <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search contacts..."
+                  value={forwardSearchQuery}
+                  onChange={(e) => setForwardSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Friends List */}
+            <div className="flex-1 overflow-y-auto px-4 pb-4">
+              {filteredForwardFriends.length === 0 ? (
+                <div className="text-center text-gray-400 py-8">
+                  {forwardSearchQuery ? 'No contacts found' : 'No contacts available'}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredForwardFriends.map((friend) => (
+                    <button
+                      key={friend._id}
+                      type="button"
+                      onClick={() => handleForwardToUser(friend)}
+                      disabled={isForwarding}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {/* Avatar */}
+                      <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center overflow-hidden shrink-0">
+                        {friend.avatar ? (
+                          <img 
+                            src={friend.avatar} 
+                            alt={friend.name} 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-white text-lg font-medium">
+                            {friend.name?.charAt(0)?.toUpperCase() || '?'}
+                          </span>
+                        )}
+                      </div>
+                      {/* Name and Email */}
+                      <div className="flex-1 text-left">
+                        <p className="text-white font-medium truncate">{friend.name}</p>
+                        <p className="text-gray-400 text-sm truncate">{friend.email}</p>
+                      </div>
+                      {/* Forward Arrow */}
+                      <IoArrowRedo size={20} className="text-gray-400" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

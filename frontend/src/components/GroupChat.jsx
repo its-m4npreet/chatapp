@@ -23,6 +23,11 @@ import {
   IoCheckmarkDone,
   IoMicOutline,
   IoStopCircleOutline,
+  IoEllipsisHorizontal,
+  IoArrowUndo,
+  IoArrowRedo,
+  IoCopyOutline,
+  IoHappy,
 } from "react-icons/io5";
 import { CiMenuKebab } from "react-icons/ci";
 import { MdEdit } from "react-icons/md";
@@ -234,6 +239,8 @@ const GroupChat = ({
   const [showEmoji, setShowEmoji] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(null);
+  const [showQuickReactions, setShowQuickReactions] = useState(null);
+  const [showMessageMenu, setShowMessageMenu] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -738,6 +745,41 @@ const GroupChat = ({
     [messages],
   );
 
+  // Handle message menu actions
+  const handleMenuReply = useCallback((message) => {
+    setReplyingTo(message);
+    setShowMessageMenu(null);
+    inputRef.current?.focus();
+  }, []);
+
+  const handleMenuForward = useCallback((message) => {
+    setShowMessageMenu(null);
+    // For group chat, copy to clipboard for now (can be extended to forward modal)
+    const textToForward =
+      message.content ||
+      (message.image?.url
+        ? "[Image]"
+        : message.audio?.url
+          ? "[Voice Message]"
+          : "");
+    navigator.clipboard
+      .writeText(textToForward)
+      .then(() => {
+        alert("Message copied to clipboard! You can paste it in another chat.");
+      })
+      .catch((err) => {
+        console.error("Failed to copy message:", err);
+      });
+  }, []);
+
+  const handleMenuCopy = useCallback((message) => {
+    setShowMessageMenu(null);
+    const textToCopy = message.content || message.image?.url || "[Image]";
+    navigator.clipboard.writeText(textToCopy).catch((err) => {
+      console.error("Failed to copy message:", err);
+    });
+  }, []);
+
   // Handle touch start for swipe detection (Mobile)
   const handleTouchStart = useCallback(
     (e, messageId) => {
@@ -1161,7 +1203,7 @@ const GroupChat = ({
                             className={`${isOwn ? "text-right" : "text-left"}`}
                           >
                             <div
-                              className={messageClass}
+                              className={`${messageClass} relative`}
                               onDoubleClick={() =>
                                 handleMessageDoubleTap(msg._id)
                               }
@@ -1234,59 +1276,164 @@ const GroupChat = ({
                                 )}
                             </div>
 
-                            {/* Quick Reactions Bar */}
-                            {!isMobile && (
-                              <div
-                                className={`absolute ${
-                                  isOwn ? "right-0" : "left-0"
-                                } -bottom-10 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center gap-1 bg-gray-800/95 backdrop-blur-sm rounded-full px-2 py-1 shadow-lg border border-gray-700 z-50`}
-                                style={{
-                                  transform: "translateX(0)",
+                            {/* Three-dot menu and React button - Shows on hover */}
+                            <div
+                              className={`absolute ${
+                                isOwn ? "-left-20" : "-right-20"
+                              } top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-100 flex items-center gap-1`}
+                            >
+                              {/* React button */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowQuickReactions(
+                                    showQuickReactions === msg._id
+                                      ? null
+                                      : msg._id,
+                                  );
                                 }}
+                                className="p-1.5 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                                title="Add reaction"
                               >
-                                {REACTIONS.map((symbol, index) => {
-                                  const mine = msg.reactions?.some(
-                                    (r) =>
-                                      getId(r.user) === currentUser?._id &&
-                                      r.reaction === symbol,
-                                  );
-                                  return (
+                                <IoHappy size={18} />
+                              </button>
+
+                              {/* Quick Reactions Popup */}
+                              {showQuickReactions === msg._id && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-40"
+                                    onClick={() => setShowQuickReactions(null)}
+                                  />
+                                  <div
+                                    className={`absolute z-50 ${
+                                      isOwn ? "right-0" : "left-0"
+                                    } bottom-full mb-2 bg-gray-800/95 backdrop-blur-sm rounded-full px-2 py-1.5 shadow-lg border border-gray-700 flex items-center gap-1`}
+                                  >
+                                    {REACTIONS.map((symbol) => {
+                                      const mine = msg.reactions?.some(
+                                        (r) =>
+                                          getId(r.user) === currentUser?._id &&
+                                          r.reaction === symbol,
+                                      );
+                                      return (
+                                        <button
+                                          key={symbol}
+                                          type="button"
+                                          className={`text-lg p-1.5 rounded-full transition-all hover:scale-125 cursor-pointer ${
+                                            mine
+                                              ? "bg-blue-600"
+                                              : "hover:bg-gray-700"
+                                          }`}
+                                          onClick={() => {
+                                            handleReaction(msg, symbol);
+                                            setShowQuickReactions(null);
+                                          }}
+                                          title={
+                                            mine
+                                              ? "Remove reaction"
+                                              : "Add reaction"
+                                          }
+                                        >
+                                          {symbol}
+                                        </button>
+                                      );
+                                    })}
+                                    <div className="w-px h-4 bg-gray-600 mx-1"></div>
                                     <button
-                                      key={symbol}
                                       type="button"
-                                      className={`reaction-emoji text-base leading-none p-1.5 rounded-full transition-all hover:scale-125 ${
-                                        mine
-                                          ? "bg-blue-600"
-                                          : "hover:bg-gray-700"
-                                      }`}
-                                      style={{
-                                        animationDelay: `${index * 0.05}s`,
-                                      }}
+                                      data-reaction-button="true"
+                                      className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-gray-700 transition-all"
                                       onClick={() =>
-                                        handleReaction(msg, symbol)
+                                        setShowReactionPicker(msg._id)
                                       }
-                                      title={
-                                        mine
-                                          ? "Remove reaction"
-                                          : "Add reaction"
-                                      }
+                                      title="More reactions"
                                     >
-                                      {symbol}
+                                      <IoAddCircleOutline size={18} />
                                     </button>
+                                  </div>
+                                </>
+                              )}
+
+                              {/* More options button */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowMessageMenu(
+                                    showMessageMenu === msg._id
+                                      ? null
+                                      : msg._id,
                                   );
-                                })}
-                                <div className="w-px h-4 bg-gray-600 mx-1"></div>
-                                <button
-                                  type="button"
-                                  data-reaction-button="true"
-                                  className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-gray-700 transition-all"
-                                  onClick={() => setShowReactionPicker(msg._id)}
-                                  title="More reactions"
-                                >
-                                  <IoAddCircleOutline size={18} />
-                                </button>
-                              </div>
-                            )}
+                                }}
+                                className="p-1.5 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                                title="More options"
+                              >
+                                <IoEllipsisHorizontal size={18} />
+                              </button>
+
+                              {/* Dropdown Menu */}
+                              {showMessageMenu === msg._id && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-40"
+                                    onClick={() => setShowMessageMenu(null)}
+                                  />
+                                  <div
+                                    className={`absolute z-50 ${
+                                      isOwn ? "left-0" : "right-0"
+                                    } top-full mt-1 bg-gray-800 rounded-lg shadow-lg border border-gray-700 py-1 min-w-30`}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMenuReply(msg)}
+                                      className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                                    >
+                                      <IoArrowUndo size={16} />
+                                      Reply
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMenuForward(msg)}
+                                      className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                                    >
+                                      <IoArrowRedo size={16} />
+                                      Forward
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMenuCopy(msg)}
+                                      className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                                    >
+                                      <IoCopyOutline size={16} />
+                                      Copy
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                            
+                            {/* Reaction Counts */}
+                            <div className={`-mt-3 flex ${isOwn ? "justify-end" : "justify-start"}`}>
+                               {Object.keys(reactionCounts).length > 0 && (
+                                <div className="z-10 flex items-center gap-1 bg-zinc-800/70 px-2 py-1 rounded-full">
+                                  {Object.entries(reactionCounts).map(
+                                    ([emoji, count]) => (
+                                      <span
+                                        key={`${msg._id || msg.tempId}-reaction-${emoji}`}
+                                        className={`flex items-center ${count > 1 ? "mr-1" : ""}`}
+                                      >
+                                        <span>{emoji}</span>
+                                        <span className="text-[10px]">
+                                          {count>1 ? count : null}
+                                        </span>
+                                      </span>
+                                    ),
+                                  )}
+                                </div>
+                              )}
+                            </div>
 
                             <div
                               className={`${
@@ -1332,24 +1479,6 @@ const GroupChat = ({
                                     />
                                   )}
                                 </span>
-                              )}
-
-                              {Object.keys(reactionCounts).length > 0 && (
-                                <div className="flex items-center gap-1 bg-zinc-800/70 px-2 py-1 rounded-full">
-                                  {Object.entries(reactionCounts).map(
-                                    ([emoji, count]) => (
-                                      <span
-                                        key={`${msg._id || msg.tempId}-reaction-${emoji}`}
-                                        className="flex items-center gap-1"
-                                      >
-                                        <span>{emoji}</span>
-                                        <span className="text-[10px]">
-                                          {count}
-                                        </span>
-                                      </span>
-                                    ),
-                                  )}
-                                </div>
                               )}
                             </div>
                           </div>
