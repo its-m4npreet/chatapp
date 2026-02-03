@@ -14,7 +14,7 @@
  */
 
 const DB_NAME = 'ChatAppDB';
-const DB_VERSION = 1;
+const DB_VERSION = 4; // Increment version for groups store
 
 // Store names
 const STORES = {
@@ -23,6 +23,9 @@ const STORES = {
   UNREAD_COUNTS: 'unreadCounts',  // Unread count per chat
   PENDING_MESSAGES: 'pendingMessages', // Messages waiting to be sent
   SYNC_META: 'syncMeta',          // Sync timestamps per chat
+  FRIENDS: 'friends',             // Friends list for offline access
+  GROUP_MESSAGES: 'groupMessages', // Group chat messages
+  GROUPS: 'groups',               // Groups list for offline access
 };
 
 class IndexedDBService {
@@ -91,6 +94,28 @@ class IndexedDBService {
         // Sync metadata store
         if (!db.objectStoreNames.contains(STORES.SYNC_META)) {
           db.createObjectStore(STORES.SYNC_META, { keyPath: 'chatId' });
+        }
+
+        // Friends store - for offline access to contacts
+        if (!db.objectStoreNames.contains(STORES.FRIENDS)) {
+          const friendsStore = db.createObjectStore(STORES.FRIENDS, { keyPath: '_id' });
+          friendsStore.createIndex('name', 'name', { unique: false });
+          friendsStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+        }
+
+        // Group messages store - for offline access to group chats
+        if (!db.objectStoreNames.contains(STORES.GROUP_MESSAGES)) {
+          const groupMsgStore = db.createObjectStore(STORES.GROUP_MESSAGES, { keyPath: '_id' });
+          groupMsgStore.createIndex('groupId', 'groupId', { unique: false });
+          groupMsgStore.createIndex('groupId_createdAt', ['groupId', 'createdAt'], { unique: false });
+          groupMsgStore.createIndex('tempId', 'tempId', { unique: false });
+        }
+
+        // Groups store - for offline access to groups list
+        if (!db.objectStoreNames.contains(STORES.GROUPS)) {
+          const groupsStore = db.createObjectStore(STORES.GROUPS, { keyPath: '_id' });
+          groupsStore.createIndex('name', 'name', { unique: false });
+          groupsStore.createIndex('updatedAt', 'updatedAt', { unique: false });
         }
       };
     });
@@ -341,9 +366,9 @@ class IndexedDBService {
 
   /**
    * Delete old messages (cleanup)
-   * @param {number} olderThanDays 
+   * @param {number} olderThanDays - Delete messages older than this many days
    */
-  async cleanupOldMessages(olderThanDays = 30) {
+  async cleanupOldMessages(olderThanDays = 7) {
     try {
       const db = await this.ensureReady();
       const tx = db.transaction(STORES.MESSAGES, 'readwrite');
@@ -366,7 +391,9 @@ class IndexedDBService {
             }
             cursor.continue();
           } else {
-            console.log(`IndexedDB: Cleaned up ${deletedCount} old messages`);
+            if (deletedCount > 0) {
+              console.log(`IndexedDB: Cleaned up ${deletedCount} old messages (older than ${olderThanDays} days)`);
+            }
             resolve(deletedCount);
           }
         };
@@ -375,6 +402,632 @@ class IndexedDBService {
 
     } catch (error) {
       console.error('IndexedDB cleanup error:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Keep only the most recent N messages per chat
+   * This prevents IndexedDB from growing infinitely
+   * @param {number} maxMessagesPerChat - Max messages to keep per chat (default: 50)
+   */
+  async trimMessagesPerChat(maxMessagesPerChat = 50) {
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.MESSAGES, 'readwrite');
+      const store = tx.objectStore(STORES.MESSAGES);
+      const index = store.index('chatId_createdAt');
+
+      // First, get all unique chat IDs
+      const chatIds = new Set();
+      
+      await new Promise((resolve, reject) => {
+        const request = store.openCursor();
+        request.onsuccess = (event) => {
+          const cursor = event.target.result;
+          if (cursor) {
+            chatIds.add(cursor.value.chatId);
+            cursor.continue();
+          } else {
+            resolve();
+          }
+        };
+        request.onerror = () => reject(request.error);
+      });
+
+      let totalDeleted = 0;
+
+      // For each chat, keep only the most recent messages
+      for (const chatId of chatIds) {
+        const messages = [];
+        
+        await new Promise((resolve, reject) => {
+          const range = IDBKeyRange.bound([chatId, ''], [chatId, '\uffff']);
+          const request = index.openCursor(range, 'prev'); // Newest first
+          
+          request.onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (cursor) {
+              messages.push(cursor.value);
+              cursor.continue();
+            } else {
+              resolve();
+            }
+          };
+          request.onerror = () => reject(request.error);
+        });
+
+        // Delete excess messages (keep newest, delete oldest)
+        if (messages.length > maxMessagesPerChat) {
+          const toDelete = messages.slice(maxMessagesPerChat);
+          
+          const deleteTx = db.transaction(STORES.MESSAGES, 'readwrite');
+          const deleteStore = deleteTx.objectStore(STORES.MESSAGES);
+          
+          for (const msg of toDelete) {
+            deleteStore.delete(msg._id);
+            totalDeleted++;
+          }
+          
+          await new Promise((resolve, reject) => {
+            deleteTx.oncomplete = () => resolve();
+            deleteTx.onerror = () => reject(deleteTx.error);
+          });
+        }
+      }
+
+      if (totalDeleted > 0) {
+        console.log(`IndexedDB: Trimmed ${totalDeleted} excess messages (keeping ${maxMessagesPerChat} per chat)`);
+      }
+      return totalDeleted;
+
+    } catch (error) {
+      console.error('IndexedDB trimMessagesPerChat error:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Run full cleanup: delete old messages AND trim excess per chat
+   * Call this on app startup
+   * @param {number} olderThanDays - Delete messages older than this
+   * @param {number} maxPerChat - Max messages to keep per chat
+   */
+  async runCleanup(olderThanDays = 7, maxPerChat = 50) {
+    try {
+      const oldDeleted = await this.cleanupOldMessages(olderThanDays);
+      const trimmed = await this.trimMessagesPerChat(maxPerChat);
+      
+      return { oldDeleted, trimmed, total: oldDeleted + trimmed };
+    } catch (error) {
+      console.error('IndexedDB runCleanup error:', error);
+      return { oldDeleted: 0, trimmed: 0, total: 0 };
+    }
+  }
+
+  /**
+   * Get storage statistics
+   * @returns {Promise<object>} Stats about stored messages
+   */
+  async getStorageStats() {
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.MESSAGES, 'readonly');
+      const store = tx.objectStore(STORES.MESSAGES);
+      
+      const chatCounts = {};
+      let totalMessages = 0;
+      let oldestMessage = null;
+      let newestMessage = null;
+
+      return new Promise((resolve, reject) => {
+        const request = store.openCursor();
+        
+        request.onsuccess = (event) => {
+          const cursor = event.target.result;
+          if (cursor) {
+            const msg = cursor.value;
+            totalMessages++;
+            
+            // Count per chat
+            chatCounts[msg.chatId] = (chatCounts[msg.chatId] || 0) + 1;
+            
+            // Track oldest/newest
+            if (!oldestMessage || msg.createdAt < oldestMessage.createdAt) {
+              oldestMessage = { _id: msg._id, createdAt: msg.createdAt };
+            }
+            if (!newestMessage || msg.createdAt > newestMessage.createdAt) {
+              newestMessage = { _id: msg._id, createdAt: msg.createdAt };
+            }
+            
+            cursor.continue();
+          } else {
+            resolve({
+              totalMessages,
+              chatCount: Object.keys(chatCounts).length,
+              messagesPerChat: chatCounts,
+              oldestMessage,
+              newestMessage,
+              timestamp: new Date().toISOString()
+            });
+          }
+        };
+        request.onerror = () => reject(request.error);
+      });
+
+    } catch (error) {
+      console.error('IndexedDB getStorageStats error:', error);
+      return { totalMessages: 0, chatCount: 0 };
+    }
+  }
+
+  // ==================== FRIENDS OPERATIONS ====================
+
+  /**
+   * Save friends list to IndexedDB for offline access
+   * @param {array} friends - Array of friend objects
+   * @param {string} currentUserId - Current user's ID (for isolation)
+   */
+  async saveFriends(friends, currentUserId) {
+    if (!friends || friends.length === 0) return;
+
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.FRIENDS, 'readwrite');
+      const store = tx.objectStore(STORES.FRIENDS);
+
+      for (const friend of friends) {
+        const friendToStore = {
+          ...friend,
+          _id: friend._id,
+          currentUserId, // Store which user this friend belongs to
+          cachedAt: Date.now()
+        };
+        store.put(friendToStore);
+      }
+
+      await new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+
+      console.log(`IndexedDB: Cached ${friends.length} friends for offline access`);
+    } catch (error) {
+      console.error('IndexedDB saveFriends error:', error);
+    }
+  }
+
+  /**
+   * Get cached friends list
+   * @param {string} currentUserId - Current user's ID
+   * @returns {Promise<array>} Array of friend objects
+   */
+  async getFriends(currentUserId) {
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.FRIENDS, 'readonly');
+      const store = tx.objectStore(STORES.FRIENDS);
+
+      return new Promise((resolve, reject) => {
+        const request = store.getAll();
+        
+        request.onsuccess = () => {
+          // Filter friends that belong to the current user
+          const allFriends = request.result || [];
+          const userFriends = allFriends.filter(f => f.currentUserId === currentUserId);
+          
+          // Sort by name for consistent display
+          userFriends.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+          
+          resolve(userFriends);
+        };
+        request.onerror = () => reject(request.error);
+      });
+
+    } catch (error) {
+      console.error('IndexedDB getFriends error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Update a single friend's data (e.g., online status, last seen)
+   * @param {string} friendId 
+   * @param {object} updates 
+   */
+  async updateFriend(friendId, updates) {
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.FRIENDS, 'readwrite');
+      const store = tx.objectStore(STORES.FRIENDS);
+
+      return new Promise((resolve, reject) => {
+        const getRequest = store.get(friendId);
+        
+        getRequest.onsuccess = () => {
+          const existing = getRequest.result;
+          if (existing) {
+            const updated = { ...existing, ...updates, updatedAt: Date.now() };
+            store.put(updated);
+          }
+          resolve();
+        };
+        getRequest.onerror = () => reject(getRequest.error);
+      });
+
+    } catch (error) {
+      console.error('IndexedDB updateFriend error:', error);
+    }
+  }
+
+  /**
+   * Remove a friend from cache
+   * @param {string} friendId 
+   */
+  async removeFriend(friendId) {
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.FRIENDS, 'readwrite');
+      const store = tx.objectStore(STORES.FRIENDS);
+
+      await new Promise((resolve, reject) => {
+        const request = store.delete(friendId);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+
+    } catch (error) {
+      console.error('IndexedDB removeFriend error:', error);
+    }
+  }
+
+  /**
+   * Clear all friends for a user (on logout)
+   * @param {string} currentUserId 
+   */
+  async clearFriends(currentUserId) {
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.FRIENDS, 'readwrite');
+      const store = tx.objectStore(STORES.FRIENDS);
+
+      return new Promise((resolve, reject) => {
+        const request = store.openCursor();
+        let deletedCount = 0;
+
+        request.onsuccess = (event) => {
+          const cursor = event.target.result;
+          if (cursor) {
+            if (cursor.value.currentUserId === currentUserId) {
+              cursor.delete();
+              deletedCount++;
+            }
+            cursor.continue();
+          } else {
+            console.log(`IndexedDB: Cleared ${deletedCount} cached friends`);
+            resolve(deletedCount);
+          }
+        };
+        request.onerror = () => reject(request.error);
+      });
+
+    } catch (error) {
+      console.error('IndexedDB clearFriends error:', error);
+      return 0;
+    }
+  }
+
+  // ==================== GROUP MESSAGE OPERATIONS ====================
+
+  /**
+   * Save group messages to IndexedDB
+   * @param {array} messages - Array of group messages
+   * @param {string} groupId - Group ID
+   */
+  async saveGroupMessages(messages, groupId) {
+    if (!messages || messages.length === 0 || !groupId) return;
+
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.GROUP_MESSAGES, 'readwrite');
+      const store = tx.objectStore(STORES.GROUP_MESSAGES);
+
+      for (const message of messages) {
+        const messageToStore = {
+          ...message,
+          _id: message._id || message.tempId,
+          groupId,
+          createdAt: message.createdAt || new Date().toISOString(),
+          storedAt: Date.now()
+        };
+        store.put(messageToStore);
+      }
+
+      await new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+
+      console.log(`IndexedDB: Saved ${messages.length} group messages for group ${groupId}`);
+
+    } catch (error) {
+      console.error('IndexedDB saveGroupMessages error:', error);
+    }
+  }
+
+  /**
+   * Save a single group message
+   * @param {object} message - Group message
+   * @param {string} groupId - Group ID
+   */
+  async saveGroupMessage(message, groupId) {
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.GROUP_MESSAGES, 'readwrite');
+      const store = tx.objectStore(STORES.GROUP_MESSAGES);
+
+      const messageToStore = {
+        ...message,
+        _id: message._id || message.tempId,
+        groupId,
+        createdAt: message.createdAt || new Date().toISOString(),
+        storedAt: Date.now()
+      };
+
+      await new Promise((resolve, reject) => {
+        const request = store.put(messageToStore);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+
+    } catch (error) {
+      console.error('IndexedDB saveGroupMessage error:', error);
+    }
+  }
+
+  /**
+   * Get group messages from IndexedDB
+   * @param {string} groupId - Group ID
+   * @param {number} limit - Max messages to return
+   * @param {string} beforeTimestamp - For pagination
+   * @returns {Promise<array>}
+   */
+  async getGroupMessages(groupId, limit = 50, beforeTimestamp = null) {
+    if (!groupId) return [];
+
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.GROUP_MESSAGES, 'readonly');
+      const store = tx.objectStore(STORES.GROUP_MESSAGES);
+      const index = store.index('groupId_createdAt');
+
+      const messages = [];
+
+      return new Promise((resolve, reject) => {
+        const range = beforeTimestamp
+          ? IDBKeyRange.bound([groupId, ''], [groupId, beforeTimestamp], false, true)
+          : IDBKeyRange.bound([groupId, ''], [groupId, '\uffff']);
+
+        const request = index.openCursor(range, 'prev'); // Descending order
+
+        request.onsuccess = (event) => {
+          const cursor = event.target.result;
+          if (cursor && messages.length < limit) {
+            messages.push(cursor.value);
+            cursor.continue();
+          } else {
+            // Reverse to get chronological order for display
+            resolve(messages.reverse());
+          }
+        };
+        request.onerror = () => reject(request.error);
+      });
+
+    } catch (error) {
+      console.error('IndexedDB getGroupMessages error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Clear group messages for a specific group
+   * @param {string} groupId - Group ID
+   */
+  async clearGroupMessages(groupId) {
+    if (!groupId) return;
+
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.GROUP_MESSAGES, 'readwrite');
+      const store = tx.objectStore(STORES.GROUP_MESSAGES);
+      const index = store.index('groupId');
+
+      return new Promise((resolve, reject) => {
+        const request = index.openCursor(IDBKeyRange.only(groupId));
+        let deletedCount = 0;
+
+        request.onsuccess = (event) => {
+          const cursor = event.target.result;
+          if (cursor) {
+            cursor.delete();
+            deletedCount++;
+            cursor.continue();
+          } else {
+            console.log(`IndexedDB: Cleared ${deletedCount} messages for group ${groupId}`);
+            resolve(deletedCount);
+          }
+        };
+        request.onerror = () => reject(request.error);
+      });
+
+    } catch (error) {
+      console.error('IndexedDB clearGroupMessages error:', error);
+      return 0;
+    }
+  }
+
+  // ==================== GROUPS OPERATIONS ====================
+
+  /**
+   * Save groups to IndexedDB
+   * @param {array} groups - Array of group objects
+   * @param {string} currentUserId - Current user ID
+   */
+  async saveGroups(groups, currentUserId) {
+    if (!groups || groups.length === 0 || !currentUserId) return;
+
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.GROUPS, 'readwrite');
+      const store = tx.objectStore(STORES.GROUPS);
+
+      for (const group of groups) {
+        const groupToStore = {
+          ...group,
+          currentUserId,
+          storedAt: Date.now()
+        };
+        store.put(groupToStore);
+      }
+
+      await new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+
+      console.log(`IndexedDB: Saved ${groups.length} groups`);
+
+    } catch (error) {
+      console.error('IndexedDB saveGroups error:', error);
+    }
+  }
+
+  /**
+   * Get groups for a user from IndexedDB
+   * @param {string} currentUserId - Current user ID
+   * @returns {Promise<array>}
+   */
+  async getGroups(currentUserId) {
+    if (!currentUserId) return [];
+
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.GROUPS, 'readonly');
+      const store = tx.objectStore(STORES.GROUPS);
+
+      return new Promise((resolve, reject) => {
+        const request = store.getAll();
+        
+        request.onsuccess = () => {
+          // Filter groups for the current user
+          const userGroups = (request.result || []).filter(
+            g => g.currentUserId === currentUserId
+          );
+          
+          // Sort by name for consistent display
+          userGroups.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+          
+          resolve(userGroups);
+        };
+        request.onerror = () => reject(request.error);
+      });
+
+    } catch (error) {
+      console.error('IndexedDB getGroups error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Update a single group
+   * @param {object} group - Group object to update
+   */
+  async updateGroup(group) {
+    if (!group?._id) return;
+
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.GROUPS, 'readwrite');
+      const store = tx.objectStore(STORES.GROUPS);
+
+      return new Promise((resolve, reject) => {
+        const getRequest = store.get(group._id);
+        
+        getRequest.onsuccess = () => {
+          const existing = getRequest.result;
+          if (existing) {
+            const updated = { ...existing, ...group, updatedAt: Date.now() };
+            store.put(updated);
+          } else {
+            store.put({ ...group, storedAt: Date.now() });
+          }
+          resolve();
+        };
+        getRequest.onerror = () => reject(getRequest.error);
+      });
+
+    } catch (error) {
+      console.error('IndexedDB updateGroup error:', error);
+    }
+  }
+
+  /**
+   * Remove a group from cache
+   * @param {string} groupId - Group ID
+   */
+  async removeGroup(groupId) {
+    if (!groupId) return;
+
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.GROUPS, 'readwrite');
+      const store = tx.objectStore(STORES.GROUPS);
+
+      await new Promise((resolve, reject) => {
+        const request = store.delete(groupId);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+
+    } catch (error) {
+      console.error('IndexedDB removeGroup error:', error);
+    }
+  }
+
+  /**
+   * Clear all groups for a user
+   * @param {string} currentUserId - Current user ID
+   */
+  async clearGroups(currentUserId) {
+    if (!currentUserId) return 0;
+
+    try {
+      const db = await this.ensureReady();
+      const tx = db.transaction(STORES.GROUPS, 'readwrite');
+      const store = tx.objectStore(STORES.GROUPS);
+
+      return new Promise((resolve, reject) => {
+        const request = store.openCursor();
+        let deletedCount = 0;
+
+        request.onsuccess = (event) => {
+          const cursor = event.target.result;
+          if (cursor) {
+            if (cursor.value.currentUserId === currentUserId) {
+              cursor.delete();
+              deletedCount++;
+            }
+            cursor.continue();
+          } else {
+            console.log(`IndexedDB: Cleared ${deletedCount} cached groups`);
+            resolve(deletedCount);
+          }
+        };
+        request.onerror = () => reject(request.error);
+      });
+
+    } catch (error) {
+      console.error('IndexedDB clearGroups error:', error);
       return 0;
     }
   }

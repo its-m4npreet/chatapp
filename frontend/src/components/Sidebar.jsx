@@ -7,6 +7,7 @@ import { TiGroup } from "react-icons/ti";
 import axios from '../lib/axios';
 import socket from '../lib/socket';
 import { ContentLoading, FriendsSkeletonLoader, GroupsSkeletonLoader } from './Loading';
+import indexedDBService from '../lib/indexedDB';
 // import { useSettings } from '../context/useSettings';
 
 const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick, showProfile, onSettingsClick, showSettings, onTabChange, viewingUserProfile, onlineUsers = [], refreshFriends, onNotificationClick, unreadNotifications = 0, groups = [], selectedGroup, onSelectGroup, onCreateGroup, externalActiveTab, isMobile, mobileSearchQuery = '' }) => {
@@ -97,20 +98,49 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
     let isMounted = true;
 
     const loadFriends = async () => {
-      try {
-        // Check if token exists before making request
-        const token = localStorage.getItem('jwt_token');
-        if (!token) {
-          console.log('No token available, skipping friend load');
-          return;
+      // Check if token exists before making request
+      const token = localStorage.getItem('jwt_token');
+      if (!token) {
+        console.log('No token available, skipping friend load');
+        return;
+      }
+
+      // Get current user ID for IndexedDB
+      const currentUserData = JSON.parse(localStorage.getItem('user') || '{}');
+      const currentUserId = currentUserData?._id || currentUserData?.id;
+
+      // TIER 1: Load from IndexedDB first (instant display)
+      if (currentUserId) {
+        try {
+          const cachedFriends = await indexedDBService.getFriends(currentUserId);
+          if (cachedFriends.length > 0 && isMounted) {
+            console.log(`Sidebar: Loaded ${cachedFriends.length} friends from IndexedDB`);
+            setUsers(cachedFriends);
+            setLoading(false); // Show cached data immediately
+            
+            // Fetch last message for each cached friend
+            cachedFriends.forEach(friend => {
+              fetchLastMessageForUser(friend._id);
+            });
+          }
+        } catch (error) {
+          console.warn('IndexedDB friends load failed:', error);
         }
-        
-        setLoading(true);
+      }
+      
+      // TIER 2: Fetch from server (source of truth) in background
+      try {
+        setLoading(users.length === 0); // Only show loading if no cached data
         const res = await axios.get('/friends');
         if (isMounted) {
           const friendsList = res.data.friends || [];
           setUsers(friendsList);
           setError("");
+          
+          // Cache friends to IndexedDB for next load
+          if (currentUserId && friendsList.length > 0) {
+            indexedDBService.saveFriends(friendsList, currentUserId).catch(console.error);
+          }
           
           // Fetch last message for each friend
           friendsList.forEach(friend => {
@@ -119,7 +149,10 @@ const Sidebar = ({ onSelectUser, selectedUser, unreadCounts = {}, onProfileClick
         }
       } catch {
         if (isMounted) {
-          setError("Failed to load friends");
+          // Only show error if we don't have cached data
+          if (users.length === 0) {
+            setError("Failed to load friends");
+          }
         }
       } finally {
         if (isMounted) {

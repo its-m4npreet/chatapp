@@ -3,6 +3,7 @@ import { IoArrowBack, IoSearch, IoPersonAdd } from 'react-icons/io5';
 import { FaCircleUser, FaCheck } from 'react-icons/fa6';
 import { useNavigate } from 'react-router-dom';
 import axios from '../lib/axios';
+import indexedDBService from '../lib/indexedDB';
 import { FriendsSkeletonLoader } from './Loading';
 
 const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
@@ -66,6 +67,15 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
       setAddingUser(user._id);
       await axios.post('/friends/add', { friendId: user._id });
       setAddedUsers([...addedUsers, user._id]);
+      
+      // Cache new friend to IndexedDB for offline access
+      const currentUserId = currentUser?._id;
+      if (currentUserId) {
+        const existingFriends = await indexedDBService.getFriends(currentUserId);
+        const updatedFriends = [...existingFriends, user];
+        indexedDBService.saveFriends(updatedFriends, currentUserId).catch(console.error);
+      }
+      
       // Notify parent to refresh friends list
       if (onFriendAdded) {
         onFriendAdded();

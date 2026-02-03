@@ -21,6 +21,7 @@ import CreateGroupModal from "../components/CreateGroupModal";
 import InviteToGroupModal from "../components/InviteToGroupModal";
 import socket from "../lib/socket";
 import axios from "../lib/axios";
+import indexedDBService from "../lib/indexedDB";
 import { useSettings } from "../context/useSettings";
 
 export const Home = () => {
@@ -258,11 +259,35 @@ export const Home = () => {
 
   // Fetch groups
   const fetchGroups = async () => {
+    const currentUserData = JSON.parse(localStorage.getItem("user") || "{}");
+    const currentUserId = currentUserData?._id || currentUserData?.id;
+
+    // TIER 1: Load from IndexedDB first (instant display)
+    if (currentUserId) {
+      try {
+        const cachedGroups = await indexedDBService.getGroups(currentUserId);
+        if (cachedGroups.length > 0) {
+          console.log(`Home: Loaded ${cachedGroups.length} groups from IndexedDB`);
+          setGroups(cachedGroups);
+        }
+      } catch (idbError) {
+        console.warn("IndexedDB groups load failed:", idbError);
+      }
+    }
+
+    // TIER 2: Fetch from server (source of truth) in background
     try {
       const res = await axios.get("/groups/my-groups");
-      setGroups(res.data.groups || []);
+      const fetchedGroups = res.data.groups || [];
+      setGroups(fetchedGroups);
+
+      // Cache to IndexedDB for next load
+      if (currentUserId && fetchedGroups.length > 0) {
+        indexedDBService.saveGroups(fetchedGroups, currentUserId).catch(console.error);
+      }
     } catch (error) {
       console.error("Failed to fetch groups:", error);
+      // If server fails, IndexedDB data is still displayed
     }
   };
 
@@ -310,6 +335,8 @@ export const Home = () => {
 
     const handleGroupDeleted = ({ groupId }) => {
       setGroups((prev) => prev.filter((g) => g._id !== groupId));
+      // Remove from IndexedDB cache
+      indexedDBService.removeGroup(groupId).catch(console.error);
       if (selectedGroup?._id === groupId) {
         setSelectedGroup(null);
       }
@@ -317,6 +344,8 @@ export const Home = () => {
 
     const handleGroupUpdated = ({ group }) => {
       setGroups((prev) => prev.map((g) => (g._id === group._id ? group : g)));
+      // Update in IndexedDB cache
+      indexedDBService.updateGroup(group).catch(console.error);
       if (selectedGroup?._id === group._id) {
         setSelectedGroup(group);
       }
@@ -324,6 +353,8 @@ export const Home = () => {
 
     const handleRemovedFromGroup = ({ groupId, groupName }) => {
       setGroups((prev) => prev.filter((g) => g._id !== groupId));
+      // Remove from IndexedDB cache
+      indexedDBService.removeGroup(groupId).catch(console.error);
       if (selectedGroup?._id === groupId) {
         setSelectedGroup(null);
         alert(`You have been removed from the group "${groupName}"`);

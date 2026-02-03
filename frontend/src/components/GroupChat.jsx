@@ -34,6 +34,7 @@ import { MdEdit } from "react-icons/md";
 import { TiGroup } from "react-icons/ti";
 import { FaCircleUser } from "react-icons/fa6";
 import axios from "../lib/axios";
+import indexedDBService from "../lib/indexedDB";
 import { ContentLoading, MessageSkeletonLoader } from "./Loading";
 import EditGroupModal from "./EditGroupModal";
 import { FaRegSmile } from "react-icons/fa";
@@ -377,17 +378,42 @@ const GroupChat = ({
   // Fetch messages
   useEffect(() => {
     if (!group?._id) return;
+    
+    let hasCachedData = false;
 
     const fetchMessages = async () => {
+      // TIER 1: Load from IndexedDB first (instant display)
       try {
-        setLoading(true);
+        const cachedMessages = await indexedDBService.getGroupMessages(group._id, 50);
+        if (cachedMessages.length > 0) {
+          console.log(`GroupChat: Loaded ${cachedMessages.length} messages from IndexedDB`);
+          setMessages(cachedMessages);
+          setLoading(false); // Show cached data immediately
+          hasCachedData = true;
+          setTimeout(scrollToBottom, 50);
+        }
+      } catch (idbError) {
+        console.warn('IndexedDB group messages load failed:', idbError);
+      }
+
+      // TIER 2: Fetch from server (source of truth) in background
+      try {
+        if (!hasCachedData) setLoading(true); // Only show loading if no cached data
         const res = await axios.get(`/groups/${group._id}/messages`);
-        setMessages(res.data.messages || []);
+        const fetchedMessages = res.data.messages || [];
+        setMessages(fetchedMessages);
         setLoading(false);
+        
+        // Cache to IndexedDB for next load
+        if (fetchedMessages.length > 0) {
+          indexedDBService.saveGroupMessages(fetchedMessages, group._id).catch(console.error);
+        }
+        
         setTimeout(scrollToBottom, 100);
       } catch (error) {
         console.error("Failed to fetch group messages:", error);
         setLoading(false);
+        // If server fails, IndexedDB data is still displayed (offline support)
       }
     };
 
@@ -400,6 +426,9 @@ const GroupChat = ({
 
     const handleNewGroupMessage = ({ groupId, message }) => {
       if (groupId === group._id) {
+        // Cache new message to IndexedDB
+        indexedDBService.saveGroupMessage(message, groupId).catch(console.error);
+        
         setMessages((prev) => {
           // Reconcile optimistic message first
           const optimisticIdx = prev.findIndex(
@@ -1376,7 +1405,7 @@ const GroupChat = ({
                               {showMessageMenu === msg._id && (
                                 <>
                                   <div
-                                    className="fixed inset-0 z-40"
+                                    className="fixed inset-0 z-100"
                                     onClick={() => setShowMessageMenu(null)}
                                   />
                                   <div

@@ -16,6 +16,7 @@ import { useState, useEffect } from 'react';
 import { SettingsProvider } from './context/SettingsContext';
 import GroupProfilePage from './components/groupViewPage';
 import axios from './lib/axios';
+import indexedDBService from './lib/indexedDB';
 
 
 // Component to view another user's profile
@@ -119,6 +120,27 @@ function App() {
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Cleanup old IndexedDB messages on app start
+  // Keeps only last 7 days of messages, max 50 per chat
+  useEffect(() => {
+    const runCleanup = async () => {
+      try {
+        // Wait a bit to not block initial render
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        const result = await indexedDBService.runCleanup(7, 50); // 7 days, 50 messages per chat
+        
+        if (result.total > 0) {
+          console.log(`IndexedDB cleanup: Removed ${result.total} old messages`);
+        }
+      } catch (error) {
+        console.error('IndexedDB cleanup failed:', error);
+      }
+    };
+
+    runCleanup();
   }, []);
   
   return (
