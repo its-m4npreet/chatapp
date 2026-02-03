@@ -1274,9 +1274,8 @@ const GroupChat = ({
                                     />
                                   ),
                                 )}
-                            </div>
 
-                            {/* Three-dot menu and React button - Shows on hover */}
+                                  {/* Three-dot menu and React button - Shows on hover */}
                             <div
                               className={`absolute ${
                                 isOwn ? "-left-20" : "-right-20"
@@ -1413,6 +1412,9 @@ const GroupChat = ({
                                 </>
                               )}
                             </div>
+                            </div>
+
+                          
                             
                             {/* Reaction Counts */}
                             <div className={`-mt-3 flex ${isOwn ? "justify-end" : "justify-start"}`}>
