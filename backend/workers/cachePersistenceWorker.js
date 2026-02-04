@@ -101,6 +101,7 @@ class CachePersistenceWorker {
             messageType: msg.messageType || 'text',
             status: 'sent',
             replyTo: msg.replyTo || null,
+            isForwarded: msg.isForwarded || false,
             createdAt: msg.createdAt ? new Date(msg.createdAt) : new Date()
           });
 

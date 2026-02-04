@@ -24,6 +24,7 @@ module.exports = (groupController) => {
     // Group messages
     router.get('/:groupId/messages', authMiddleware, groupController.getGroupMessages);
     router.post('/message', authMiddleware, groupController.sendGroupMessage);
+    router.post('/forward', authMiddleware, groupController.forwardMessageToGroup);
     router.post('/:groupId/messages/:messageId/react', authMiddleware, groupController.reactToGroupMessage);
 
     return router;

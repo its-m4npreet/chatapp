@@ -250,9 +250,12 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   const [showMessageMenu, setShowMessageMenu] = useState(null); // Track which message's three-dot menu is open
   const [showForwardModal, setShowForwardModal] = useState(false); // Forward modal visibility
   const [messageToForward, setMessageToForward] = useState(null); // Message being forwarded
-  const [forwardFriends, setForwardFriends] = useState([]); // Friends list for forwarding
+  const [forwardRecipients, setForwardRecipients] = useState({ friends: [], groups: [] }); // Friends and groups for forwarding
   const [forwardSearchQuery, setForwardSearchQuery] = useState(""); // Search query in forward modal
   const [isForwarding, setIsForwarding] = useState(false); // Loading state for forwarding
+  const [isLoadingForward, setIsLoadingForward] = useState(false); // Loading state for opening forward modal
+  const [forwardTab, setForwardTab] = useState("friends"); // "friends" or "groups"
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null); // Track highlighted message for reply scroll
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const reactionPickerRef = useRef(null);
@@ -268,6 +271,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   const messagesContainerRef = useRef(null); // For scroll detection
   const previousScrollHeightRef = useRef(null); // To maintain scroll position
   const isLoadingOlderRef = useRef(false); // Prevent simultaneous loads
+  const messageRefs = useRef({}); // Store refs to message elements for scrolling
   
   const [inputValue, setInputValue] = useState("");
   const [messages, setMessages] = useState([]);
@@ -983,21 +987,50 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     inputRef.current?.focus();
   };
 
+  // Scroll to a specific message (used when clicking on reply preview)
+  const scrollToMessage = (messageId) => {
+    if (!messageId) return;
+    
+    const messageElement = messageRefs.current[messageId];
+    if (messageElement) {
+      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Highlight the message briefly
+      setHighlightedMessageId(messageId);
+      setTimeout(() => setHighlightedMessageId(null), 2000);
+    }
+  };
+
   const handleForward = async (message) => {
     setShowMessageMenu(null);
     setMessageToForward(message);
     setForwardSearchQuery("");
+    setForwardTab("friends");
+    setShowForwardModal(true);
+    setIsLoadingForward(true);
     
-    // Fetch friends list for forwarding
+    // Fetch friends and groups for forwarding
     try {
-      const res = await axios.get('/friends');
-      const friendsList = res.data.friends || [];
-      // Filter out the current chat user
-      setForwardFriends(friendsList.filter(f => f._id !== user._id));
-      setShowForwardModal(true);
+      const [friendsRes, groupsRes] = await Promise.all([
+        axios.get('/friends'),
+        axios.get('/groups/my-groups')
+      ]);
+      
+      const friendsList = friendsRes.data.friends || [];
+      const groupsList = groupsRes.data.groups || [];
+      
+      // Filter out the current chat user from friends
+      const filteredFriends = friendsList.filter(f => f._id !== user._id);
+      
+      setForwardRecipients({
+        friends: filteredFriends,
+        groups: groupsList
+      });
     } catch (err) {
-      console.error('Failed to fetch friends:', err);
+      console.error('Failed to fetch recipients:', err);
       alert('Failed to load contacts. Please try again.');
+      setShowForwardModal(false);
+    } finally {
+      setIsLoadingForward(false);
     }
   };
 
@@ -1009,10 +1042,30 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     try {
       const tempId = `temp-${Date.now()}-${Math.random()}`;
       
+      // Extract image URL properly - messages can have image as { url, public_id } or string
+      let imageUrl = null;
+      if (messageToForward.image) {
+        if (typeof messageToForward.image === 'string') {
+          imageUrl = messageToForward.image;
+        } else if (messageToForward.image.url && messageToForward.image.url.trim() !== '') {
+          imageUrl = messageToForward.image.url;
+        }
+      }
+      
+      // Extract audio URL properly - messages can have audio as { url, public_id } or string
+      let audioUrl = null;
+      if (messageToForward.audio) {
+        if (typeof messageToForward.audio === 'string') {
+          audioUrl = messageToForward.audio;
+        } else if (messageToForward.audio.url && messageToForward.audio.url.trim() !== '') {
+          audioUrl = messageToForward.audio.url;
+        }
+      }
+      
       const forwardedMsg = {
         content: messageToForward.content || "",
-        image: messageToForward.image?.url || messageToForward.image || null,
-        audio: messageToForward.audio?.url || messageToForward.audio || null,
+        image: imageUrl,
+        audio: audioUrl,
         receiver: recipient._id,
         sender: currentUser._id,
         createdAt: new Date().toISOString(),
@@ -1025,7 +1078,7 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       
       setShowForwardModal(false);
       setMessageToForward(null);
-      setForwardFriends([]);
+      setForwardRecipients({ friends: [], groups: [] });
       
       // Optional: Show success feedback
       // You can add a toast notification here
@@ -1037,16 +1090,68 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     }
   };
 
+  // Forward message to a group
+  const handleForwardToGroup = async (targetGroup) => {
+    if (!messageToForward || isForwarding) return;
+    
+    setIsForwarding(true);
+    
+    try {
+      const tempId = `temp-${Date.now()}-${Math.random()}`;
+      
+      // Extract image URL properly
+      let imageUrl = null;
+      if (messageToForward.image) {
+        if (typeof messageToForward.image === 'string' && messageToForward.image.trim() !== '') {
+          imageUrl = messageToForward.image;
+        } else if (messageToForward.image.url && messageToForward.image.url.trim() !== '') {
+          imageUrl = messageToForward.image.url;
+        }
+      }
+      
+      // Extract audio URL properly
+      let audioUrl = null;
+      if (messageToForward.audio) {
+        if (typeof messageToForward.audio === 'string' && messageToForward.audio.trim() !== '') {
+          audioUrl = messageToForward.audio;
+        } else if (messageToForward.audio.url && messageToForward.audio.url.trim() !== '') {
+          audioUrl = messageToForward.audio.url;
+        }
+      }
+      
+      await axios.post("/groups/forward", {
+        groupId: targetGroup._id,
+        content: messageToForward.content || "",
+        image: imageUrl,
+        audio: audioUrl,
+        tempId,
+      });
+      
+      setShowForwardModal(false);
+      setMessageToForward(null);
+      setForwardRecipients({ friends: [], groups: [] });
+    } catch (err) {
+      console.error('Failed to forward message to group:', err);
+      alert('Failed to forward message. Please try again.');
+    } finally {
+      setIsForwarding(false);
+    }
+  };
+
   const closeForwardModal = () => {
     setShowForwardModal(false);
     setMessageToForward(null);
     setForwardSearchQuery("");
-    setForwardFriends([]);
+    setForwardRecipients({ friends: [], groups: [] });
   };
 
-  const filteredForwardFriends = forwardFriends.filter(friend =>
+  const filteredForwardFriends = forwardRecipients.friends.filter(friend =>
     friend.name?.toLowerCase().includes(forwardSearchQuery.toLowerCase()) ||
     friend.email?.toLowerCase().includes(forwardSearchQuery.toLowerCase())
+  );
+
+  const filteredForwardGroups = forwardRecipients.groups.filter(g =>
+    g.name?.toLowerCase().includes(forwardSearchQuery.toLowerCase())
   );
 
   const handleCopy = async (message) => {
@@ -1588,9 +1693,10 @@ const formatLastSeen = (lastSeenDate) => {
             return (
               <div
                 key={msg._id || idx}
+                ref={(el) => { if (msg._id) messageRefs.current[msg._id] = el; }}
                 className={`reletive my-3 flex flex-col group ${
                   isCurrentUser ? "items-end" : "items-start"
-                }`}
+                } ${highlightedMessageId === msg._id ? "animate-pulse" : ""}`}
               >
                 <div 
                   className="relative "
@@ -1608,14 +1714,21 @@ const formatLastSeen = (lastSeenDate) => {
                       </div>
                     )}
                     {msg.replyTo && (
-                      <div className={`mb-2 pb-2 border-l-2 ${isCurrentUser ? "border-blue-400" : "border-gray-600"} pl-2 text-xs`}>
+                      <div 
+                        className={`mb-2 pb-2 border-l-2 ${isCurrentUser ? "border-blue-400" : "border-gray-600"} pl-2 text-xs cursor-pointer hover:opacity-80 transition-opacity`}
+                        onClick={() => scrollToMessage(msg.replyTo?._id)}
+                      >
                         <div className={`font-semibold ${isCurrentUser ? "text-blue-200" : "text-gray-300"}`}>
                           Replying to {typeof msg.replyTo?.sender === 'object' ? msg.replyTo.sender.name : 'user'}
                         </div>
-                        <div className={`${isCurrentUser ? "text-blue-100" : "text-gray-400"} truncate line-clamp-1`}>
+                        <div className={`${isCurrentUser ? "text-blue-100" : "text-gray-400"}`}>
                           {msg.replyTo?.messageType === 'image' ? '📷 Sent an image' : 
                            msg.replyTo?.messageType === 'audio' ? '🎙️ Sent a voice message' :
-                           msg.replyTo?.content || '...'}
+                           msg.replyTo?.content 
+                             ? (msg.replyTo.content.length > 50 
+                                 ? msg.replyTo.content.substring(0, 50) + '...' 
+                                 : msg.replyTo.content)
+                             : 'Message'}
                         </div>
                       </div>
                     )}
@@ -2240,7 +2353,7 @@ const formatLastSeen = (lastSeenDate) => {
       {/* Forward Message Modal */}
       {showForwardModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-gray-800 rounded-xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col shadow-2xl border border-gray-700">
+          <div className="bg-gray-800 rounded-xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col shadow-2xl border border-gray-700 relative">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-700">
               <h3 className="text-lg font-semibold text-white">Forward Message</h3>
@@ -2265,13 +2378,39 @@ const formatLastSeen = (lastSeenDate) => {
               </div>
             )}
 
+            {/* Tabs */}
+            <div className="flex border-b border-gray-700 mx-4 mt-3">
+              <button
+                type="button"
+                onClick={() => setForwardTab("friends")}
+                className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                  forwardTab === "friends"
+                    ? "text-blue-400 border-b-2 border-blue-400"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                Friends ({forwardRecipients.friends.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setForwardTab("groups")}
+                className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                  forwardTab === "groups"
+                    ? "text-blue-400 border-b-2 border-blue-400"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                Groups ({forwardRecipients.groups.length})
+              </button>
+            </div>
+
             {/* Search Bar */}
             <div className="p-4">
               <div className="relative">
                 <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
-                  placeholder="Search contacts..."
+                  placeholder={forwardTab === "friends" ? "Search contacts..." : "Search groups..."}
                   value={forwardSearchQuery}
                   onChange={(e) => setForwardSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
@@ -2279,48 +2418,105 @@ const formatLastSeen = (lastSeenDate) => {
               </div>
             </div>
 
-            {/* Friends List */}
+            {/* Recipients List */}
             <div className="flex-1 overflow-y-auto px-4 pb-4">
-              {filteredForwardFriends.length === 0 ? (
-                <div className="text-center text-gray-400 py-8">
-                  {forwardSearchQuery ? 'No contacts found' : 'No contacts available'}
+              {isLoadingForward ? (
+                // Loading state
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                  <p className="text-gray-400 text-sm">Loading contacts...</p>
                 </div>
+              ) : forwardTab === "friends" ? (
+                // Friends List
+                filteredForwardFriends.length === 0 ? (
+                  <div className="text-center text-gray-400 py-8">
+                    {forwardSearchQuery ? 'No contacts found' : 'No contacts available'}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredForwardFriends.map((friend) => (
+                      <button
+                        key={friend._id}
+                        type="button"
+                        onClick={() => handleForwardToUser(friend)}
+                        disabled={isForwarding}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {/* Avatar */}
+                        <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center overflow-hidden shrink-0">
+                          {friend.profilePicture || friend.avatar ? (
+                            <img 
+                              src={friend.profilePicture || friend.avatar} 
+                              alt={friend.name} 
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-white text-lg font-medium">
+                              {friend.name?.charAt(0)?.toUpperCase() || '?'}
+                            </span>
+                          )}
+                        </div>
+                        {/* Name and Email */}
+                        <div className="flex-1 text-left">
+                          <p className="text-white font-medium truncate">{friend.name}</p>
+                          <p className="text-gray-400 text-sm truncate">{friend.email}</p>
+                        </div>
+                        {/* Forward Arrow */}
+                        <IoArrowRedo size={20} className="text-gray-400" />
+                      </button>
+                    ))}
+                  </div>
+                )
               ) : (
-                <div className="space-y-2">
-                  {filteredForwardFriends.map((friend) => (
-                    <button
-                      key={friend._id}
-                      type="button"
-                      onClick={() => handleForwardToUser(friend)}
-                      disabled={isForwarding}
-                      className="w-full flex items-center gap-3 p-3 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      {/* Avatar */}
-                      <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center overflow-hidden shrink-0">
-                        {friend.avatar ? (
-                          <img 
-                            src={friend.avatar} 
-                            alt={friend.name} 
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-white text-lg font-medium">
-                            {friend.name?.charAt(0)?.toUpperCase() || '?'}
-                          </span>
-                        )}
-                      </div>
-                      {/* Name and Email */}
-                      <div className="flex-1 text-left">
-                        <p className="text-white font-medium truncate">{friend.name}</p>
-                        <p className="text-gray-400 text-sm truncate">{friend.email}</p>
-                      </div>
-                      {/* Forward Arrow */}
-                      <IoArrowRedo size={20} className="text-gray-400" />
-                    </button>
-                  ))}
-                </div>
+                // Groups List
+                filteredForwardGroups.length === 0 ? (
+                  <div className="text-center text-gray-400 py-8">
+                    {forwardSearchQuery ? 'No groups found' : 'No groups available'}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredForwardGroups.map((g) => (
+                      <button
+                        key={g._id}
+                        type="button"
+                        onClick={() => handleForwardToGroup(g)}
+                        disabled={isForwarding}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {/* Group Avatar */}
+                        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center overflow-hidden shrink-0">
+                          {g.avatar ? (
+                            <img 
+                              src={g.avatar} 
+                              alt={g.name} 
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-white text-lg font-medium">
+                              {g.name?.charAt(0)?.toUpperCase() || 'G'}
+                            </span>
+                          )}
+                        </div>
+                        {/* Group Name and Member Count */}
+                        <div className="flex-1 text-left">
+                          <p className="text-white font-medium truncate">{g.name}</p>
+                          <p className="text-gray-400 text-sm">{g.members?.length || 0} members</p>
+                        </div>
+                        {/* Forward Arrow */}
+                        <IoArrowRedo size={20} className="text-gray-400" />
+                      </button>
+                    ))}
+                  </div>
+                )
               )}
             </div>
+
+            {/* Loading Indicator */}
+            {isForwarding && (
+              <div className="absolute inset-0 bg-black/30 flex items-center justify-center rounded-xl">
+                <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
           </div>
         </div>
       )}

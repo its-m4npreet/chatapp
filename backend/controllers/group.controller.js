@@ -521,15 +521,15 @@ const createGroupController = (io) => {
   // Send group message
   const sendGroupMessage = async (req, res) => {
     try {
-      const { groupId, content, image, audio, tempId, replyToId } = req.body;
+      const { groupId, content, image, audio, tempId, replyToId, mentions } = req.body;
       const userId = req.userId;
 
-      const group = await Group.findById(groupId);
+      const group = await Group.findById(groupId).populate("members", "name");
       if (!group) {
         return res.status(404).json({ message: "Group not found" });
       }
 
-      if (!group.members.some((m) => m.toString() === userId)) {
+      if (!group.members.some((m) => m._id.toString() === userId)) {
         return res
           .status(403)
           .json({ message: "You are not a member of this group" });
@@ -539,6 +539,15 @@ const createGroupController = (io) => {
       if (content?.trim() && (image || audio)) messageType = "mixed";
       else if (image) messageType = "image";
       else if (audio) messageType = "audio";
+
+      // Validate mentions - only allow mentioning group members
+      let validMentions = [];
+      if (mentions && Array.isArray(mentions) && mentions.length > 0) {
+        const memberIds = group.members.map(m => m._id.toString());
+        validMentions = mentions.filter(mentionId => 
+          memberIds.includes(mentionId) && mentionId !== userId
+        );
+      }
 
       const message = new GroupMessage({
         group: groupId,
@@ -553,10 +562,12 @@ const createGroupController = (io) => {
         messageType,
         status: "sent",
         replyTo: replyToId || null,
+        mentions: validMentions,
       });
 
       await message.save();
       await message.populate("sender", "name profilePicture");
+      await message.populate("mentions", "name profilePicture");
 
       // Populate replyTo if it exists
       if (message.replyTo) {
@@ -570,6 +581,24 @@ const createGroupController = (io) => {
         });
       }
 
+      // Send notifications to mentioned users
+      const sender = await User.findById(userId).select("name profilePicture");
+      for (const mentionedUserId of validMentions) {
+        const notification = new Notification({
+          recipient: mentionedUserId,
+          sender: userId,
+          type: "group_mention",
+          group: groupId,
+          message: `${sender.name} mentioned you in "${group.name}"`,
+        });
+        await notification.save();
+        await notification.populate("sender", "name profilePicture");
+        await notification.populate("group", "name avatar");
+
+        // Emit real-time notification
+        io.to(mentionedUserId).emit("newNotification", notification);
+      }
+
       // Emit to all group members with tempId for optimistic updates
       const messageData = {
         groupId,
@@ -580,7 +609,7 @@ const createGroupController = (io) => {
       };
 
       group.members.forEach((member) => {
-        io.to(member.toString()).emit("newGroupMessage", messageData);
+        io.to(member._id.toString()).emit("newGroupMessage", messageData);
       });
 
       res.status(201).json({ message });
@@ -648,6 +677,66 @@ const createGroupController = (io) => {
     }
   };
 
+  // Forward a message to a group
+  const forwardMessageToGroup = async (req, res) => {
+    try {
+      const { groupId, content, image, audio, tempId } = req.body;
+      const userId = req.userId;
+
+      const group = await Group.findById(groupId);
+      if (!group) {
+        return res.status(404).json({ message: "Group not found" });
+      }
+
+      if (!group.members.some((m) => m.toString() === userId)) {
+        return res
+          .status(403)
+          .json({ message: "You are not a member of this group" });
+      }
+
+      let messageType = "text";
+      if (content?.trim() && (image || audio)) messageType = "mixed";
+      else if (image) messageType = "image";
+      else if (audio) messageType = "audio";
+
+      const message = new GroupMessage({
+        group: groupId,
+        sender: userId,
+        content: content?.trim() || "",
+        image: image
+          ? { url: image, public_id: "" }
+          : { url: "", public_id: "" },
+        audio: audio
+          ? { url: audio, public_id: "" }
+          : { url: "", public_id: "" },
+        messageType,
+        status: "sent",
+        isForwarded: true,
+      });
+
+      await message.save();
+      await message.populate("sender", "name profilePicture");
+
+      // Emit to all group members
+      const messageData = {
+        groupId,
+        message: {
+          ...message.toObject(),
+          tempId,
+        },
+      };
+
+      group.members.forEach((member) => {
+        io.to(member.toString()).emit("newGroupMessage", messageData);
+      });
+
+      res.status(201).json({ message });
+    } catch (error) {
+      console.error("Forward message to group error:", error);
+      res.status(500).json({ message: error.message || "Server error" });
+    }
+  };
+
   return {
     createGroup,
     getMyGroups,
@@ -663,6 +752,7 @@ const createGroupController = (io) => {
     getGroupMessages,
     sendGroupMessage,
     reactToGroupMessage,
+    forwardMessageToGroup,
   };
 };
 

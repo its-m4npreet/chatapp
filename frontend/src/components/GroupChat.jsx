@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   X,
   UserPlus,
@@ -28,6 +28,7 @@ import {
   IoArrowRedo,
   IoCopyOutline,
   IoHappy,
+  IoSearch,
 } from "react-icons/io5";
 import { CiMenuKebab } from "react-icons/ci";
 import { MdEdit } from "react-icons/md";
@@ -251,6 +252,19 @@ const GroupChat = ({
   const [audioPreview, setAudioPreview] = useState(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const [replyingTo, setReplyingTo] = useState(null);
+  const [showForwardModal, setShowForwardModal] = useState(false);
+  const [messageToForward, setMessageToForward] = useState(null);
+  const [forwardRecipients, setForwardRecipients] = useState({ friends: [], groups: [] });
+  const [forwardSearchQuery, setForwardSearchQuery] = useState("");
+  const [isForwarding, setIsForwarding] = useState(false);
+  const [isLoadingForward, setIsLoadingForward] = useState(false);
+  const [forwardTab, setForwardTab] = useState("friends"); // "friends" or "groups"
+  // Mention states
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionStartIndex, setMentionStartIndex] = useState(-1);
+  const [selectedMentions, setSelectedMentions] = useState([]); // Array of {userId, name}
+  const mentionSuggestionsRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
@@ -336,12 +350,38 @@ const GroupChat = ({
     [getMarker],
   );
 
-  // Memoize renderMarkdown to prevent recreation
-  const renderMarkdown = useCallback((content) => {
+  // Memoize renderMarkdown to prevent recreation - now highlights @mentions
+  const renderMarkdown = useCallback((content, mentions = []) => {
     if (!content) return null;
     try {
-      const html = marked.parse(content);
-      const sanitized = DOMPurify.sanitize(html);
+      let processedContent = content;
+      
+      // Highlight @mentions - replace @username with styled span
+      if (mentions && mentions.length > 0) {
+        mentions.forEach((mention) => {
+          const mentionName = mention.name || mention;
+          const mentionRegex = new RegExp(`@${mentionName}\\b`, 'g');
+          processedContent = processedContent.replace(
+            mentionRegex,
+            `<span class="mention-highlight text-blue-400 font-semibold">@${mentionName}</span>`
+          );
+        });
+      }
+      
+      // Also highlight any @word pattern that might be a mention
+      processedContent = processedContent.replace(
+        /@(\w+)/g,
+        (match) => {
+          // Check if already processed
+          if (match.includes('mention-highlight')) return match;
+          return `<span class="text-blue-400 font-semibold">${match}</span>`;
+        }
+      );
+      
+      const html = marked.parse(processedContent);
+      const sanitized = DOMPurify.sanitize(html, {
+        ADD_ATTR: ['class'], // Allow class attribute for mention styling
+      });
       return { __html: sanitized };
     } catch (error) {
       console.error("Markdown parsing error:", error);
@@ -379,7 +419,9 @@ const GroupChat = ({
   useEffect(() => {
     if (!group?._id) return;
     
-    let hasCachedData = false;
+    // Reset state for new group
+    setMessages([]);
+    setLoading(true);
 
     const fetchMessages = async () => {
       // TIER 1: Load from IndexedDB first (instant display)
@@ -389,7 +431,6 @@ const GroupChat = ({
           console.log(`GroupChat: Loaded ${cachedMessages.length} messages from IndexedDB`);
           setMessages(cachedMessages);
           setLoading(false); // Show cached data immediately
-          hasCachedData = true;
           setTimeout(scrollToBottom, 50);
         }
       } catch (idbError) {
@@ -398,7 +439,6 @@ const GroupChat = ({
 
       // TIER 2: Fetch from server (source of truth) in background
       try {
-        if (!hasCachedData) setLoading(true); // Only show loading if no cached data
         const res = await axios.get(`/groups/${group._id}/messages`);
         const fetchedMessages = res.data.messages || [];
         setMessages(fetchedMessages);
@@ -678,6 +718,10 @@ const GroupChat = ({
       handleRemoveImage();
       cancelRecording();
       setReplyingTo(null);
+      setSelectedMentions([]); // Clear mentions after sending
+
+      // Extract mention user IDs from selectedMentions
+      const mentionUserIds = selectedMentions.map((m) => m.userId);
 
       await axios.post("/groups/message", {
         groupId: group._id,
@@ -686,6 +730,7 @@ const GroupChat = ({
         audio: audioUrl,
         tempId,
         replyToId: replyingTo?._id || null,
+        mentions: mentionUserIds,
       });
     } catch (error) {
       console.error("Failed to send message:", error);
@@ -760,6 +805,22 @@ const GroupChat = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showReactionPicker]);
 
+  // Close mention suggestions when clicking outside
+  useEffect(() => {
+    if (!showMentionSuggestions) return;
+    const handleClickOutside = (event) => {
+      if (
+        mentionSuggestionsRef.current &&
+        !mentionSuggestionsRef.current.contains(event.target) &&
+        inputRef.current !== event.target
+      ) {
+        setShowMentionSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showMentionSuggestions]);
+
   // Handle double-tap on message for reply (web)
   const _touchTimeoutRef = useRef(null);
   const touchStartRef = useRef({ x: 0, messageId: null, timestamp: 0 });
@@ -781,25 +842,39 @@ const GroupChat = ({
     inputRef.current?.focus();
   }, []);
 
-  const handleMenuForward = useCallback((message) => {
+  const handleMenuForward = useCallback(async (message) => {
     setShowMessageMenu(null);
-    // For group chat, copy to clipboard for now (can be extended to forward modal)
-    const textToForward =
-      message.content ||
-      (message.image?.url
-        ? "[Image]"
-        : message.audio?.url
-          ? "[Voice Message]"
-          : "");
-    navigator.clipboard
-      .writeText(textToForward)
-      .then(() => {
-        alert("Message copied to clipboard! You can paste it in another chat.");
-      })
-      .catch((err) => {
-        console.error("Failed to copy message:", err);
+    setMessageToForward(message);
+    setForwardSearchQuery("");
+    setForwardTab("friends");
+    setShowForwardModal(true);
+    setIsLoadingForward(true);
+    
+    // Fetch friends and groups for forwarding
+    try {
+      const [friendsRes, groupsRes] = await Promise.all([
+        axios.get('/friends'),
+        axios.get('/groups/my-groups')
+      ]);
+      
+      const friendsList = friendsRes.data.friends || [];
+      const groupsList = groupsRes.data.groups || [];
+      
+      // Filter out the current group from the groups list
+      const filteredGroups = groupsList.filter(g => g._id !== group._id);
+      
+      setForwardRecipients({
+        friends: friendsList,
+        groups: filteredGroups
       });
-  }, []);
+    } catch (err) {
+      console.error('Failed to fetch recipients:', err);
+      alert('Failed to load contacts. Please try again.');
+      setShowForwardModal(false);
+    } finally {
+      setIsLoadingForward(false);
+    }
+  }, [group?._id]);
 
   const handleMenuCopy = useCallback((message) => {
     setShowMessageMenu(null);
@@ -808,6 +883,126 @@ const GroupChat = ({
       console.error("Failed to copy message:", err);
     });
   }, []);
+
+  // Forward message to a friend (DM)
+  const handleForwardToFriend = async (recipient) => {
+    if (!messageToForward || isForwarding) return;
+    
+    setIsForwarding(true);
+    
+    try {
+      const tempId = `temp-${Date.now()}-${Math.random()}`;
+      
+      // Extract image URL properly - group messages have image as { url, public_id }
+      let imageUrl = null;
+      if (messageToForward.image) {
+        if (typeof messageToForward.image === 'string') {
+          imageUrl = messageToForward.image;
+        } else if (messageToForward.image.url && messageToForward.image.url.trim() !== '') {
+          imageUrl = messageToForward.image.url;
+        }
+      }
+      
+      // Extract audio URL properly - group messages have audio as { url, public_id }
+      let audioUrl = null;
+      if (messageToForward.audio) {
+        if (typeof messageToForward.audio === 'string') {
+          audioUrl = messageToForward.audio;
+        } else if (messageToForward.audio.url && messageToForward.audio.url.trim() !== '') {
+          audioUrl = messageToForward.audio.url;
+        }
+      }
+      
+      const forwardedMsg = {
+        content: messageToForward.content || "",
+        image: imageUrl,
+        audio: audioUrl,
+        receiver: recipient._id,
+        sender: currentUser._id,
+        createdAt: new Date().toISOString(),
+        tempId,
+        isForwarded: true,
+      };
+
+      // Send the forwarded message via socket
+      socket.emit("sendMessage", forwardedMsg);
+      
+      setShowForwardModal(false);
+      setMessageToForward(null);
+      setForwardRecipients({ friends: [], groups: [] });
+    } catch (err) {
+      console.error('Failed to forward message:', err);
+      alert('Failed to forward message. Please try again.');
+    } finally {
+      setIsForwarding(false);
+    }
+  };
+
+  // Forward message to a group
+  const handleForwardToGroup = async (targetGroup) => {
+    if (!messageToForward || isForwarding) return;
+    
+    setIsForwarding(true);
+    
+    try {
+      const tempId = `temp-${Date.now()}-${Math.random()}`;
+      
+      // Extract image URL properly
+      let imageUrl = null;
+      if (messageToForward.image) {
+        if (typeof messageToForward.image === 'string' && messageToForward.image.trim() !== '') {
+          imageUrl = messageToForward.image;
+        } else if (messageToForward.image.url && messageToForward.image.url.trim() !== '') {
+          imageUrl = messageToForward.image.url;
+        }
+      }
+      
+      // Extract audio URL properly
+      let audioUrl = null;
+      if (messageToForward.audio) {
+        if (typeof messageToForward.audio === 'string' && messageToForward.audio.trim() !== '') {
+          audioUrl = messageToForward.audio;
+        } else if (messageToForward.audio.url && messageToForward.audio.url.trim() !== '') {
+          audioUrl = messageToForward.audio.url;
+        }
+      }
+      
+      await axios.post("/groups/forward", {
+        groupId: targetGroup._id,
+        content: messageToForward.content || "",
+        image: imageUrl,
+        audio: audioUrl,
+        tempId,
+      });
+      
+      setShowForwardModal(false);
+      setMessageToForward(null);
+      setForwardRecipients({ friends: [], groups: [] });
+    } catch (err) {
+      console.error('Failed to forward message to group:', err);
+      alert('Failed to forward message. Please try again.');
+    } finally {
+      setIsForwarding(false);
+    }
+  };
+
+  // Close forward modal
+  const closeForwardModal = () => {
+    setShowForwardModal(false);
+    setMessageToForward(null);
+    setForwardSearchQuery("");
+    setForwardRecipients({ friends: [], groups: [] });
+  };
+
+  // Filter recipients based on search query
+  const filteredFriends = forwardRecipients.friends.filter(friend =>
+    friend.name?.toLowerCase().includes(forwardSearchQuery.toLowerCase()) ||
+    friend.email?.toLowerCase().includes(forwardSearchQuery.toLowerCase())
+  );
+
+  const filteredGroups = forwardRecipients.groups.filter(g =>
+    g.name?.toLowerCase().includes(forwardSearchQuery.toLowerCase())
+  );
 
   // Handle touch start for swipe detection (Mobile)
   const handleTouchStart = useCallback(
@@ -926,9 +1121,68 @@ const GroupChat = ({
     setShowReactionPicker(null);
   };
 
-  // Optimize input change handler
+  // Get filtered members for mention suggestions
+  const filteredMentionMembers = useMemo(() => {
+    if (!group?.members || !mentionQuery) return group?.members || [];
+    return group.members.filter(
+      (member) =>
+        member._id !== currentUser?._id &&
+        member.name?.toLowerCase().includes(mentionQuery.toLowerCase())
+    );
+  }, [group?.members, mentionQuery, currentUser?._id]);
+
+  // Handle mention selection
+  const handleMentionSelect = useCallback((member) => {
+    if (!inputRef.current) return;
+    
+    const beforeMention = newMessage.substring(0, mentionStartIndex);
+    const afterMention = newMessage.substring(inputRef.current.selectionStart);
+    const mentionText = `@${member.name} `;
+    
+    setNewMessage(beforeMention + mentionText + afterMention);
+    setSelectedMentions((prev) => {
+      // Avoid duplicates
+      if (prev.some((m) => m.userId === member._id)) return prev;
+      return [...prev, { userId: member._id, name: member.name }];
+    });
+    setShowMentionSuggestions(false);
+    setMentionQuery("");
+    setMentionStartIndex(-1);
+    
+    // Focus back on input
+    setTimeout(() => {
+      if (inputRef.current) {
+        const newCursorPos = beforeMention.length + mentionText.length;
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  }, [newMessage, mentionStartIndex]);
+
+  // Optimize input change handler with mention detection
   const handleInputChange = useCallback((e) => {
-    setNewMessage(e.target.value);
+    const value = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    setNewMessage(value);
+    
+    // Detect @ mention
+    const textBeforeCursor = value.substring(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf("@");
+    
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+      // Check if there's no space between @ and cursor (active mention)
+      if (!textAfterAt.includes(" ")) {
+        setMentionStartIndex(lastAtIndex);
+        setMentionQuery(textAfterAt);
+        setShowMentionSuggestions(true);
+        return;
+      }
+    }
+    
+    setShowMentionSuggestions(false);
+    setMentionQuery("");
+    setMentionStartIndex(-1);
   }, []);
 
   const handleKeyDownGroup = (e) => {
@@ -1239,6 +1493,13 @@ const GroupChat = ({
                               onTouchStart={(e) => handleTouchStart(e, msg._id)}
                               onTouchEnd={(e) => handleTouchEnd(e, msg._id)}
                             >
+                              {/* Forwarded Label */}
+                              {msg.isForwarded && (
+                                <div className={`flex items-center gap-1 text-xs mb-1 ${isOwn ? "text-blue-200" : "text-gray-400"}`}>
+                                  <IoArrowRedo size={12} />
+                                  <span className="italic">Forwarded</span>
+                                </div>
+                              )}
                               {msg.replyTo && (
                                 <div
                                   className={`mb-2 pb-2 border-l-2 ${isOwn ? "border-blue-400" : "border-gray-500"} pl-2 text-xs`}
@@ -1252,13 +1513,17 @@ const GroupChat = ({
                                       : "user"}
                                   </div>
                                   <div
-                                    className={`${isOwn ? "text-blue-100" : "text-gray-400"} truncate line-clamp-1`}
+                                    className={`${isOwn ? "text-blue-100" : "text-gray-400"}`}
                                   >
                                     {msg.replyTo?.messageType === "image"
                                       ? "📷 Sent an image"
                                       : msg.replyTo?.messageType === "audio"
                                         ? "🎙️ Sent a voice message"
-                                        : msg.replyTo?.content || "..."}
+                                        : msg.replyTo?.content
+                                          ? (msg.replyTo.content.length > 50
+                                              ? msg.replyTo.content.substring(0, 50) + "..."
+                                              : msg.replyTo.content)
+                                          : "Message"}
                                   </div>
                                 </div>
                               )}
@@ -1299,6 +1564,7 @@ const GroupChat = ({
                                       className="markdown-content prose prose-invert max-w-none"
                                       dangerouslySetInnerHTML={renderMarkdown(
                                         chunk,
+                                        msg.mentions,
                                       )}
                                     />
                                   ),
@@ -1446,8 +1712,8 @@ const GroupChat = ({
                           
                             
                             {/* Reaction Counts */}
-                            <div className={`-mt-3 flex ${isOwn ? "justify-end" : "justify-start"}`}>
-                               {Object.keys(reactionCounts).length > 0 && (
+                            {Object.keys(reactionCounts).length > 0 && (
+                              <div className={`-mt-3 flex ${isOwn ? "justify-end" : "justify-start"}`}>
                                 <div className="z-10 flex items-center gap-1 bg-zinc-800/70 px-2 py-1 rounded-full">
                                   {Object.entries(reactionCounts).map(
                                     ([emoji, count]) => (
@@ -1463,8 +1729,8 @@ const GroupChat = ({
                                     ),
                                   )}
                                 </div>
-                              )}
-                            </div>
+                              </div>
+                            )}
 
                             <div
                               className={`${
@@ -1767,16 +2033,51 @@ const GroupChat = ({
                   </div>
                 )}
 
+                {/* Mention Suggestions Dropdown */}
+                {showMentionSuggestions && filteredMentionMembers.length > 0 && (
+                  <div
+                    ref={mentionSuggestionsRef}
+                    className="absolute bottom-14 left-0 z-50 w-64 max-h-48 overflow-y-auto bg-gray-800 border border-gray-700 rounded-lg shadow-lg"
+                  >
+                    <div className="p-2 border-b border-gray-700 text-xs text-gray-400">
+                      Tag a member
+                    </div>
+                    {filteredMentionMembers.slice(0, 6).map((member) => (
+                      <button
+                        key={member._id}
+                        type="button"
+                        onClick={() => handleMentionSelect(member)}
+                        className="w-full flex items-center gap-3 p-2 hover:bg-gray-700 transition-colors text-left"
+                      >
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-600 flex items-center justify-center shrink-0">
+                          {member.profilePicture ? (
+                            <img
+                              src={member.profilePicture}
+                              alt={member.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-white text-sm font-medium">
+                              {member.name?.charAt(0)?.toUpperCase() || "?"}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-white text-sm truncate">{member.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <textarea
                   ref={inputRef}
                   value={newMessage}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDownGroup}
-                  placeholder="Type a message..."
+                  placeholder="Type @ to mention..."
                   className="flex-1 min-w-0 text-white px-4 py-2 rounded-lg outline-none border border-gray-700 focus:border-blue-500 bg-transparent resize-none scroll-hide"
                   rows="1"
                   style={{
-                    maxHeight: "150px",
+                    maxHeight: "40px",
                     overflowY: "auto",
                     minHeight: "40px",
                     scrollbarWidth: "none",
@@ -1811,6 +2112,175 @@ const GroupChat = ({
           }}
           className="z-50"
         />
+
+        {/* Forward Message Modal */}
+        {showForwardModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-gray-800 rounded-xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col shadow-2xl border border-gray-700">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-700">
+                <h3 className="text-lg font-semibold text-white">Forward Message</h3>
+                <button
+                  type="button"
+                  onClick={closeForwardModal}
+                  className="p-1 hover:bg-gray-700 rounded-full transition-colors text-gray-400 hover:text-white"
+                >
+                  <IoClose size={24} />
+                </button>
+              </div>
+
+              {/* Message Preview */}
+              {messageToForward && (
+                <div className="p-3 mx-4 mt-3 bg-gray-700/50 rounded-lg border border-gray-600">
+                  <p className="text-xs text-gray-400 mb-1">Message to forward:</p>
+                  <p className="text-sm text-white truncate">
+                    {messageToForward.content || 
+                     (messageToForward.image?.url ? '📷 Image' : 
+                      messageToForward.audio?.url ? '🎙️ Voice message' : '')}
+                  </p>
+                </div>
+              )}
+
+              {/* Tabs */}
+              <div className="flex border-b border-gray-700 mx-4 mt-3">
+                <button
+                  type="button"
+                  onClick={() => setForwardTab("friends")}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                    forwardTab === "friends"
+                      ? "text-blue-400 border-b-2 border-blue-400"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  Friends ({forwardRecipients.friends.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForwardTab("groups")}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                    forwardTab === "groups"
+                      ? "text-blue-400 border-b-2 border-blue-400"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  Groups ({forwardRecipients.groups.length})
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="p-4">
+                <div className="relative">
+                  <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder={forwardTab === "friends" ? "Search contacts..." : "Search groups..."}
+                    value={forwardSearchQuery}
+                    onChange={(e) => setForwardSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Recipients List */}
+              <div className="flex-1 overflow-y-auto px-4 pb-4">
+                {isLoadingForward ? (
+                  // Loading state
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <p className="text-gray-400 text-sm">Loading contacts...</p>
+                  </div>
+                ) : forwardTab === "friends" ? (
+                  // Friends List
+                  filteredFriends.length === 0 ? (
+                    <div className="text-center text-gray-400 py-8">
+                      {forwardSearchQuery ? 'No contacts found' : 'No contacts available'}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredFriends.map((friend) => (
+                        <button
+                          key={friend._id}
+                          type="button"
+                          onClick={() => handleForwardToFriend(friend)}
+                          disabled={isForwarding}
+                          className="w-full flex items-center gap-3 p-3 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {/* Avatar */}
+                          <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center overflow-hidden shrink-0">
+                            {friend.profilePicture ? (
+                              <img 
+                                src={friend.profilePicture} 
+                                alt={friend.name} 
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-white text-lg font-medium">
+                                {friend.name?.charAt(0)?.toUpperCase() || '?'}
+                              </span>
+                            )}
+                          </div>
+                          {/* Name and Email */}
+                          <div className="flex-1 text-left">
+                            <p className="text-white font-medium truncate">{friend.name}</p>
+                            <p className="text-gray-400 text-sm truncate">{friend.email}</p>
+                          </div>
+                          {/* Forward Arrow */}
+                          <IoArrowRedo size={20} className="text-gray-400" />
+                        </button>
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  // Groups List
+                  filteredGroups.length === 0 ? (
+                    <div className="text-center text-gray-400 py-8">
+                      {forwardSearchQuery ? 'No groups found' : 'No other groups available'}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredGroups.map((g) => (
+                        <button
+                          key={g._id}
+                          type="button"
+                          onClick={() => handleForwardToGroup(g)}
+                          disabled={isForwarding}
+                          className="w-full flex items-center gap-3 p-3 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {/* Group Avatar */}
+                          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center overflow-hidden shrink-0">
+                            {g.avatar ? (
+                              <img 
+                                src={g.avatar} 
+                                alt={g.name} 
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <TiGroup size={20} className="text-white" />
+                            )}
+                          </div>
+                          {/* Group Name and Member Count */}
+                          <div className="flex-1 text-left">
+                            <p className="text-white font-medium truncate">{g.name}</p>
+                            <p className="text-gray-400 text-sm">{g.members?.length || 0} members</p>
+                          </div>
+                          {/* Forward Arrow */}
+                          <IoArrowRedo size={20} className="text-gray-400" />
+                        </button>
+                      ))}
+                    </div>
+                  )
+                )}
+              </div>
+
+              {/* Loading Indicator */}
+              {isForwarding && (
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center rounded-xl">
+                  <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       {/* </div> */}
     </>

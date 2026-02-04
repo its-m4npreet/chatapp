@@ -440,22 +440,27 @@ export const Home = () => {
     if (isMobile) setShowSidebar(false);
   };
 
-  const handleSelectGroup = async (group) => {
-    try {
-      const res = await axios.get(`/groups/${group._id}`);
-      // API returns { group: {...} } - extract the group object
-      setSelectedGroup(res.data.group || res.data);
-      setSelectedUser(null);
-      setShowProfile(false);
-      setShowSettings(false);
-      setShowAddUser(false);
-      setSidebarActiveTab("groups");
-    } catch (error) {
-      console.error("Failed to fetch group details:", error);
-      // Fallback to the group object passed in (from sidebar list)
-      setSelectedGroup(group.group || group);
-      setSidebarActiveTab("groups");
-    }
+  const handleSelectGroup = (group) => {
+    // Immediately set the group from sidebar data for instant UI render
+    const groupData = group.group || group;
+    setSelectedGroup(groupData);
+    setSelectedUser(null);
+    setShowProfile(false);
+    setShowSettings(false);
+    setShowAddUser(false);
+    setSidebarActiveTab("groups");
+    
+    // Fetch latest group details in background (for updated members, etc.)
+    axios.get(`/groups/${groupData._id}`)
+      .then((res) => {
+        const updatedGroup = res.data.group || res.data;
+        setSelectedGroup(updatedGroup);
+      })
+      .catch((error) => {
+        console.error("Failed to fetch group details:", error);
+        // Keep the original group data on error
+      });
+    
     // New: hide sidebar on mobile when opening a group
     if (isMobile) setShowSidebar(false);
   };

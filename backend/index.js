@@ -189,7 +189,7 @@ io.on('connection', (socket) => {
   // Real-time message sending (Redis-first, write-behind pattern)
   socket.on('sendMessage', async (msg) => {
     try {
-      const { sender, receiver, content, image, audio, tempId, replyTo } = msg;
+      const { sender, receiver, content, image, audio, tempId, replyTo, isForwarded } = msg;
       
       if (!receiver || (!content?.trim() && !image && !audio)) {
         return;
@@ -209,7 +209,8 @@ io.on('connection', (socket) => {
         audio: audio ? { url: audio, public_id: '' } : null,
         messageType,
         tempId,
-        replyTo: replyTo || null
+        replyTo: replyTo || null,
+        isForwarded: isForwarded || false
       };
 
       // Store in Redis first (fast write) - Worker will persist to MongoDB
@@ -226,7 +227,8 @@ io.on('connection', (socket) => {
           audio: audio ? { url: audio, public_id: '' } : null,
           messageType,
           status: 'sent',
-          replyTo: replyTo || null
+          replyTo: replyTo || null,
+          isForwarded: isForwarded || false
         });
         await newMessage.save();
         await newMessage.populate('sender', 'name profilePicture');
