@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { IoMdSend } from "react-icons/io";
 import { FaRegSmile } from "react-icons/fa";
-import { IoImageOutline, IoClose, IoAddCircleOutline, IoMicOutline, IoStopCircleOutline, IoEllipsisHorizontal, IoArrowUndo, IoArrowRedo, IoCopyOutline, IoSearch} from "react-icons/io5";
+import { IoImageOutline, IoClose, IoAddCircleOutline, IoMicOutline, IoStopCircleOutline, IoEllipsisHorizontal, IoArrowUndo, IoArrowRedo, IoCopyOutline, IoSearch, IoPlay, IoPause, IoTrashOutline, IoPencil } from "react-icons/io5";
 import { IoCheckmark, IoCheckmarkDone } from "react-icons/io5";
 import { MdOutlineAddReaction } from "react-icons/md";
 import EmojiPicker from "emoji-picker-react";
@@ -188,6 +188,160 @@ const getAudioThemeClasses = (theme, isCurrentUser, isDarkMode) => {
   }
 };
 
+// WhatsApp-style Audio Message Player Component
+const AudioMessage = ({ src, isCurrentUser, isDarkMode }) => {
+  const audioRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+      audio.currentTime = 0;
+    };
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
+    };
+  }, []);
+
+  const togglePlay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      audio.play();
+    }
+  };
+
+  const handleSeek = (e) => {
+    const audio = audioRef.current;
+    if (!audio || !duration) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = x / rect.width;
+    const newTime = percentage * duration;
+    
+    audio.currentTime = newTime;
+    setCurrentTime(newTime);
+  };
+
+  const formatTime = (time) => {
+    if (!time || isNaN(time)) return "0:00";
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // Generate waveform bars (static visual representation)
+  const waveformBars = Array.from({ length: 28 }, (_, i) => {
+    // Create a pseudo-random but consistent pattern
+    const height = 20 + Math.sin(i * 0.8) * 15 + Math.cos(i * 1.2) * 10;
+    return Math.max(8, Math.min(35, height));
+  });
+
+  return (
+    <div className="flex items-center gap-3 min-w-50 max-w-70">
+      {/* Hidden audio element */}
+      <audio ref={audioRef} src={src} preload="metadata" />
+      
+      {/* Play/Pause Button */}
+      <button
+        onClick={togglePlay}
+        className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+          isCurrentUser
+            ? "bg-white/20 hover:bg-white/30 text-white"
+            : isDarkMode
+              ? "bg-white/20 hover:bg-white/30 text-white"
+              : "bg-black/10 hover:bg-black/20 text-gray-700"
+        }`}
+      >
+        {isPlaying ? (
+          <IoPause size={20} />
+        ) : (
+          <IoPlay size={20} className="ml-0.5" />
+        )}
+      </button>
+
+      {/* Waveform and Progress */}
+      <div className="flex-1 flex flex-col gap-1">
+        {/* Waveform visualization */}
+        <div 
+          className="flex items-center gap-0.5 h-8 cursor-pointer"
+          onClick={handleSeek}
+        >
+          {waveformBars.map((height, i) => {
+            const barProgress = (i / waveformBars.length) * 100;
+            const isActive = barProgress <= progress;
+            
+            return (
+              <div
+                key={i}
+                className={`w-1 rounded-full transition-colors ${
+                  isActive
+                    ? isCurrentUser
+                      ? "bg-white"
+                      : isDarkMode
+                        ? "bg-white"
+                        : "bg-gray-700"
+                    : isCurrentUser
+                      ? "bg-white/40"
+                      : isDarkMode
+                        ? "bg-white/40"
+                        : "bg-gray-400"
+                }`}
+                style={{ height: `${height}%` }}
+              />
+            );
+          })}
+        </div>
+
+        {/* Time display */}
+        <div className={`flex justify-between text-xs ${
+          isCurrentUser
+            ? "text-white/80"
+            : isDarkMode
+              ? "text-white/80"
+              : "text-gray-600"
+        }`}>
+          <span>{formatTime(isPlaying || currentTime > 0 ? currentTime : duration)}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUserTyping, isMobile , onBack }) => {
   const { settings, sendNotification } = useSettings();
   // Join current user's room for real-time updates and handle reconnection
@@ -256,6 +410,9 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   const [isLoadingForward, setIsLoadingForward] = useState(false); // Loading state for opening forward modal
   const [forwardTab, setForwardTab] = useState("friends"); // "friends" or "groups"
   const [highlightedMessageId, setHighlightedMessageId] = useState(null); // Track highlighted message for reply scroll
+  const [editingMessage, setEditingMessage] = useState(null); // Message being edited
+  const [editContent, setEditContent] = useState(""); // Content for editing
+  const [showDeleteModal, setShowDeleteModal] = useState(null); // Message ID for delete confirmation
   const inputRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const reactionPickerRef = useRef(null);
@@ -447,6 +604,26 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       );
     };
 
+    const handleMessageEdited = ({ messageId, content, isEdited, editedAt }) => {
+      console.log('ChatView: Received messageEdited:', { messageId, content });
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === messageId ? { ...m, content, isEdited, editedAt } : m
+        )
+      );
+    };
+
+    const handleMessageDeletedForEveryone = ({ messageId }) => {
+      console.log('ChatView: Received messageDeletedForEveryone:', { messageId });
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === messageId 
+            ? { ...m, deletedForEveryone: true, content: '', image: null, audio: null }
+            : m
+        )
+      );
+    };
+
     const handleConnect = () => {
       console.log('ChatView: Socket reconnected, listeners re-registered');
       if (currentUserRef.current && currentUserRef.current._id) {
@@ -459,6 +636,8 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
     socket.on("messagesMarkedRead", handleMessagesMarkedRead);
     socket.on("messageReactionUpdated", handleReactionUpdated);
     socket.on("messageStatusUpdate", handleMessageStatusUpdate);
+    socket.on("messageEdited", handleMessageEdited);
+    socket.on("messageDeletedForEveryone", handleMessageDeletedForEveryone);
     socket.on("connect", handleConnect);
 
     return () => {
@@ -467,6 +646,8 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       socket.off("messagesMarkedRead", handleMessagesMarkedRead);
       socket.off("messageReactionUpdated", handleReactionUpdated);
       socket.off("messageStatusUpdate", handleMessageStatusUpdate);
+      socket.off("messageEdited", handleMessageEdited);
+      socket.off("messageDeletedForEveryone", handleMessageDeletedForEveryone);
       socket.off("connect", handleConnect);
     };
   }, [socket, sendNotification]);
@@ -600,7 +781,10 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
   }, [user, hasMore, cursor]);
 
   // Fetch messages when user changes - Load latest 20 messages initially
-  // 3-Tier: IndexedDB (instant) → Server API (Redis/MongoDB)
+  // 3-Tier Caching Strategy:
+  // TIER 1: IndexedDB (instant, offline-capable)
+  // TIER 2: Redis (server-side cache, fast)
+  // TIER 3: MongoDB (persistent, source of truth)
   useEffect(() => {
     if (!user || !user._id) {
       setMessages([]);
@@ -616,25 +800,38 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       const currentUserData = JSON.parse(localStorage.getItem("user"));
       const currentUserId = currentUserData?._id || currentUserData?.id;
       
+      let cachedMessages = [];
+      let lastSyncTimestamp = null;
+      let hasLocalData = false;
+      
       try {
-        // TIER 1: Load from IndexedDB first (instant display)
+        // ===== TIER 1: IndexedDB (Instant Display) =====
         if (currentUserId) {
           try {
-            const cachedMessages = await indexedDBService.getMessages(
+            // Get cached messages from IndexedDB
+            cachedMessages = await indexedDBService.getMessages(
               currentUserId,
               user._id,
-              20
+              50 // Load more from cache for better UX
+            );
+            
+            // Get last sync timestamp to know when we last fetched from server
+            lastSyncTimestamp = await indexedDBService.getLastSyncTimestamp(
+              currentUserId,
+              user._id
             );
             
             if (cachedMessages.length > 0) {
-              console.log(`ChatView: Loaded ${cachedMessages.length} messages from IndexedDB`);
+              hasLocalData = true;
+              console.log(`ChatView: TIER 1 - Loaded ${cachedMessages.length} messages from IndexedDB (cached)`);
               setMessages(cachedMessages);
               
               // Set cursor to oldest message for pagination
               setCursor(cachedMessages[0].createdAt);
               setHasMore(cachedMessages.length >= 20);
+              setIsLoadingMessages(false); // Show cached data immediately
               
-              // Scroll to bottom immediately
+              // Scroll to bottom immediately with cached data
               setTimeout(scrollToBottom, 50);
             }
           } catch (idbError) {
@@ -642,39 +839,91 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
           }
         }
         
-        // TIER 2 & 3: Fetch from server (Redis → MongoDB) in background
+        // ===== TIER 2 & 3: Server API (Redis → MongoDB) =====
+        // If we have cached data, only fetch new messages since last sync
+        // If no cache, fetch full initial load
         const { default: axios } = await import("../lib/axios");
-        const res = await axios.get(`/messages/${user._id}`, {
-          params: { limit: 20 }
-        });
+        
+        const params = { limit: 20 };
+        
+        // If we have local data, only fetch messages newer than last sync
+        // This implements incremental sync for efficiency
+        if (hasLocalData && lastSyncTimestamp) {
+          // Fetch only new messages since last sync (within last 5 minutes buffer for safety)
+          const syncBufferMs = 5 * 60 * 1000; // 5 minute buffer
+          const sinceTime = new Date(lastSyncTimestamp - syncBufferMs).toISOString();
+          params.since = sinceTime;
+          console.log(`ChatView: TIER 2/3 - Fetching messages since ${sinceTime} (incremental sync)`);
+        } else {
+          console.log('ChatView: TIER 2/3 - Fetching full message history (no local cache)');
+        }
+        
+        const res = await axios.get(`/messages/${user._id}`, { params });
         
         const fetchedMessages = res.data.data || res.data.messages || [];
+        const source = res.data.source || 'mongodb'; // Server tells us if from redis or mongodb
         
-        // Update state with server data (source of truth)
-        setMessages(fetchedMessages);
+        console.log(`ChatView: TIER 2/3 - Fetched ${fetchedMessages.length} messages from server (source: ${source})`);
         
-        // Set cursor to oldest message createdAt for pagination
         if (fetchedMessages.length > 0) {
-          setCursor(fetchedMessages[0].createdAt);
-          setHasMore(res.data.hasMore ?? true);
+          if (hasLocalData && params.since) {
+            // Incremental sync: Merge new messages with cached ones
+            setMessages(prevMessages => {
+              // Create a map of existing messages by ID for deduplication
+              const messageMap = new Map(prevMessages.map(m => [m._id, m]));
+              
+              // Add/update with server messages
+              for (const msg of fetchedMessages) {
+                messageMap.set(msg._id, msg);
+              }
+              
+              // Convert back to array and sort by createdAt
+              const mergedMessages = Array.from(messageMap.values())
+                .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+              
+              console.log(`ChatView: Merged ${fetchedMessages.length} new messages with ${prevMessages.length} cached (total: ${mergedMessages.length})`);
+              return mergedMessages;
+            });
+            
+            // Save only the new messages to IndexedDB
+            if (currentUserId) {
+              indexedDBService.saveMessages(fetchedMessages, currentUserId).catch(console.error);
+            }
+          } else {
+            // Full load: Replace with server data
+            setMessages(fetchedMessages);
+            setCursor(fetchedMessages[0].createdAt);
+            setHasMore(res.data.hasMore ?? true);
+            
+            // Save all messages to IndexedDB
+            if (currentUserId) {
+              indexedDBService.saveMessages(fetchedMessages, currentUserId).catch(console.error);
+            }
+          }
           
-          // TIER 1: Persist to IndexedDB for next load
+          // Update sync timestamp
           if (currentUserId) {
-            indexedDBService.saveMessages(fetchedMessages, currentUserId).catch(console.error);
             indexedDBService.updateSyncTimestamp(currentUserId, user._id).catch(console.error);
           }
-        } else {
+          
+          // Scroll to bottom after server data loads
+          setTimeout(scrollToBottom, 100);
+        } else if (!hasLocalData) {
+          // No messages from server and no cache - empty chat
           setHasMore(false);
         }
         
-        // Scroll to bottom after messages load
-        setTimeout(scrollToBottom, 100);
       } catch (error) {
-        console.error("Failed to fetch messages:", error);
-        console.error("Error details:", error.response?.data);
-        // If server fails, IndexedDB data is still displayed (offline support)
+        console.error("Failed to fetch messages from server:", error);
+        // If server fails but we have IndexedDB data, user can still chat (offline support)
+        if (hasLocalData) {
+          console.log('ChatView: Server unavailable, using cached data (offline mode)');
+        }
       } finally {
-        setIsLoadingMessages(false);
+        if (!hasLocalData) {
+          // Only set loading false here if we didn't have cached data
+          setIsLoadingMessages(false);
+        }
       }
     };
 
@@ -1165,6 +1414,110 @@ const ChatView = ({ user, socket, currentUser, onViewProfile, isUserOnline, isUs
       // Optional: show a brief toast/notification that copy was successful
     } catch (err) {
       console.error('Failed to copy message:', err);
+    }
+  };
+
+  // Check if message ID is a valid MongoDB ObjectId (not a temp ID)
+  const isValidMessageId = (id) => {
+    if (!id) return false;
+    // Temp IDs start with "temp-"
+    if (typeof id === 'string' && id.startsWith('temp-')) return false;
+    // MongoDB ObjectIds are 24 character hex strings
+    return /^[a-fA-F0-9]{24}$/.test(id);
+  };
+
+  // Handle edit message
+  const handleEdit = (message) => {
+    if (!isValidMessageId(message._id)) {
+      console.warn('Cannot edit message with temporary ID');
+      return;
+    }
+    setShowMessageMenu(null);
+    setEditingMessage(message);
+    setEditContent(message.content || '');
+  };
+
+  // Save edited message
+  const handleSaveEdit = async () => {
+    if (!editingMessage || !editContent.trim()) return;
+    if (!isValidMessageId(editingMessage._id)) {
+      console.warn('Cannot edit message with temporary ID');
+      return;
+    }
+    
+    try {
+      await axios.put(`/messages/${editingMessage._id}/edit`, {
+        content: editContent.trim()
+      });
+      
+      // Update message in local state
+      setMessages(prev => prev.map(msg => 
+        msg._id === editingMessage._id 
+          ? { ...msg, content: editContent.trim(), isEdited: true, editedAt: new Date() }
+          : msg
+      ));
+      
+      setEditingMessage(null);
+      setEditContent('');
+    } catch (error) {
+      console.error('Failed to edit message:', error);
+      alert(error.response?.data?.message || 'Failed to edit message');
+    }
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditingMessage(null);
+    setEditContent('');
+  };
+
+  // Handle delete message options
+  const handleDeleteOptions = (message) => {
+    if (!isValidMessageId(message._id)) {
+      console.warn('Cannot delete message with temporary ID');
+      return;
+    }
+    setShowMessageMenu(null);
+    setShowDeleteModal(message);
+  };
+
+  // Delete for me
+  const handleDeleteForMe = async (message) => {
+    if (!isValidMessageId(message._id)) {
+      console.warn('Cannot delete message with temporary ID');
+      return;
+    }
+    try {
+      await axios.delete(`/messages/${message._id}/delete-for-me`);
+      
+      // Remove message from local state
+      setMessages(prev => prev.filter(msg => msg._id !== message._id));
+      setShowDeleteModal(null);
+    } catch (error) {
+      console.error('Failed to delete message:', error);
+      alert(error.response?.data?.message || 'Failed to delete message');
+    }
+  };
+
+  // Delete for everyone
+  const handleDeleteForEveryone = async (message) => {
+    if (!isValidMessageId(message._id)) {
+      console.warn('Cannot delete message with temporary ID');
+      return;
+    }
+    try {
+      await axios.delete(`/messages/${message._id}/delete-for-everyone`);
+      
+      // Update message in local state to show as deleted
+      setMessages(prev => prev.map(msg => 
+        msg._id === message._id 
+          ? { ...msg, deletedForEveryone: true, content: '', image: null, audio: null }
+          : msg
+      ));
+      setShowDeleteModal(null);
+    } catch (error) {
+      console.error('Failed to delete message:', error);
+      alert(error.response?.data?.message || 'Failed to delete message');
     }
   };
 
@@ -1743,20 +2096,21 @@ const formatLastSeen = (lastSeenDate) => {
                       />
                     )}
                     {audioUrl && (
-                      <div className={`flex items-center gap-2 ${!isAudioOnly ? "mb-2" : "p-3"} ${isAudioOnly && getAudioThemeClasses(messageTheme, isCurrentUser, settings.darkMode)} rounded-2xl`}>
-                        <IoMicOutline size={20} className="text-white" />
-                        <audio 
+                      <div className={`${!isAudioOnly ? "mb-2" : "p-3"} ${isAudioOnly && getAudioThemeClasses(messageTheme, isCurrentUser, settings.darkMode)} rounded-2xl`}>
+                        <AudioMessage 
                           src={audioUrl} 
-                          controls 
-                          className="max-w-xs"
-                          style={{ 
-                            height: '32px',
-                            filter: 'invert(1) grayscale(1) contrast(0.9)'
-                          }}
+                          isCurrentUser={isCurrentUser}
+                          isDarkMode={settings.darkMode}
                         />
                       </div>
                     )}
-                    {msg.content &&
+                    {/* Deleted message display */}
+                    {msg.deletedForEveryone ? (
+                      <div className={`italic ${isCurrentUser ? "text-blue-200/70" : "text-gray-400"} flex items-center gap-1`}>
+                        <IoTrashOutline size={14} />
+                        <span>This message was deleted</span>
+                      </div>
+                    ) : msg.content &&
                       splitIntoLines(msg.content).map((chunk, index) => (
                         <div
                           key={index}
@@ -1764,6 +2118,12 @@ const formatLastSeen = (lastSeenDate) => {
                           dangerouslySetInnerHTML={renderMarkdown(chunk)}
                         />
                       ))}
+                    {/* Edited indicator */}
+                    {msg.isEdited && !msg.deletedForEveryone && (
+                      <div className={`text-xs mt-1 ${isCurrentUser ? "text-blue-200/60" : "text-gray-400/60"}`}>
+                        (edited)
+                      </div>
+                    )}
                   </div>
 
                   {/* Three-dot menu and React button - Shows on hover */}
@@ -1795,7 +2155,11 @@ const formatLastSeen = (lastSeenDate) => {
                         <div
                           className={`absolute z-50 ${
                             isCurrentUser ? "right-0" : "left-0"
-                          } bottom-full mb-2 bg-gray-800/95 backdrop-blur-sm rounded-full px-2 py-1.5 shadow-lg border border-gray-700 flex items-center gap-1`}
+                          } bottom-full mb-2 backdrop-blur-sm rounded-full px-2 py-1.5 shadow-lg flex items-center gap-1 ${
+                            settings.darkMode 
+                              ? "bg-gray-800/95 border border-gray-700" 
+                              : "bg-white/95 border border-gray-200"
+                          }`}
                         >
                           {REACTIONS.map((symbol) => {
                             const mine = msg.reactions?.some(
@@ -1818,11 +2182,15 @@ const formatLastSeen = (lastSeenDate) => {
                               </button>
                             );
                           })}
-                          <div className="w-px h-4 bg-gray-600 mx-1"></div>
+                          <div className={`w-px h-4 mx-1 ${settings.darkMode ? "bg-gray-600" : "bg-gray-300"}`}></div>
                     <button
                       type="button"
                       data-reaction-button="true"
-                      className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-gray-700 transition-all"
+                      className={`p-1 rounded-full transition-all ${
+                        settings.darkMode 
+                          ? "text-gray-400 hover:text-white hover:bg-gray-700" 
+                          : "text-gray-500 hover:text-gray-800 hover:bg-gray-200"
+                      }`}
                       onClick={() => setShowReactionPicker(msg._id)}
                       title="More reactions"
                     >
@@ -1839,7 +2207,11 @@ const formatLastSeen = (lastSeenDate) => {
                         e.stopPropagation();
                         setShowMessageMenu(showMessageMenu === msg._id ? null : msg._id);
                       }}
-                      className="p-1.5 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                      className={`p-1.5 rounded-full transition-colors ${
+                        settings.darkMode 
+                          ? "hover:bg-gray-700 text-gray-400 hover:text-white" 
+                          : "hover:bg-gray-200 text-gray-500 hover:text-gray-800"
+                      }`}
                       title="More options"
                     >
                       <IoEllipsisHorizontal size={18} />
@@ -1856,12 +2228,20 @@ const formatLastSeen = (lastSeenDate) => {
                         <div
                           className={`absolute z-50 ${
                             isCurrentUser ? "left-0" : "right-0"
-                          } top-full mt-1 bg-gray-800 rounded-lg shadow-lg border border-gray-700 py-1 min-w-30`}
+                          } top-full mt-1 rounded-lg shadow-lg py-1 min-w-30 ${
+                            settings.darkMode 
+                              ? "bg-gray-800 border border-gray-700" 
+                              : "bg-white border border-gray-200"
+                          }`}
                         >
                           <button
                             type="button"
                             onClick={() => handleReply(msg)}
-                            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
+                              settings.darkMode 
+                                ? "text-white hover:bg-gray-700" 
+                                : "text-gray-800 hover:bg-gray-100"
+                            }`}
                           >
                             <IoArrowUndo size={16} />
                             Reply
@@ -1869,7 +2249,11 @@ const formatLastSeen = (lastSeenDate) => {
                           <button
                             type="button"
                             onClick={() => handleForward(msg)}
-                            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
+                              settings.darkMode 
+                                ? "text-white hover:bg-gray-700" 
+                                : "text-gray-800 hover:bg-gray-100"
+                            }`}
                           >
                             <IoArrowRedo size={16} />
                             Forward
@@ -1877,11 +2261,45 @@ const formatLastSeen = (lastSeenDate) => {
                           <button
                             type="button"
                             onClick={() => handleCopy(msg)}
-                            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
+                              settings.darkMode 
+                                ? "text-white hover:bg-gray-700" 
+                                : "text-gray-800 hover:bg-gray-100"
+                            }`}
                           >
                             <IoCopyOutline size={16} />
                             Copy
                           </button>
+                          {/* Edit button - only for sender and text messages with valid ID */}
+                          {isCurrentUser && msg.content && !msg.deletedForEveryone && !String(msg._id).startsWith('temp-') && (
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(msg)}
+                              className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
+                                settings.darkMode 
+                                  ? "text-white hover:bg-gray-700" 
+                                  : "text-gray-800 hover:bg-gray-100"
+                              }`}
+                            >
+                              <IoPencil size={16} />
+                              Edit
+                            </button>
+                          )}
+                          {/* Delete button - only for messages with valid ID */}
+                          {!msg.deletedForEveryone && !String(msg._id).startsWith('temp-') && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteOptions(msg)}
+                              className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
+                                settings.darkMode 
+                                  ? "text-red-400 hover:bg-gray-700" 
+                                  : "text-red-600 hover:bg-gray-100"
+                              }`}
+                            >
+                              <IoTrashOutline size={16} />
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </>
                     )}
@@ -2023,55 +2441,125 @@ const formatLastSeen = (lastSeenDate) => {
                   <>
                     {/* Backdrop */}
                     <div
-                      className="fixed inset-0 z-9998"
+                      className="fixed inset-0 z-9998 bg-black/30"
                       onClick={() => setShowLongPressReactions(null)}
                     />
                     {/* Reaction Popup */}
                     <div
                       data-reaction-popup="true"
-                      className="fixed z-9999 flex items-center gap-1 bg-gray-900/95 backdrop-blur-sm rounded-full px-3 py-2 shadow-lg border border-gray-700"
+                      className={`fixed z-9999 flex flex-col items-center backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden ${
+                        settings.darkMode 
+                          ? "bg-gray-900/95 border border-gray-700" 
+                          : "bg-white/95 border border-gray-200"
+                      }`}
                       style={{
                         left: `${showLongPressReactions?.x ?? 0}px`,
-                        top: `${(showLongPressReactions?.y ?? 0) - 60}px`,
-                        transform: 'translateX(-50%)'
+                        top: `${(showLongPressReactions?.y ?? 0) - 120}px`,
+                        transform: 'translateX(-50%)',
+                        minWidth: '220px'
                       }}
                     >
-                      {REACTIONS.map((symbol) => {
-                        const mine = msg.reactions?.some(
-                          (r) =>
-                            getId(r.user) === currentUser?._id &&
-                            r.reaction === symbol
-                        );
-                        return (
-                          <button
-                            key={symbol}
-                            type="button"
-                            data-reaction-popup="true"
-                            className={`text-xl leading-none p-2 rounded-full transition-all active:scale-90 ${
-                              mine ? "bg-blue-600" : "hover:bg-gray-700"
-                            }`}
-                            onClick={() => {
-                              handleReaction(msg, symbol);
-                              setShowLongPressReactions(null);
-                            }}
-                          >
-                            {symbol}
-                          </button>
-                        );
-                      })}
-                      <div className="w-px h-6 bg-gray-600 mx-1"></div>
-                      <button
-                        type="button"
-                        data-reaction-popup="true"
-                        className="text-gray-400 active:text-white p-2 rounded-full active:bg-gray-700 transition-all"
-                        onClick={() => {
-                          setShowReactionPicker(msg._id);
-                          setShowLongPressReactions(null);
-                        }}
-                        title="More reactions"
-                      >
-                        <IoAddCircleOutline size={20} />
-                      </button>
+                      {/* Reactions Row */}
+                      <div className="flex items-center gap-1 px-3 py-2">
+                        {REACTIONS.map((symbol) => {
+                          const mine = msg.reactions?.some(
+                            (r) =>
+                              getId(r.user) === currentUser?._id &&
+                              r.reaction === symbol
+                          );
+                          return (
+                            <button
+                              key={symbol}
+                              type="button"
+                              data-reaction-popup="true"
+                              className={`text-xl leading-none p-2 rounded-full transition-all active:scale-90 ${
+                                mine 
+                                  ? "bg-blue-600" 
+                                  : settings.darkMode 
+                                    ? "hover:bg-gray-700" 
+                                    : "hover:bg-gray-200"
+                              }`}
+                              onClick={() => {
+                                handleReaction(msg, symbol);
+                                setShowLongPressReactions(null);
+                              }}
+                            >
+                              {symbol}
+                            </button>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          data-reaction-popup="true"
+                          className={`p-2 rounded-full transition-all ${
+                            settings.darkMode 
+                              ? "text-gray-400 active:text-white active:bg-gray-700" 
+                              : "text-gray-500 active:text-gray-800 active:bg-gray-200"
+                          }`}
+                          onClick={() => {
+                            setShowReactionPicker(msg._id);
+                            setShowLongPressReactions(null);
+                          }}
+                          title="More reactions"
+                        >
+                          <IoAddCircleOutline size={20} />
+                        </button>
+                      </div>
+                      
+                      {/* Divider */}
+                      <div className={`w-full h-px ${settings.darkMode ? "bg-gray-700" : "bg-gray-200"}`}></div>
+                      
+                      {/* Action Buttons Row */}
+                      <div className="flex items-center justify-around w-full px-2 py-2">
+                        <button
+                          type="button"
+                          data-reaction-popup="true"
+                          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all min-w-16 ${
+                            settings.darkMode 
+                              ? "active:bg-gray-700" 
+                              : "active:bg-gray-200"
+                          }`}
+                          onClick={() => {
+                            handleReply(msg);
+                            setShowLongPressReactions(null);
+                          }}
+                        >
+                          <IoArrowUndo size={20} className={settings.darkMode ? "text-gray-300" : "text-gray-600"} />
+                          <span className={`text-xs ${settings.darkMode ? "text-gray-400" : "text-gray-500"}`}>Reply</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-reaction-popup="true"
+                          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all min-w-16 ${
+                            settings.darkMode 
+                              ? "active:bg-gray-700" 
+                              : "active:bg-gray-200"
+                          }`}
+                          onClick={() => {
+                            handleForward(msg);
+                            setShowLongPressReactions(null);
+                          }}
+                        >
+                          <IoArrowRedo size={20} className={settings.darkMode ? "text-gray-300" : "text-gray-600"} />
+                          <span className={`text-xs ${settings.darkMode ? "text-gray-400" : "text-gray-500"}`}>Forward</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-reaction-popup="true"
+                          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all min-w-16 ${
+                            settings.darkMode 
+                              ? "active:bg-gray-700" 
+                              : "active:bg-gray-200"
+                          }`}
+                          onClick={() => {
+                            handleCopy(msg);
+                            setShowLongPressReactions(null);
+                          }}
+                        >
+                          <IoCopyOutline size={20} className={settings.darkMode ? "text-gray-300" : "text-gray-600"} />
+                          <span className={`text-xs ${settings.darkMode ? "text-gray-400" : "text-gray-500"}`}>Copy</span>
+                        </button>
+                      </div>
                     </div>
                   </>
                 )}
@@ -2138,8 +2626,11 @@ const formatLastSeen = (lastSeenDate) => {
       {audioPreview && !isRecording && (
         <div className="px-4 py-2">
           <div className="flex items-center gap-2 p-3 bg-zinc-700 rounded-lg border border-gray-600">
-            <IoMicOutline size={20} className="text-blue-500" />
-            <audio src={audioPreview} controls className="flex-1" />
+            <AudioMessage 
+              src={audioPreview} 
+              isCurrentUser={true}
+              isDarkMode={true}
+            />
             <button
               type="button"
               onClick={cancelRecording}
@@ -2517,6 +3008,119 @@ const formatLastSeen = (lastSeenDate) => {
                 <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Message Modal */}
+      {editingMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className={`w-full max-w-md rounded-xl shadow-xl ${
+            settings.darkMode ? "bg-gray-800" : "bg-white"
+          }`}>
+            <div className={`px-4 py-3 border-b ${
+              settings.darkMode ? "border-gray-700" : "border-gray-200"
+            }`}>
+              <h3 className={`text-lg font-semibold ${
+                settings.darkMode ? "text-white" : "text-gray-900"
+              }`}>Edit Message</h3>
+            </div>
+            <div className="p-4">
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                className={`w-full px-3 py-2 rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  settings.darkMode 
+                    ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" 
+                    : "bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-500"
+                }`}
+                rows={4}
+                placeholder="Edit your message..."
+                autoFocus
+              />
+            </div>
+            <div className={`px-4 py-3 border-t flex justify-end gap-2 ${
+              settings.darkMode ? "border-gray-700" : "border-gray-200"
+            }`}>
+              <button
+                onClick={handleCancelEdit}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  settings.darkMode 
+                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600" 
+                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={!editContent.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Message Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className={`w-full max-w-sm rounded-xl shadow-xl ${
+            settings.darkMode ? "bg-gray-800" : "bg-white"
+          }`}>
+            <div className={`px-4 py-3 border-b ${
+              settings.darkMode ? "border-gray-700" : "border-gray-200"
+            }`}>
+              <h3 className={`text-lg font-semibold ${
+                settings.darkMode ? "text-white" : "text-gray-900"
+              }`}>Delete Message</h3>
+            </div>
+            <div className="p-4 space-y-3">
+              <button
+                onClick={() => handleDeleteForMe(showDeleteModal)}
+                className={`w-full px-4 py-3 rounded-lg text-left transition-colors ${
+                  settings.darkMode 
+                    ? "bg-gray-700 text-gray-200 hover:bg-gray-600" 
+                    : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                }`}
+              >
+                <div className="font-medium">Delete for me</div>
+                <div className={`text-sm ${settings.darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                  This message will be removed from your chat
+                </div>
+              </button>
+              {showDeleteModal.sender?._id === currentUser?._id && (
+                <button
+                  onClick={() => handleDeleteForEveryone(showDeleteModal)}
+                  className={`w-full px-4 py-3 rounded-lg text-left transition-colors ${
+                    settings.darkMode 
+                      ? "bg-red-900/30 text-red-400 hover:bg-red-900/50" 
+                      : "bg-red-50 text-red-600 hover:bg-red-100"
+                  }`}
+                >
+                  <div className="font-medium">Delete for everyone</div>
+                  <div className={`text-sm ${settings.darkMode ? "text-red-400/70" : "text-red-500"}`}>
+                    This message will be removed for all participants
+                  </div>
+                </button>
+              )}
+            </div>
+            <div className={`px-4 py-3 border-t ${
+              settings.darkMode ? "border-gray-700" : "border-gray-200"
+            }`}>
+              <button
+                onClick={() => setShowDeleteModal(null)}
+                className={`w-full px-4 py-2 rounded-lg transition-colors ${
+                  settings.darkMode 
+                    ? "bg-gray-700 text-gray-300 hover:bg-gray-600" 
+                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                }`}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

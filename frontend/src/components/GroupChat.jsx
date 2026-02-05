@@ -29,6 +29,8 @@ import {
   IoCopyOutline,
   IoHappy,
   IoSearch,
+  IoPlay,
+  IoPause,
 } from "react-icons/io5";
 import { CiMenuKebab } from "react-icons/ci";
 import { MdEdit } from "react-icons/md";
@@ -209,6 +211,154 @@ const getGroupAudioThemeClasses = (theme, isOwn, isDarkMode) => {
   }
 };
 
+// WhatsApp-style Audio Message Player Component
+const AudioMessage = ({ src, isCurrentUser, isDarkMode }) => {
+  const audioRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+      audio.currentTime = 0;
+    };
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
+    };
+  }, []);
+
+  const togglePlay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      audio.play();
+    }
+  };
+
+  const handleSeek = (e) => {
+    const audio = audioRef.current;
+    if (!audio || !duration) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = x / rect.width;
+    const newTime = percentage * duration;
+    
+    audio.currentTime = newTime;
+    setCurrentTime(newTime);
+  };
+
+  const formatTime = (time) => {
+    if (!time || isNaN(time)) return "0:00";
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // Generate waveform bars (static visual representation)
+  const waveformBars = Array.from({ length: 28 }, (_, i) => {
+    const height = 20 + Math.sin(i * 0.8) * 15 + Math.cos(i * 1.2) * 10;
+    return Math.max(8, Math.min(35, height));
+  });
+
+  return (
+    <div className="flex items-center gap-3 min-w-50 max-w-70">
+      <audio ref={audioRef} src={src} preload="metadata" />
+      
+      <button
+        onClick={togglePlay}
+        className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+          isCurrentUser
+            ? "bg-white/20 hover:bg-white/30 text-white"
+            : isDarkMode
+              ? "bg-white/20 hover:bg-white/30 text-white"
+              : "bg-black/10 hover:bg-black/20 text-gray-700"
+        }`}
+      >
+        {isPlaying ? (
+          <IoPause size={20} />
+        ) : (
+          <IoPlay size={20} className="ml-0.5" />
+        )}
+      </button>
+
+      <div className="flex-1 flex flex-col gap-1">
+        <div 
+          className="flex items-center gap-0.5 h-8 cursor-pointer"
+          onClick={handleSeek}
+        >
+          {waveformBars.map((height, i) => {
+            const barProgress = (i / waveformBars.length) * 100;
+            const isActive = barProgress <= progress;
+            
+            return (
+              <div
+                key={i}
+                className={`w-1 rounded-full transition-colors ${
+                  isActive
+                    ? isCurrentUser
+                      ? "bg-white"
+                      : isDarkMode
+                        ? "bg-white"
+                        : "bg-gray-700"
+                    : isCurrentUser
+                      ? "bg-white/40"
+                      : isDarkMode
+                        ? "bg-white/40"
+                        : "bg-gray-400"
+                }`}
+                style={{ height: `${height}%` }}
+              />
+            );
+          })}
+        </div>
+
+        <div className={`flex justify-between text-xs ${
+          isCurrentUser
+            ? "text-white/80"
+            : isDarkMode
+              ? "text-white/80"
+              : "text-gray-600"
+        }`}>
+          <span>{formatTime(isPlaying || currentTime > 0 ? currentTime : duration)}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 // Add global styles for reaction animations
@@ -240,6 +390,7 @@ const GroupChat = ({
   const [showEditGroup, setShowEditGroup] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showDesktopMenu, setShowDesktopMenu] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(null);
   const [showQuickReactions, setShowQuickReactions] = useState(null);
   const [showMessageMenu, setShowMessageMenu] = useState(null);
@@ -264,10 +415,13 @@ const GroupChat = ({
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
   const [selectedMentions, setSelectedMentions] = useState([]); // Array of {userId, name}
+  const [showLongPressReactions, setShowLongPressReactions] = useState(null); // {messageId, x, y}
   const mentionSuggestionsRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
+  const longPressTimerRef = useRef(null);
+  const longPressStartRef = useRef(null);
   const timestampRef = useRef(null);
 
   const messagesEndRef = useRef(null);
@@ -276,6 +430,7 @@ const GroupChat = ({
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const mobileMenuRef = useRef(null);
+  const desktopMenuRef = useRef(null);
   const getId = (val) =>
     typeof val === "object" && val !== null ? val._id : val;
 
@@ -318,6 +473,21 @@ const GroupChat = ({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showMobileMenu]);
+
+  // Close desktop menu when clicking outside
+  useEffect(() => {
+    if (!showDesktopMenu) return;
+    const handleClickOutside = (event) => {
+      if (
+        desktopMenuRef.current &&
+        !desktopMenuRef.current.contains(event.target)
+      ) {
+        setShowDesktopMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showDesktopMenu]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -741,17 +911,17 @@ const GroupChat = ({
     setSending(false);
   };
 
-  // const handleLeaveGroup = async () => {
-  //   if (!window.confirm("Are you sure you want to leave this group?")) return;
+  const handleLeaveGroup = async () => {
+    if (!window.confirm("Are you sure you want to leave this group?")) return;
 
-  //   try {
-  //     await axios.post(`/groups/${group._id}/leave`);
-  //     if (onGroupUpdated) onGroupUpdated();
-  //     if (onClose) onClose();
-  //   } catch (error) {
-  //     alert(error.response?.data?.message || "Failed to leave group");
-  //   }
-  // };
+    try {
+      await axios.post(`/groups/${group._id}/leave`);
+      if (onGroupUpdated) onGroupUpdated();
+      if (onBack) onBack();
+    } catch (error) {
+      alert(error.response?.data?.message || "Failed to leave group");
+    }
+  };
 
   // const handleDeleteGroup = async () => {
   //   if (
@@ -1004,16 +1174,53 @@ const GroupChat = ({
     g.name?.toLowerCase().includes(forwardSearchQuery.toLowerCase())
   );
 
-  // Handle touch start for swipe detection (Mobile)
+  // Handle touch start for swipe detection and long press (Mobile)
   const handleTouchStart = useCallback(
     (e, messageId) => {
       if (!isMobile) return;
       const now = Date.now();
-      touchStartRef.current = {
+      const touchPoint = {
         x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      };
+      
+      touchStartRef.current = {
+        x: touchPoint.x,
         messageId: messageId,
         timestamp: now,
       };
+      
+      // Long press detection
+      longPressStartRef.current = touchPoint;
+      longPressTimerRef.current = setTimeout(() => {
+        if (longPressStartRef.current) {
+          setShowLongPressReactions({
+            messageId,
+            x: longPressStartRef.current.x,
+            y: longPressStartRef.current.y
+          });
+          longPressStartRef.current = null;
+        }
+      }, 500);
+    },
+    [isMobile],
+  );
+
+  // Handle touch move to cancel long press if moved
+  const handleTouchMove = useCallback(
+    (e) => {
+      if (!isMobile || !longPressStartRef.current || !longPressTimerRef.current) return;
+      
+      const currentTouch = e.touches[0];
+      const diffX = Math.abs(currentTouch.clientX - longPressStartRef.current.x);
+      const diffY = Math.abs(currentTouch.clientY - longPressStartRef.current.y);
+      
+      // If moved more than 10px, cancel long press
+      if (diffX > 10 || diffY > 10) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+        longPressStartRef.current = null;
+      }
     },
     [isMobile],
   );
@@ -1021,6 +1228,13 @@ const GroupChat = ({
   // Handle touch end for swipe detection (Mobile)
   const handleTouchEnd = useCallback(
     (e, messageId) => {
+      // Clear long press timer
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+      longPressStartRef.current = null;
+      
       if (!isMobile || !touchStartRef.current) return;
 
       const now = Date.now();
@@ -1330,7 +1544,11 @@ const GroupChat = ({
             <div className="relative" ref={mobileMenuRef}>
               <button
                 onClick={() => setShowMobileMenu(!showMobileMenu)}
-                className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
+                className={`p-2 rounded-lg transition ${
+                  settings.darkMode 
+                    ? "hover:bg-zinc-700 text-gray-400 hover:text-white" 
+                    : "hover:bg-gray-200 text-gray-600 hover:text-gray-900"
+                }`}
                 title="More options"
               >
                 {showMobileMenu ? (
@@ -1345,14 +1563,22 @@ const GroupChat = ({
                     className="fixed inset-0 z-40"
                     onClick={() => setShowMobileMenu(false)}
                   />
-                  <div className="absolute right-0 mt-2 w-48 bg-zinc-800 border border-gray-700 rounded-lg shadow-lg z-50">
+                  <div className={`absolute right-0 mt-2 w-48 rounded-lg shadow-lg z-50 border ${
+                    settings.darkMode 
+                      ? "bg-zinc-800 border-gray-700" 
+                      : "bg-white border-gray-200"
+                  }`}>
                     {(isCreator || isAdmin) && (
                       <button
                         onClick={() => {
                           setShowEditGroup(true);
                           setShowMobileMenu(false);
                         }}
-                        className="w-full text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 hover:text-white transition flex items-center gap-2"
+                        className={`w-full text-left px-4 py-2 transition flex items-center gap-2 rounded-t-lg ${
+                          settings.darkMode 
+                            ? "text-gray-300 hover:bg-zinc-700 hover:text-white" 
+                            : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                        }`}
                       >
                         <MdEdit size={18} />
                         Edit Group
@@ -1363,41 +1589,136 @@ const GroupChat = ({
                         onOpenInvite && onOpenInvite(group);
                         setShowMobileMenu(false);
                       }}
-                      className="w-full text-left px-4 py-2 text-gray-300 hover:bg-zinc-700 hover:text-white transition flex items-center gap-2"
+                      className={`w-full text-left px-4 py-2 transition flex items-center gap-2 ${
+                        settings.darkMode 
+                          ? "text-gray-300 hover:bg-zinc-700 hover:text-white" 
+                          : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
                     >
                       <IoPersonAddOutline size={18} />
                       Add Members
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigate(`/group/${group._id}`);
+                        setShowMobileMenu(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 transition flex items-center gap-2 ${
+                        settings.darkMode 
+                          ? "text-gray-300 hover:bg-zinc-700 hover:text-white" 
+                          : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
+                    >
+                      <Users size={18} />
+                      View Group Info
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleLeaveGroup();
+                        setShowMobileMenu(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 transition flex items-center gap-2 rounded-b-lg ${
+                        settings.darkMode 
+                          ? "text-red-400 hover:bg-zinc-700 hover:text-red-300" 
+                          : "text-red-600 hover:bg-gray-100 hover:text-red-700"
+                      }`}
+                    >
+                      <LogOut size={18} />
+                      Leave Group
                     </button>
                   </div>
                 </>
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-3">
-              {(isCreator || isAdmin) && (
-                <button
-                  onClick={() => setShowEditGroup(true)}
-                  className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
-                  title="Edit group"
-                >
-                  <MdEdit size={20} />
-                </button>
-              )}
+            <div className="relative" ref={desktopMenuRef}>
               <button
-                onClick={() => onOpenInvite && onOpenInvite(group)}
-                className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
-                title="Invite members"
+                onClick={() => setShowDesktopMenu(!showDesktopMenu)}
+                className={`p-2 rounded-lg transition ${
+                  settings.darkMode 
+                    ? "hover:bg-zinc-700 text-gray-400 hover:text-white" 
+                    : "hover:bg-gray-200 text-gray-600 hover:text-gray-900"
+                }`}
+                title="More options"
               >
-                <IoPersonAddOutline size={20} />
+                {showDesktopMenu ? (
+                  <IoClose size={20} />
+                ) : (
+                  <CiMenuKebab size={20} />
+                )}
               </button>
-              {/* {onClose && (
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-zinc-700 rounded-lg text-gray-400 hover:text-white transition"
-            >
-              <IoClose size={20} />
-            </button>
-          )} */}
+              {showDesktopMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowDesktopMenu(false)}
+                  />
+                  <div className={`absolute right-0 mt-2 w-48 rounded-lg shadow-lg z-50 border ${
+                    settings.darkMode 
+                      ? "bg-zinc-800 border-gray-700" 
+                      : "bg-white border-gray-200"
+                  }`}>
+                    {(isCreator || isAdmin) && (
+                      <button
+                        onClick={() => {
+                          setShowEditGroup(true);
+                          setShowDesktopMenu(false);
+                        }}
+                        className={`w-full text-left px-4 py-2 transition flex items-center gap-2 rounded-t-lg ${
+                          settings.darkMode 
+                            ? "text-gray-300 hover:bg-zinc-700 hover:text-white" 
+                            : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                        }`}
+                      >
+                        <MdEdit size={18} />
+                        Edit Group
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        onOpenInvite && onOpenInvite(group);
+                        setShowDesktopMenu(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 transition flex items-center gap-2 ${
+                        settings.darkMode 
+                          ? "text-gray-300 hover:bg-zinc-700 hover:text-white" 
+                          : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
+                    >
+                      <IoPersonAddOutline size={18} />
+                      Add Members
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigate(`/group/${group._id}`);
+                        setShowDesktopMenu(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 transition flex items-center gap-2 ${
+                        settings.darkMode 
+                          ? "text-gray-300 hover:bg-zinc-700 hover:text-white" 
+                          : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
+                    >
+                      <Users size={18} />
+                      View Group Info
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleLeaveGroup();
+                        setShowDesktopMenu(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 transition flex items-center gap-2 rounded-b-lg ${
+                        settings.darkMode 
+                          ? "text-red-400 hover:bg-zinc-700 hover:text-red-300" 
+                          : "text-red-600 hover:bg-gray-100 hover:text-red-700"
+                      }`}
+                    >
+                      <LogOut size={18} />
+                      Leave Group
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1491,6 +1812,7 @@ const GroupChat = ({
                                 handleMessageDoubleTap(msg._id)
                               }
                               onTouchStart={(e) => handleTouchStart(e, msg._id)}
+                              onTouchMove={handleTouchMove}
                               onTouchEnd={(e) => handleTouchEnd(e, msg._id)}
                             >
                               {/* Forwarded Label */}
@@ -1538,21 +1860,12 @@ const GroupChat = ({
                               )}
                               {hasAudio && (
                                 <div
-                                  className={`flex items-center gap-2 ${hasContent ? "mb-2" : "p-3"} ${!hasContent && getGroupAudioThemeClasses(messageTheme, isOwn, settings.darkMode)} rounded-2xl`}
+                                  className={`${hasContent ? "mb-2" : "p-3"} ${!hasContent && getGroupAudioThemeClasses(messageTheme, isOwn, settings.darkMode)} rounded-2xl`}
                                 >
-                                  <IoMicOutline
-                                    size={20}
-                                    className="text-white"
-                                  />
-                                  <audio
+                                  <AudioMessage
                                     src={msg.audio.url}
-                                    controls
-                                    className="max-w-xs"
-                                    style={{
-                                      height: "32px",
-                                      filter:
-                                        "invert(1) grayscale(1) contrast(0.9)",
-                                    }}
+                                    isCurrentUser={isOwn}
+                                    isDarkMode={settings.darkMode}
                                   />
                                 </div>
                               )}
@@ -1587,7 +1900,11 @@ const GroupChat = ({
                                       : msg._id,
                                   );
                                 }}
-                                className="p-1.5 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                                className={`p-1.5 rounded-full transition-colors ${
+                                  settings.darkMode
+                                    ? "hover:bg-gray-700 text-gray-400 hover:text-white"
+                                    : "hover:bg-gray-200 text-gray-500 hover:text-gray-800"
+                                }`}
                                 title="Add reaction"
                               >
                                 <IoHappy size={18} />
@@ -1603,7 +1920,11 @@ const GroupChat = ({
                                   <div
                                     className={`absolute z-50 ${
                                       isOwn ? "right-0" : "left-0"
-                                    } bottom-full mb-2 bg-gray-800/95 backdrop-blur-sm rounded-full px-2 py-1.5 shadow-lg border border-gray-700 flex items-center gap-1`}
+                                    } bottom-full mb-2 backdrop-blur-sm rounded-full px-2 py-1.5 shadow-lg flex items-center gap-1 ${
+                                      settings.darkMode
+                                        ? "bg-gray-800/95 border border-gray-700"
+                                        : "bg-white/95 border border-gray-200"
+                                    }`}
                                   >
                                     {REACTIONS.map((symbol) => {
                                       const mine = msg.reactions?.some(
@@ -1618,7 +1939,9 @@ const GroupChat = ({
                                           className={`text-lg p-1.5 rounded-full transition-all hover:scale-125 cursor-pointer ${
                                             mine
                                               ? "bg-blue-600"
-                                              : "hover:bg-gray-700"
+                                              : settings.darkMode
+                                                ? "hover:bg-gray-700"
+                                                : "hover:bg-gray-200"
                                           }`}
                                           onClick={() => {
                                             handleReaction(msg, symbol);
@@ -1634,11 +1957,15 @@ const GroupChat = ({
                                         </button>
                                       );
                                     })}
-                                    <div className="w-px h-4 bg-gray-600 mx-1"></div>
+                                    <div className={`w-px h-4 mx-1 ${settings.darkMode ? "bg-gray-600" : "bg-gray-300"}`}></div>
                                     <button
                                       type="button"
                                       data-reaction-button="true"
-                                      className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-gray-700 transition-all"
+                                      className={`p-1 rounded-full transition-all ${
+                                        settings.darkMode
+                                          ? "text-gray-400 hover:text-white hover:bg-gray-700"
+                                          : "text-gray-500 hover:text-gray-800 hover:bg-gray-200"
+                                      }`}
                                       onClick={() =>
                                         setShowReactionPicker(msg._id)
                                       }
@@ -1661,7 +1988,11 @@ const GroupChat = ({
                                       : msg._id,
                                   );
                                 }}
-                                className="p-1.5 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                                className={`p-1.5 rounded-full transition-colors ${
+                                  settings.darkMode
+                                    ? "hover:bg-gray-700 text-gray-400 hover:text-white"
+                                    : "hover:bg-gray-200 text-gray-500 hover:text-gray-800"
+                                }`}
                                 title="More options"
                               >
                                 <IoEllipsisHorizontal size={18} />
@@ -1677,12 +2008,20 @@ const GroupChat = ({
                                   <div
                                     className={`absolute z-50 ${
                                       isOwn ? "left-0" : "right-0"
-                                    } top-full mt-1 bg-gray-800 rounded-lg shadow-lg border border-gray-700 py-1 min-w-30`}
+                                    } top-full mt-1 rounded-lg shadow-lg py-1 min-w-30 ${
+                                      settings.darkMode
+                                        ? "bg-gray-800 border border-gray-700"
+                                        : "bg-white border border-gray-200"
+                                    }`}
                                   >
                                     <button
                                       type="button"
                                       onClick={() => handleMenuReply(msg)}
-                                      className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                                      className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
+                                        settings.darkMode
+                                          ? "text-white hover:bg-gray-700"
+                                          : "text-gray-800 hover:bg-gray-100"
+                                      }`}
                                     >
                                       <IoArrowUndo size={16} />
                                       Reply
@@ -1690,7 +2029,11 @@ const GroupChat = ({
                                     <button
                                       type="button"
                                       onClick={() => handleMenuForward(msg)}
-                                      className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                                      className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
+                                        settings.darkMode
+                                          ? "text-white hover:bg-gray-700"
+                                          : "text-gray-800 hover:bg-gray-100"
+                                      }`}
                                     >
                                       <IoArrowRedo size={16} />
                                       Forward
@@ -1698,11 +2041,143 @@ const GroupChat = ({
                                     <button
                                       type="button"
                                       onClick={() => handleMenuCopy(msg)}
-                                      className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                                      className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
+                                        settings.darkMode
+                                          ? "text-white hover:bg-gray-700"
+                                          : "text-gray-800 hover:bg-gray-100"
+                                      }`}
                                     >
                                       <IoCopyOutline size={16} />
                                       Copy
                                     </button>
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Long Press Reaction Popup (Mobile Only) */}
+                              {isMobile && showLongPressReactions?.messageId === msg._id && (
+                                <>
+                                  {/* Backdrop */}
+                                  <div
+                                    className="fixed inset-0 z-9998 bg-black/30"
+                                    onClick={() => setShowLongPressReactions(null)}
+                                  />
+                                  {/* Reaction Popup */}
+                                  <div
+                                    data-reaction-popup="true"
+                                    className={`fixed z-9999 flex flex-col items-center backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden ${
+                                      settings.darkMode
+                                        ? "bg-gray-900/95 border border-gray-700"
+                                        : "bg-white/95 border border-gray-200"
+                                    }`}
+                                    style={{
+                                      left: `${showLongPressReactions?.x ?? 0}px`,
+                                      top: `${(showLongPressReactions?.y ?? 0) - 120}px`,
+                                      transform: 'translateX(-50%)',
+                                      minWidth: '220px'
+                                    }}
+                                  >
+                                    {/* Reactions Row */}
+                                    <div className="flex items-center gap-1 px-3 py-2">
+                                      {REACTIONS.map((symbol) => {
+                                        const mine = msg.reactions?.some(
+                                          (r) =>
+                                            getId(r.user) === currentUser?._id &&
+                                            r.reaction === symbol
+                                        );
+                                        return (
+                                          <button
+                                            key={symbol}
+                                            type="button"
+                                            data-reaction-popup="true"
+                                            className={`text-xl leading-none p-2 rounded-full transition-all active:scale-90 ${
+                                              mine
+                                                ? "bg-blue-600"
+                                                : settings.darkMode
+                                                  ? "hover:bg-gray-700"
+                                                  : "hover:bg-gray-200"
+                                            }`}
+                                            onClick={() => {
+                                              handleReaction(msg, symbol);
+                                              setShowLongPressReactions(null);
+                                            }}
+                                          >
+                                            {symbol}
+                                          </button>
+                                        );
+                                      })}
+                                      <button
+                                        type="button"
+                                        data-reaction-popup="true"
+                                        className={`p-2 rounded-full transition-all ${
+                                          settings.darkMode
+                                            ? "text-gray-400 active:text-white active:bg-gray-700"
+                                            : "text-gray-500 active:text-gray-800 active:bg-gray-200"
+                                        }`}
+                                        onClick={() => {
+                                          setShowReactionPicker(msg._id);
+                                          setShowLongPressReactions(null);
+                                        }}
+                                        title="More reactions"
+                                      >
+                                        <IoAddCircleOutline size={20} />
+                                      </button>
+                                    </div>
+                                    
+                                    {/* Divider */}
+                                    <div className={`w-full h-px ${settings.darkMode ? "bg-gray-700" : "bg-gray-200"}`}></div>
+                                    
+                                    {/* Action Buttons Row */}
+                                    <div className="flex items-center justify-around w-full px-2 py-2">
+                                      <button
+                                        type="button"
+                                        data-reaction-popup="true"
+                                        className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all min-w-16 ${
+                                          settings.darkMode
+                                            ? "active:bg-gray-700"
+                                            : "active:bg-gray-200"
+                                        }`}
+                                        onClick={() => {
+                                          handleMenuReply(msg);
+                                          setShowLongPressReactions(null);
+                                        }}
+                                      >
+                                        <IoArrowUndo size={20} className={settings.darkMode ? "text-gray-300" : "text-gray-600"} />
+                                        <span className={`text-xs ${settings.darkMode ? "text-gray-400" : "text-gray-500"}`}>Reply</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        data-reaction-popup="true"
+                                        className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all min-w-16 ${
+                                          settings.darkMode
+                                            ? "active:bg-gray-700"
+                                            : "active:bg-gray-200"
+                                        }`}
+                                        onClick={() => {
+                                          handleMenuForward(msg);
+                                          setShowLongPressReactions(null);
+                                        }}
+                                      >
+                                        <IoArrowRedo size={20} className={settings.darkMode ? "text-gray-300" : "text-gray-600"} />
+                                        <span className={`text-xs ${settings.darkMode ? "text-gray-400" : "text-gray-500"}`}>Forward</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        data-reaction-popup="true"
+                                        className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all min-w-16 ${
+                                          settings.darkMode
+                                            ? "active:bg-gray-700"
+                                            : "active:bg-gray-200"
+                                        }`}
+                                        onClick={() => {
+                                          handleMenuCopy(msg);
+                                          setShowLongPressReactions(null);
+                                        }}
+                                      >
+                                        <IoCopyOutline size={20} className={settings.darkMode ? "text-gray-300" : "text-gray-600"} />
+                                        <span className={`text-xs ${settings.darkMode ? "text-gray-400" : "text-gray-500"}`}>Copy</span>
+                                      </button>
+                                    </div>
                                   </div>
                                 </>
                               )}
@@ -1714,7 +2189,7 @@ const GroupChat = ({
                             {/* Reaction Counts */}
                             {Object.keys(reactionCounts).length > 0 && (
                               <div className={`-mt-3 flex ${isOwn ? "justify-end" : "justify-start"}`}>
-                                <div className="z-10 flex items-center gap-1 bg-zinc-800/70 px-2 py-1 rounded-full">
+                                <div className="z-10 flex items-center gap-1 bg-zinc-800 px-2 py-1 rounded-full">
                                   {Object.entries(reactionCounts).map(
                                     ([emoji, count]) => (
                                       <span
@@ -1874,8 +2349,11 @@ const GroupChat = ({
               {/* Audio Preview */}
               {audioPreview && !isRecording && (
                 <div className="mb-3 flex items-center gap-2 p-3 bg-zinc-700 rounded-lg border border-gray-600">
-                  <IoMicOutline size={20} className="text-blue-500" />
-                  <audio src={audioPreview} controls className="flex-1" />
+                  <AudioMessage
+                    src={audioPreview}
+                    isCurrentUser={true}
+                    isDarkMode={true}
+                  />
                   <button
                     type="button"
                     onClick={cancelRecording}

@@ -1,5 +1,5 @@
 const express = require('express');
-const { signUp, signIn, logout, updateProfile, getAllUsers, getUserById, getFriends, addFriend, removeFriend, googleAuth, resendOtpCode, verifyOtpCode, loginWithVerifiedEmail, sendResetPasswordEmail, resetPassword, sendBugReport } = require('../controllers/auth');
+const { signUp, signIn, logout, updateProfile, getAllUsers, getUserById, getFriends, getUserFriendCount, addFriend, removeFriend, googleAuth, resendOtpCode, verifyOtpCode, loginWithVerifiedEmail, sendResetPasswordEmail, resetPassword, sendBugReport } = require('../controllers/auth');
 const authMiddleware = require('../middleware/authMiddleware');
 
 const userRouter = express.Router();
@@ -27,6 +27,9 @@ userRouter.get('/users', authMiddleware, getAllUsers);
 
 // Get a specific user by ID
 userRouter.get('/users/:userId', getUserById);
+
+// Get a user's friend count
+userRouter.get('/users/:userId/friend-count', authMiddleware, getUserFriendCount);
 
 // Friend management routes
 userRouter.get('/friends', authMiddleware, getFriends);

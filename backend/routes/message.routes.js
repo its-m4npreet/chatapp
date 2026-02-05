@@ -9,6 +9,9 @@ module.exports = (messageController) => {
   messageRouter.post('/upload', authMiddleware, messageController.uploadImage);
   messageRouter.post('/upload-audio', authMiddleware, messageController.uploadAudio);
   messageRouter.post('/:messageId/react', authMiddleware, messageController.reactToMessage);
+  messageRouter.put('/:messageId/edit', authMiddleware, messageController.editMessage);
+  messageRouter.delete('/:messageId/delete-for-me', authMiddleware, messageController.deleteForMe);
+  messageRouter.delete('/:messageId/delete-for-everyone', authMiddleware, messageController.deleteForEveryone);
   messageRouter.get('/last/:receiverId', authMiddleware, messageController.getLastMessage);
   messageRouter.get('/:receiverId', authMiddleware, messageController.getMessages);
 

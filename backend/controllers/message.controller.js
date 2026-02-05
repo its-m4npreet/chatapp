@@ -171,11 +171,12 @@ const createMessageController = (io) => {
     };
 
     // Get messages between authenticated user and receiverId with cursor-based pagination
-    // Redis-first: Check Redis cache for recent messages, then MongoDB for older
+    // 3-Tier Caching: Redis (fast) → MongoDB (persistent)
+    // Supports 'since' param for incremental sync (only get new messages)
     const getMessages = async (req, res) => {
         const receiverId = req.params.receiverId;
         const userId = req.userId;
-        const { cursor, limit = 20 } = req.query;
+        const { cursor, limit = 20, since } = req.query;
 
         if (!receiverId) {
             return res.status(400).json({ message: "receiverId is required" });
@@ -184,7 +185,62 @@ const createMessageController = (io) => {
         try {
             const parsedLimit = parseInt(limit);
             
-            // If no cursor (first load), try Redis first for recent messages
+            // TIER 1: If 'since' param provided, this is an incremental sync request
+            // Only return messages newer than the 'since' timestamp
+            if (since) {
+                const sinceDate = new Date(since);
+                
+                // First try Redis for very recent messages
+                const cachedMessages = await cacheService.getRecentMessages(userId, receiverId, 100);
+                const newCachedMessages = cachedMessages.filter(msg => 
+                    new Date(msg.createdAt) > sinceDate
+                );
+                
+                if (newCachedMessages.length > 0) {
+                    // Return cached new messages (already newest first, reverse for display)
+                    newCachedMessages.reverse();
+                    return res.status(200).json({
+                        message: "New messages fetched (from cache)",
+                        data: newCachedMessages,
+                        hasMore: false,
+                        cursor: null,
+                        source: 'redis',
+                        syncType: 'incremental'
+                    });
+                }
+                
+                // Fall back to MongoDB for incremental sync
+                const newMessages = await Message.find({
+                    $or: [
+                        { sender: userId, receiver: receiverId },
+                        { sender: receiverId, receiver: userId }
+                    ],
+                    createdAt: { $gt: sinceDate }
+                })
+                    .sort({ createdAt: 1 }) // Oldest to newest for display
+                    .limit(100) // Reasonable limit for incremental sync
+                    .populate('sender', 'name profilePicture')
+                    .populate('receiver', 'name profilePicture')
+                    .populate({
+                        path: 'replyTo',
+                        select: 'content messageType sender',
+                        populate: {
+                            path: 'sender',
+                            select: 'name profilePicture'
+                        }
+                    });
+                
+                return res.status(200).json({
+                    message: "New messages fetched",
+                    data: newMessages,
+                    hasMore: false,
+                    cursor: null,
+                    source: 'mongodb',
+                    syncType: 'incremental'
+                });
+            }
+            
+            // TIER 2: If no cursor (first load), try Redis first for recent messages
             if (!cursor) {
                 const cachedMessages = await cacheService.getRecentMessages(userId, receiverId, parsedLimit + 1);
                 
@@ -197,7 +253,6 @@ const createMessageController = (io) => {
                     messagesToSend.reverse();
                     
                     // If we have enough messages from cache, return them
-                    // But also fetch from MongoDB in background to ensure consistency
                     if (cachedMessages.length >= parsedLimit) {
                         return res.status(200).json({
                             message: "Messages fetched successfully (from cache)",
@@ -210,7 +265,7 @@ const createMessageController = (io) => {
                 }
             }
 
-            // Fetch from MongoDB (for older messages or if cache miss)
+            // TIER 3: Fetch from MongoDB (for older messages or if cache miss)
             const query = {
                 $or: [
                     { sender: userId, receiver: receiverId },
@@ -256,7 +311,8 @@ const createMessageController = (io) => {
                 message: "Messages fetched successfully",
                 data: messagesToSend,
                 hasMore,
-                cursor: messagesToSend.length > 0 ? messagesToSend[0].createdAt : null
+                cursor: messagesToSend.length > 0 ? messagesToSend[0].createdAt : null,
+                source: 'mongodb'
             });
         } catch (error) {
             console.error(error);
@@ -355,7 +411,149 @@ const createMessageController = (io) => {
         }
     };
 
-    return { sendMessage, getMessages, uploadImage, uploadAudio, reactToMessage, getLastMessage };
+    // Edit a message (only sender can edit, only text content)
+    const editMessage = async (req, res) => {
+        try {
+            const { messageId } = req.params;
+            const { content } = req.body;
+            const userId = req.userId;
+
+            if (!messageId) {
+                return res.status(400).json({ message: "messageId is required" });
+            }
+
+            if (!content || content.trim() === '') {
+                return res.status(400).json({ message: "Content is required" });
+            }
+
+            const message = await Message.findById(messageId);
+            if (!message) {
+                return res.status(404).json({ message: "Message not found" });
+            }
+
+            // Only sender can edit
+            if (message.sender.toString() !== userId) {
+                return res.status(403).json({ message: "Only the sender can edit this message" });
+            }
+
+            // Can't edit deleted messages
+            if (message.deletedForEveryone) {
+                return res.status(400).json({ message: "Cannot edit a deleted message" });
+            }
+
+            // Update message
+            message.content = content.trim();
+            message.isEdited = true;
+            message.editedAt = new Date();
+            await message.save();
+
+            await message.populate('sender', 'name profilePicture');
+            await message.populate('receiver', 'name profilePicture');
+
+            // Emit to both users
+            const payload = {
+                messageId: message._id,
+                content: message.content,
+                isEdited: true,
+                editedAt: message.editedAt,
+            };
+
+            io.to(message.sender._id.toString()).emit('messageEdited', payload);
+            io.to(message.receiver._id.toString()).emit('messageEdited', payload);
+
+            res.status(200).json({
+                message: "Message edited successfully",
+                data: message,
+            });
+        } catch (error) {
+            console.error('Edit message error:', error);
+            res.status(500).json({ message: "Server error" });
+        }
+    };
+
+    // Delete message for me (only removes from current user's view)
+    const deleteForMe = async (req, res) => {
+        try {
+            const { messageId } = req.params;
+            const userId = req.userId;
+
+            if (!messageId) {
+                return res.status(400).json({ message: "messageId is required" });
+            }
+
+            const message = await Message.findById(messageId);
+            if (!message) {
+                return res.status(404).json({ message: "Message not found" });
+            }
+
+            // User must be sender or receiver
+            if (message.sender.toString() !== userId && message.receiver.toString() !== userId) {
+                return res.status(403).json({ message: "Not authorized for this message" });
+            }
+
+            // Add user to deletedFor array if not already there
+            if (!message.deletedFor.includes(userId)) {
+                message.deletedFor.push(userId);
+                await message.save();
+            }
+
+            res.status(200).json({
+                message: "Message deleted for you",
+                messageId: message._id,
+            });
+        } catch (error) {
+            console.error('Delete for me error:', error);
+            res.status(500).json({ message: "Server error" });
+        }
+    };
+
+    // Delete message for everyone (only sender can do this)
+    const deleteForEveryone = async (req, res) => {
+        try {
+            const { messageId } = req.params;
+            const userId = req.userId;
+
+            if (!messageId) {
+                return res.status(400).json({ message: "messageId is required" });
+            }
+
+            const message = await Message.findById(messageId);
+            if (!message) {
+                return res.status(404).json({ message: "Message not found" });
+            }
+
+            // Only sender can delete for everyone
+            if (message.sender.toString() !== userId) {
+                return res.status(403).json({ message: "Only the sender can delete for everyone" });
+            }
+
+            // Mark as deleted for everyone
+            message.deletedForEveryone = true;
+            message.content = "";
+            message.image = { url: "", public_id: "" };
+            message.audio = { url: "", public_id: "" };
+            await message.save();
+
+            // Emit to both users
+            const payload = {
+                messageId: message._id,
+                deletedForEveryone: true,
+            };
+
+            io.to(message.sender.toString()).emit('messageDeletedForEveryone', payload);
+            io.to(message.receiver.toString()).emit('messageDeletedForEveryone', payload);
+
+            res.status(200).json({
+                message: "Message deleted for everyone",
+                messageId: message._id,
+            });
+        } catch (error) {
+            console.error('Delete for everyone error:', error);
+            res.status(500).json({ message: "Server error" });
+        }
+    };
+
+    return { sendMessage, getMessages, uploadImage, uploadAudio, reactToMessage, getLastMessage, editMessage, deleteForMe, deleteForEveryone };
 };
 
 module.exports = createMessageController;

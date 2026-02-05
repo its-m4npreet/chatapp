@@ -206,6 +206,20 @@ const getFriends = async (req, res) => {
     }
 };
 
+// Get a specific user's friend count
+const getUserFriendCount = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const user = await User.findById(userId).select('friends');
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        res.status(200).json({ count: user.friends?.length || 0 });
+    } catch (error) {
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
 // Add a friend (bidirectional - adds both users to each other's friend list)
 const addFriend = async (req, res) => {
     try {
@@ -735,4 +749,4 @@ const sendBugReport = async (req, res) => {
     }
 };
 
-module.exports = { signUp, signIn, logout, updateProfile, getAllUsers, getUserById, getFriends, addFriend, removeFriend, googleAuth, resendOtpCode, verifyOtpCode, loginWithVerifiedEmail, sendResetPasswordEmail, resetPassword, sendBugReport };
+module.exports = { signUp, signIn, logout, updateProfile, getAllUsers, getUserById, getFriends, getUserFriendCount, addFriend, removeFriend, googleAuth, resendOtpCode, verifyOtpCode, loginWithVerifiedEmail, sendResetPasswordEmail, resetPassword, sendBugReport };

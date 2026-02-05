@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { IoArrowBack, IoSearch, IoPersonAdd } from 'react-icons/io5';
 import { FaCircleUser, FaCheck } from 'react-icons/fa6';
 import { useNavigate } from 'react-router-dom';
@@ -6,17 +6,25 @@ import axios from '../lib/axios';
 import indexedDBService from '../lib/indexedDB';
 import { FriendsSkeletonLoader } from './Loading';
 
+const USERS_PER_PAGE = 10;
+
 const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
   const [addedUsers, setAddedUsers] = useState([]);
   const [addingUser, setAddingUser] = useState(null);
+  const [displayedCount, setDisplayedCount] = useState(USERS_PER_PAGE);
+  const [hasMore, setHasMore] = useState(true);
   
   const navigate = useNavigate();
   const isDarkMode = localStorage.getItem('chatAppSettings') ? JSON.parse(localStorage.getItem('chatAppSettings')).darkMode : true;
   const isMobile = window.innerWidth <= 768;
+  
+  const observerRef = useRef(null);
+  const loadMoreRef = useRef(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -37,6 +45,7 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
         const friendIds = (friendsRes.data.friends || []).map(f => f._id);
         setAddedUsers(friendIds);
         setUsers(filteredUsers);
+        setHasMore(filteredUsers.length > USERS_PER_PAGE);
         setLoading(false);
       } catch {
         setError('Failed to load users');
@@ -46,12 +55,59 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
     fetchUsers();
   }, [currentUser]);
 
+  // Reset pagination when search query changes
+  useEffect(() => {
+    setDisplayedCount(USERS_PER_PAGE);
+  }, [searchQuery]);
+
   // Filter users based on search query
   const filteredUsers = users.filter(
     (user) =>
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Get paginated users to display
+  const displayedUsers = filteredUsers.slice(0, displayedCount);
+  const canLoadMore = displayedCount < filteredUsers.length;
+
+  // Load more users function
+  const loadMoreUsers = useCallback(() => {
+    if (loadingMore || !canLoadMore) return;
+    
+    setLoadingMore(true);
+    // Simulate a small delay for smooth UX
+    setTimeout(() => {
+      setDisplayedCount(prev => Math.min(prev + USERS_PER_PAGE, filteredUsers.length));
+      setLoadingMore(false);
+    }, 300);
+  }, [loadingMore, canLoadMore, filteredUsers.length]);
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    if (loading) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && canLoadMore && !loadingMore) {
+          loadMoreUsers();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    observerRef.current = observer;
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [loading, canLoadMore, loadingMore, loadMoreUsers]);
 
   const handleAddFriend = async (user, e) => {
     e.stopPropagation();
@@ -137,7 +193,7 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
           </div>
         ) : (
           <div className="space-y-2">
-            {filteredUsers.map((user) => {
+            {displayedUsers.map((user) => {
               const isAdded = addedUsers.includes(user._id);
               const isAdding = addingUser === user._id;
               return (
@@ -176,11 +232,6 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
                     <div className={`text-sm truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                       {user.username}
                     </div>
-                    {/* {user.bio && (
-                      <div className="text-xs text-gray-500 truncate mt-1">
-                        {user.bio}
-                      </div>
-                    )} */}
                   </div>
 
                   {/* Add Button */}
@@ -205,6 +256,22 @@ const AddUser = ({ onClose, onSelectUser, currentUser, onFriendAdded }) => {
                 </div>
               );
             })}
+            
+            {/* Load More Trigger & Skeleton Loading */}
+            {canLoadMore && (
+              <div ref={loadMoreRef} className="py-2">
+                {loadingMore && (
+                  <FriendsSkeletonLoader count={3} />
+                )}
+              </div>
+            )}
+            
+            {/* End of list indicator */}
+            {!canLoadMore && displayedUsers.length > 0 && (
+              <div className={`text-center py-4 text-sm ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                Showing all {filteredUsers.length} users
+              </div>
+            )}
           </div>
         )}
       </div>

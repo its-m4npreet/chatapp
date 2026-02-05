@@ -45,7 +45,20 @@ const messageSchema = new mongoose.Schema(
     isForwarded: {
       type: Boolean,
       default: false,
-    }
+    },
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
+    editedAt: { type: Date },
+    deletedFor: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    }],
+    deletedForEveryone: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

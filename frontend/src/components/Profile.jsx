@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaCircleUser } from 'react-icons/fa6';
+import { FaUserFriends } from 'react-icons/fa';
 import { MdEdit, MdLogout, MdVerified, MdEmail, MdLocationOn, MdLink, MdWork } from 'react-icons/md';
 import { IoArrowBack } from 'react-icons/io5';
 import axios from '../lib/axios';
@@ -13,6 +14,44 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile })
   const user = isViewingOther ? viewingUser : currentUser;
   
   const navigate = useNavigate();
+  const [friendCount, setFriendCount] = useState(0);
+  const [loadingFriends, setLoadingFriends] = useState(true);
+
+  // Fetch friend count
+  useEffect(() => {
+    const fetchFriendCount = async () => {
+      if (!user?._id) return;
+      
+      try {
+        setLoadingFriends(true);
+        if (isViewingOther) {
+          // For other users, fetch their friend count from API
+          const res = await axios.get(`/users/${user._id}/friend-count`);
+          setFriendCount(res.data.count || 0);
+        } else {
+          // For current user, get from friends list
+          const currentUserId = currentUser?._id;
+          // Try IndexedDB first
+          if (currentUserId) {
+            const cachedFriends = await indexedDBService.getFriends(currentUserId);
+            if (cachedFriends.length > 0) {
+              setFriendCount(cachedFriends.length);
+              setLoadingFriends(false);
+            }
+          }
+          // Then fetch from server
+          const res = await axios.get('/friends');
+          setFriendCount(res.data.friends?.length || 0);
+        }
+      } catch (error) {
+        console.error('Failed to fetch friend count:', error);
+      } finally {
+        setLoadingFriends(false);
+      }
+    };
+
+    fetchFriendCount();
+  }, [user?._id, isViewingOther, currentUser?._id]);
 
   const handleBack = () => {
     if (isMobile || !onClose) {
@@ -130,7 +169,21 @@ const Profile = ({ currentUser, viewingUser, onClose, onEditProfile, isMobile })
             {user.name}
           </h2>
         </div>
-        <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'} text-sm md:text-base`}>@{user.username}</p>
+        <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'} text-sm md:text-base`}>@{user.username || 'username'}</p>
+
+        {/* Friend Count */}
+        <div className="flex items-center gap-2 mt-3">
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${isDarkMode ? 'bg-gray-800/60' : 'bg-gray-100'}`}>
+            <FaUserFriends size={16} className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} />
+            {loadingFriends ? (
+              <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>...</span>
+            ) : (
+              <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+                {friendCount} {friendCount === 1 ? 'Friend' : 'Friends'}
+              </span>
+            )}
+          </div>
+        </div>
 
         {/* Experience/Bio Section */}
         <div className="mt-6">
